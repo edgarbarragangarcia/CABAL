@@ -33,6 +33,14 @@ export const cabalStats: CabalStat[] = [
   },
 ];
 
+/** Cita textual, verificada contra la nota de prensa original. */
+export const cabalQuote = {
+  text: "El socialismo impuesto en este gobierno es el reflejo del miedo a la libertad.",
+  sourceLabel: "Infobae, 25 ago. 2025",
+  sourceUrl:
+    "https://www.infobae.com/colombia/2025/08/25/maria-fernanda-cabal-afirmo-que-el-socialismo-impuesto-en-este-gobierno-es-el-reflejo-del-miedo-a-la-libertad-y-petro-le-respondio/",
+};
+
 /** Proyectos de ley con radicación documentada (fuente: Congreso Visible / sitio oficial). */
 export const cabalBills: { title: string; topic: string }[] = [
   { title: "Sistema integral de atención al espectro autista", topic: "Salud" },

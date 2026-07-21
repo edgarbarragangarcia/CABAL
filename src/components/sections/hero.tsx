@@ -9,7 +9,7 @@ import { Container } from "@/components/ui/container";
 import { Reveal } from "@/components/animations/reveal";
 import { LiveRadioWidget } from "@/components/sections/live-radio-widget";
 import { staggerContainer, fadeUp } from "@/lib/motion";
-import { cabalStats } from "@/config/maria-fernanda-cabal";
+import { cabalStats, cabalQuote } from "@/config/maria-fernanda-cabal";
 
 export function Hero() {
   return (
@@ -47,14 +47,23 @@ export function Hero() {
               </span>
             </motion.h1>
 
-            <motion.p
+            <motion.blockquote
               variants={fadeUp}
-              className="mt-6 text-balance text-lg text-muted-foreground sm:text-xl"
+              className="mt-6 max-w-xl border-l-2 border-brand pl-4 text-balance text-lg italic text-muted-foreground sm:text-xl lg:text-left"
             >
-              La Fundación Escuela Libertad diseña y ejecuta programas educativos,
-              comunitarios y de desarrollo social que transforman el futuro de niños,
-              jóvenes y familias en todo el país.
-            </motion.p>
+              “{cabalQuote.text}”
+              <footer className="mt-2 text-sm not-italic text-muted-foreground/80">
+                — María Fernanda Cabal ·{" "}
+                <a
+                  href={cabalQuote.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                >
+                  {cabalQuote.sourceLabel}
+                </a>
+              </footer>
+            </motion.blockquote>
 
             <motion.div
               variants={fadeUp}
