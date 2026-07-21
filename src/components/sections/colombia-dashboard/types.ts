@@ -11,7 +11,7 @@ export type DepartmentShape = {
 
 export const MAP_VIEWBOX = { width: 480, height: 620 };
 
-export type DashboardTopicId = "violencia" | "economia" | "gobierno" | "corrupcion";
+export type DashboardTopicId = "violencia" | "economia" | "gobierno" | "corrupcion" | "educacion";
 
 export type DashboardTopic = {
   id: DashboardTopicId;

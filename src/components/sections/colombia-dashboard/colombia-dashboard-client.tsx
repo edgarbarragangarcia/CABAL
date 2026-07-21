@@ -6,11 +6,13 @@ import { scaleSequential } from "d3-scale";
 import {
   interpolateBlues,
   interpolateGreens,
+  interpolateOranges,
   interpolatePurples,
   interpolateReds,
 } from "d3-scale-chromatic";
 import {
   ExternalLink,
+  GraduationCap,
   Landmark,
   Lightbulb,
   MousePointerClick,
@@ -31,6 +33,7 @@ const TOPIC_META: Record<
   economia: { icon: TrendingUp, interpolator: interpolateGreens },
   gobierno: { icon: Landmark, interpolator: interpolateBlues },
   corrupcion: { icon: Scale, interpolator: interpolatePurples },
+  educacion: { icon: GraduationCap, interpolator: interpolateOranges },
 };
 
 function formatValue(value: number, unit: string): string {
@@ -38,6 +41,7 @@ function formatValue(value: number, unit: string): string {
   if (unit === "miles de millones COP")
     return `$${value.toLocaleString("es-CO", { maximumFractionDigits: 0 })} mil M`;
   if (unit === "puntos") return `${value.toLocaleString("es-CO", { maximumFractionDigits: 1 })} / 100`;
+  if (unit === "%") return `${value.toLocaleString("es-CO", { maximumFractionDigits: 1 })}%`;
   return value.toLocaleString("es-CO");
 }
 
@@ -274,24 +278,39 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
           <p className="mt-1 text-xs text-muted-foreground">
             Departamentos ordenados de mayor a menor, según los datos de {activeTopic.year}.
           </p>
-          <ol className="mt-4 flex flex-col gap-2.5">
-            {ranked.slice(0, 8).map((d, i) => (
-              <li key={d.code}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCode(d.code)}
-                  className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-muted"
-                >
-                  <span className="w-5 shrink-0 text-xs font-semibold text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 truncate text-sm">{d.name}</span>
-                  <span className="shrink-0 text-sm font-semibold">
-                    {formatValue(d.value, activeTopic.unit)}
-                  </span>
-                </button>
-              </li>
-            ))}
+          <ol className="mt-4 flex flex-col gap-3">
+            {ranked.slice(0, 8).map((d, i) => {
+              const barWidth = ranked[0] ? Math.max((d.value / ranked[0].value) * 100, 3) : 0;
+              return (
+                <li key={d.code}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCode(d.code)}
+                    className="group flex w-full flex-col gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-muted"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-5 shrink-0 text-xs font-semibold text-muted-foreground">
+                        {i + 1}
+                      </span>
+                      <span className="flex-1 truncate text-sm">{d.name}</span>
+                      <span className="shrink-0 text-sm font-semibold">
+                        {formatValue(d.value, activeTopic.unit)}
+                      </span>
+                    </div>
+                    <div className="ml-8 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: TOPIC_META[activeTopicId].interpolator(0.75) }}
+                        initial={{ width: 0 }}
+                        whileInView={{ width: `${barWidth}%` }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: i * 0.04 }}
+                      />
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
           </ol>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { AlertTriangle, Banknote, Landmark, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Banknote, GraduationCap, Landmark, ShieldAlert } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { Reveal } from "@/components/animations/reveal";
@@ -6,12 +6,15 @@ import { AnimatedCounter } from "@/components/animations/animated-counter";
 import { getColombiaDepartmentShapes } from "@/lib/gov-data/colombia-geo";
 import {
   getAnticorruptionIndexByDepartment,
+  getEducationCoverageByDepartment,
   getGdpByDepartment,
   getGovernmentPerformanceByDepartment,
   getHomicidesByDepartment,
+  getNationalHomicideTrend,
   GOV_DATASETS,
 } from "@/lib/gov-data/queries";
 import { ColombiaDashboardClient } from "./colombia-dashboard-client";
+import { NationalTrendChart } from "./national-trend-chart";
 import type { DashboardTopic } from "./types";
 
 function average(values: number[]): number {
@@ -26,15 +29,17 @@ function average(values: number[]): number {
  * las consultas se resuelven en el servidor antes de enviar HTML al cliente.
  */
 export async function ColombiaDashboard() {
-  let shapes, homicidios, pib, mdm, integra;
+  let shapes, homicidios, pib, mdm, integra, educacion, trend;
 
   try {
-    [shapes, homicidios, pib, mdm, integra] = await Promise.all([
+    [shapes, homicidios, pib, mdm, integra, educacion, trend] = await Promise.all([
       getColombiaDepartmentShapes(),
       getHomicidesByDepartment(),
       getGdpByDepartment(),
       getGovernmentPerformanceByDepartment(),
       getAnticorruptionIndexByDepartment(),
+      getEducationCoverageByDepartment(),
+      getNationalHomicideTrend(),
     ]);
   } catch {
     return (
@@ -113,6 +118,22 @@ export async function ColombiaDashboard() {
       lowLabel: "Mayor riesgo de corrupción",
       highLabel: "Menor riesgo de corrupción",
     },
+    {
+      id: "educacion",
+      label: "Educación",
+      unit: "%",
+      year: educacion.year,
+      source: GOV_DATASETS.coberturaEducativa.source,
+      sourceUrl: GOV_DATASETS.coberturaEducativa.url,
+      data: educacion.data,
+      higherIsBetter: true,
+      explainer:
+        "Este mapa muestra qué porcentaje de niños y jóvenes en edad escolar (5 a 16 años) están matriculados en un colegio en cada departamento. Mientras más oscuro el color naranja, mayor es esa cobertura.",
+      unitExplainer:
+        "La \"cobertura neta\" es el porcentaje de la población en edad escolar que está matriculada en el nivel educativo que le corresponde.",
+      lowLabel: "Menor cobertura escolar",
+      highLabel: "Mayor cobertura escolar",
+    },
   ];
 
   const nationalStats = [
@@ -139,6 +160,12 @@ export async function ColombiaDashboard() {
       label: `Legalidad institucional promedio (${integra.year})`,
       value: Math.round(average(integra.data.map((d) => d.value)) * 10) / 10,
       suffix: " / 100",
+    },
+    {
+      icon: GraduationCap,
+      label: `Cobertura escolar promedio (${educacion.year})`,
+      value: Math.round(average(educacion.data.map((d) => d.value)) * 10) / 10,
+      suffix: "%",
     },
   ];
 
@@ -168,7 +195,7 @@ export async function ColombiaDashboard() {
         </Reveal>
 
         {/* Resumen nacional: da contexto de país antes de entrar al detalle por departamento */}
-        <Reveal className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Reveal className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {nationalStats.map((stat) => {
             const Icon = stat.icon;
             return (
@@ -183,7 +210,20 @@ export async function ColombiaDashboard() {
           })}
         </Reveal>
 
-        <div className="mt-10">
+        {/* Tendencia en el tiempo: complementa el mapa, que solo compara un año a la vez */}
+        <Reveal className="mt-6 rounded-2xl border border-border bg-surface p-4 sm:p-6">
+          <p className="text-sm font-semibold">
+            Homicidios en Colombia, {trend[0]?.year}–{trend[trend.length - 1]?.year}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Total nacional por año. Pasa el mouse sobre cada punto para ver el dato exacto.
+          </p>
+          <div className="mt-4">
+            <NationalTrendChart data={trend} />
+          </div>
+        </Reveal>
+
+        <div className="mt-6">
           <ColombiaDashboardClient shapes={shapes} topics={topics} />
         </div>
       </Container>

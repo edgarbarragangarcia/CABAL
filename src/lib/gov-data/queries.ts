@@ -32,6 +32,12 @@ export const GOV_DATASETS = {
     source: "Procuraduría General de la Nación",
     url: "https://www.datos.gov.co/Funci-n-p-blica/INTEGRA-ndice-Integral-de-Legalidad-/i594-3uqz",
   },
+  coberturaEducativa: {
+    id: "ji8i-4anb",
+    title: "Cobertura educativa por departamento",
+    source: "Ministerio de Educación Nacional (MEN)",
+    url: "https://www.datos.gov.co/Educaci-n/MEN_ESTADISTICAS_EN_EDUCACION_EN_PREESCOLAR-B-SIC/ji8i-4anb",
+  },
 } as const;
 
 const currentYear = new Date().getFullYear();
@@ -164,4 +170,57 @@ export async function getAnticorruptionIndexByDepartment(): Promise<{
         value: Math.round(Number(r.promedio) * 10) / 10,
       })),
   };
+}
+
+/** Cobertura neta de educación (%) por departamento, último año disponible. */
+export async function getEducationCoverageByDepartment(): Promise<{
+  data: DepartmentDatum[];
+  year: number;
+}> {
+  const [{ max_ano }] = await querySocrataDataset<{ max_ano: string }>(
+    GOV_DATASETS.coberturaEducativa.id,
+    { $select: "max(ano) as max_ano" }
+  );
+  const year = Number(max_ano);
+
+  const rows = await querySocrataDataset<{
+    c_digo_departamento: string;
+    departamento: string;
+    cobertura_neta: string;
+  }>(GOV_DATASETS.coberturaEducativa.id, {
+    $select: "c_digo_departamento, departamento, cobertura_neta",
+    $where: `ano='${year}'`,
+    $limit: 40,
+  });
+
+  return {
+    year,
+    data: rows
+      .filter((r) => r.departamento && r.cobertura_neta)
+      .map((r) => ({
+        code: normalizeDeptCode(r.c_digo_departamento),
+        name: r.departamento,
+        value: Math.round(Number(r.cobertura_neta) * 10) / 10,
+      })),
+  };
+}
+
+/** Tendencia nacional de homicidios por año (últimos `years` años completos). */
+export async function getNationalHomicideTrend(
+  years: number = 10
+): Promise<{ year: number; total: number }[]> {
+  const endYear = currentYear - 1;
+  const startYear = endYear - years + 1;
+
+  const rows = await querySocrataDataset<{ anio: string; total: string }>(
+    GOV_DATASETS.homicidios.id,
+    {
+      $select: "date_extract_y(fecha_hecho) as anio, sum(cantidad) as total",
+      $where: `fecha_hecho >= '${startYear}-01-01T00:00:00' AND fecha_hecho < '${endYear + 1}-01-01T00:00:00'`,
+      $group: "anio",
+      $order: "anio",
+    }
+  );
+
+  return rows.map((r) => ({ year: Number(r.anio), total: Number(r.total) }));
 }
