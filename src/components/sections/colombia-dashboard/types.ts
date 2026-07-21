@@ -11,7 +11,13 @@ export type DepartmentShape = {
 
 export const MAP_VIEWBOX = { width: 480, height: 620 };
 
-export type DashboardTopicId = "violencia" | "economia" | "gobierno" | "corrupcion" | "educacion";
+export type DashboardTopicId =
+  | "violencia"
+  | "economia"
+  | "gobierno"
+  | "corrupcion"
+  | "educacion"
+  | "hurtos";
 
 export type DashboardTopic = {
   id: DashboardTopicId;
@@ -35,4 +41,19 @@ export type DashboardTopic = {
 export type ColombiaDashboardData = {
   shapes: DepartmentShape[];
   topics: DashboardTopic[];
+};
+
+/** Periodos presidenciales que abarca la ventana de datos del observatorio. */
+export const GOVERNMENT_PERIODS = [
+  { label: "Santos II", startYear: 2014, endYear: 2018, color: "#64748b" },
+  { label: "Duque", startYear: 2018, endYear: 2022, color: "#0ea5e9" },
+  { label: "Petro", startYear: 2022, endYear: 2026, color: "#f97316" },
+] as const;
+
+export type TrendPoint = { year: number; total: number };
+export type TrendSeries = {
+  id: string;
+  label: string;
+  color: string;
+  data: TrendPoint[];
 };

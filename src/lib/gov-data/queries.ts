@@ -38,6 +38,12 @@ export const GOV_DATASETS = {
     source: "Ministerio de Educación Nacional (MEN)",
     url: "https://www.datos.gov.co/Educaci-n/MEN_ESTADISTICAS_EN_EDUCACION_EN_PREESCOLAR-B-SIC/ji8i-4anb",
   },
+  hurtos: {
+    id: "6sqw-8cg5",
+    title: "Reporte de hurto por modalidades",
+    source: "Policía Nacional de Colombia (DIPON)",
+    url: "https://www.datos.gov.co/Seguridad-y-Defensa/Reporte-Hurto-por-Modalidades-Polic-a-Nacional/6sqw-8cg5",
+  },
 } as const;
 
 const currentYear = new Date().getFullYear();
@@ -205,6 +211,33 @@ export async function getEducationCoverageByDepartment(): Promise<{
   };
 }
 
+/** Total de hurtos por departamento en un año (Policía Nacional). */
+export async function getTheftsByDepartment(
+  year: number = currentYear - 1
+): Promise<{ data: DepartmentDatum[]; year: number }> {
+  const rows = await querySocrataDataset<{
+    dpto: string;
+    departamento: string;
+    total: string;
+  }>(GOV_DATASETS.hurtos.id, {
+    $select: "substring(codigo_dane,1,2) as dpto, departamento, sum(cantidad::number) as total",
+    $where: `fecha_hecho like '%/${year}'`,
+    $group: "dpto, departamento",
+    $limit: 40,
+  });
+
+  return {
+    year,
+    data: rows
+      .filter((r) => r.dpto)
+      .map((r) => ({
+        code: normalizeDeptCode(r.dpto),
+        name: r.departamento,
+        value: Number(r.total),
+      })),
+  };
+}
+
 /** Tendencia nacional de homicidios por año (últimos `years` años completos). */
 export async function getNationalHomicideTrend(
   years: number = 10
@@ -223,4 +256,25 @@ export async function getNationalHomicideTrend(
   );
 
   return rows.map((r) => ({ year: Number(r.anio), total: Number(r.total) }));
+}
+
+/** Tendencia nacional de hurtos por año (últimos `years` años completos). */
+export async function getNationalTheftTrend(
+  years: number = 10
+): Promise<{ year: number; total: number }[]> {
+  const endYear = currentYear - 1;
+  const startYear = endYear - years + 1;
+
+  const rows = await querySocrataDataset<{ anio: string; total: string }>(
+    GOV_DATASETS.hurtos.id,
+    {
+      $select: "substring(fecha_hecho,7,4) as anio, sum(cantidad::number) as total",
+      $group: "anio",
+      $order: "anio",
+    }
+  );
+
+  return rows
+    .map((r) => ({ year: Number(r.anio), total: Number(r.total) }))
+    .filter((r) => r.year >= startYear && r.year <= endYear);
 }

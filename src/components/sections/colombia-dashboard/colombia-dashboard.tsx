@@ -1,4 +1,4 @@
-import { AlertTriangle, Banknote, GraduationCap, Landmark, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Banknote, GraduationCap, Landmark, ShieldAlert, Siren } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { Reveal } from "@/components/animations/reveal";
@@ -11,11 +11,13 @@ import {
   getGovernmentPerformanceByDepartment,
   getHomicidesByDepartment,
   getNationalHomicideTrend,
+  getNationalTheftTrend,
+  getTheftsByDepartment,
   GOV_DATASETS,
 } from "@/lib/gov-data/queries";
 import { ColombiaDashboardClient } from "./colombia-dashboard-client";
 import { NationalTrendChart } from "./national-trend-chart";
-import type { DashboardTopic } from "./types";
+import type { DashboardTopic, TrendSeries } from "./types";
 
 function average(values: number[]): number {
   if (values.length === 0) return 0;
@@ -29,18 +31,21 @@ function average(values: number[]): number {
  * las consultas se resuelven en el servidor antes de enviar HTML al cliente.
  */
 export async function ColombiaDashboard() {
-  let shapes, homicidios, pib, mdm, integra, educacion, trend;
+  let shapes, homicidios, pib, mdm, integra, educacion, hurtos, homicideTrend, theftTrend;
 
   try {
-    [shapes, homicidios, pib, mdm, integra, educacion, trend] = await Promise.all([
-      getColombiaDepartmentShapes(),
-      getHomicidesByDepartment(),
-      getGdpByDepartment(),
-      getGovernmentPerformanceByDepartment(),
-      getAnticorruptionIndexByDepartment(),
-      getEducationCoverageByDepartment(),
-      getNationalHomicideTrend(),
-    ]);
+    [shapes, homicidios, pib, mdm, integra, educacion, hurtos, homicideTrend, theftTrend] =
+      await Promise.all([
+        getColombiaDepartmentShapes(),
+        getHomicidesByDepartment(),
+        getGdpByDepartment(),
+        getGovernmentPerformanceByDepartment(),
+        getAnticorruptionIndexByDepartment(),
+        getEducationCoverageByDepartment(),
+        getTheftsByDepartment(),
+        getNationalHomicideTrend(),
+        getNationalTheftTrend(),
+      ]);
   } catch {
     return (
       <section className="py-16 sm:py-24">
@@ -134,6 +139,21 @@ export async function ColombiaDashboard() {
       lowLabel: "Menor cobertura escolar",
       highLabel: "Mayor cobertura escolar",
     },
+    {
+      id: "hurtos",
+      label: "Hurtos",
+      unit: "casos",
+      year: hurtos.year,
+      source: GOV_DATASETS.hurtos.source,
+      sourceUrl: GOV_DATASETS.hurtos.url,
+      data: hurtos.data,
+      higherIsBetter: false,
+      explainer:
+        "Este mapa muestra cuántos hurtos (a personas, comercios, viviendas, vehículos) registró la Policía Nacional en cada departamento durante el año. Mientras más oscuro el color, más casos hubo.",
+      unitExplainer: "\"Casos\" son hurtos reportados oficialmente por la Policía Nacional.",
+      lowLabel: "Menos casos",
+      highLabel: "Más casos",
+    },
   ];
 
   const nationalStats = [
@@ -167,6 +187,17 @@ export async function ColombiaDashboard() {
       value: Math.round(average(educacion.data.map((d) => d.value)) * 10) / 10,
       suffix: "%",
     },
+    {
+      icon: Siren,
+      label: `Hurtos en ${hurtos.year} (total nacional)`,
+      value: hurtos.data.reduce((sum, d) => sum + d.value, 0),
+      suffix: "",
+    },
+  ];
+
+  const trendSeries: TrendSeries[] = [
+    { id: "homicidios", label: "Homicidios", color: "var(--destructive)", data: homicideTrend },
+    { id: "hurtos", label: "Hurtos", color: "#d946ef", data: theftTrend },
   ];
 
   return (
@@ -195,7 +226,7 @@ export async function ColombiaDashboard() {
         </Reveal>
 
         {/* Resumen nacional: da contexto de país antes de entrar al detalle por departamento */}
-        <Reveal className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <Reveal className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           {nationalStats.map((stat) => {
             const Icon = stat.icon;
             return (
@@ -210,16 +241,19 @@ export async function ColombiaDashboard() {
           })}
         </Reveal>
 
-        {/* Tendencia en el tiempo: complementa el mapa, que solo compara un año a la vez */}
+        {/* Tendencia en el tiempo: complementa el mapa, que solo compara un año a la vez.
+            Permite superponer indicadores y compara el promedio por periodo presidencial. */}
         <Reveal className="mt-6 rounded-2xl border border-border bg-surface p-4 sm:p-6">
           <p className="text-sm font-semibold">
-            Homicidios en Colombia, {trend[0]?.year}–{trend[trend.length - 1]?.year}
+            Tendencia nacional, {homicideTrend[0]?.year}–{homicideTrend[homicideTrend.length - 1]?.year}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Total nacional por año. Pasa el mouse sobre cada punto para ver el dato exacto.
+            Total nacional por año. Activa o desactiva indicadores para compararlos, y pasa el
+            mouse sobre cada punto para ver el dato exacto. Las franjas de color marcan cada
+            gobierno.
           </p>
           <div className="mt-4">
-            <NationalTrendChart data={trend} />
+            <NationalTrendChart series={trendSeries} />
           </div>
         </Reveal>
 
