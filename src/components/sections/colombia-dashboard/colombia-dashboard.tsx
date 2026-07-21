@@ -49,6 +49,11 @@ export async function ColombiaDashboard() {
       sourceUrl: GOV_DATASETS.homicidios.url,
       data: homicidios.data,
       higherIsBetter: false,
+      explainer:
+        "Este mapa muestra cuántos homicidios registró la Policía Nacional en cada departamento durante el año. Mientras más oscuro el color rojo, más casos hubo en ese departamento.",
+      unitExplainer: "\"Casos\" son homicidios reportados oficialmente por la Policía Nacional.",
+      lowLabel: "Menos casos",
+      highLabel: "Más casos",
     },
     {
       id: "economia",
@@ -59,6 +64,12 @@ export async function ColombiaDashboard() {
       sourceUrl: GOV_DATASETS.pibDepartamental.url,
       data: pib.data,
       higherIsBetter: true,
+      explainer:
+        "Este mapa muestra el tamaño de la economía de cada departamento: el valor de todo lo que se produjo (bienes y servicios) durante el año. Mientras más oscuro el color verde, más grande es esa economía.",
+      unitExplainer:
+        "El valor está en \"miles de millones de pesos\": por ejemplo, $10.000 significa 10.000 mil millones, es decir, 10 billones de pesos.",
+      lowLabel: "Economía más pequeña",
+      highLabel: "Economía más grande",
     },
     {
       id: "gobierno",
@@ -69,6 +80,12 @@ export async function ColombiaDashboard() {
       sourceUrl: GOV_DATASETS.desempenoMunicipal.url,
       data: mdm.data,
       higherIsBetter: true,
+      explainer:
+        "Este mapa muestra qué tan bien gestionan sus recursos y servicios los municipios de cada departamento (educación, salud, gestión de recursos, entre otros), según el índice oficial del DNP. Mientras más oscuro el color azul, mejor es el desempeño promedio.",
+      unitExplainer:
+        "El puntaje va de 0 a 100: entre más alto, mejor es la gestión municipal según este índice oficial.",
+      lowLabel: "Peor gestión",
+      highLabel: "Mejor gestión",
     },
   ];
 

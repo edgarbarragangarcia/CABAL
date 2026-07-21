@@ -23,6 +23,13 @@ export type DashboardTopic = {
   data: DepartmentDatum[];
   /** Mayor valor = mejor (MDM) o peor (homicidios)? Afecta el orden del ranking. */
   higherIsBetter: boolean;
+  /** Explicación en lenguaje sencillo de qué mide este tema y cómo leerlo. */
+  explainer: string;
+  /** Qué significa la unidad de medida, en una frase simple. */
+  unitExplainer: string;
+  /** Etiquetas de los extremos de la leyenda de color (p. ej. "Menos casos" / "Más casos"). */
+  lowLabel: string;
+  highLabel: string;
 };
 
 export type ColombiaDashboardData = {

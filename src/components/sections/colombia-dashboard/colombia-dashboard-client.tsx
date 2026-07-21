@@ -4,7 +4,7 @@ import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { scaleSequential } from "d3-scale";
 import { interpolateBlues, interpolateGreens, interpolateReds } from "d3-scale-chromatic";
-import { ExternalLink, Landmark, ShieldAlert, TrendingUp } from "lucide-react";
+import { ExternalLink, Landmark, Lightbulb, MousePointerClick, Palette, ShieldAlert, TrendingUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { MAP_VIEWBOX, type ColombiaDashboardData, type DashboardTopicId } from "./types";
@@ -93,6 +93,33 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
           })}
         </div>
 
+        {/* Explicación en lenguaje sencillo, cambia según el tema seleccionado */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTopicId}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2 }}
+            className="mb-4 flex items-start gap-2.5 rounded-xl bg-surface-muted p-4 text-sm text-muted-foreground"
+          >
+            <Lightbulb className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+            <p>{activeTopic.explainer}</p>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Instrucciones de uso: siempre visibles, no cambian con el tema */}
+        <div className="mb-4 grid gap-2 rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground sm:grid-cols-2">
+          <p className="flex items-center gap-2">
+            <Palette className="size-3.5 shrink-0 text-brand" aria-hidden="true" />
+            Color más oscuro = valor más alto en ese tema.
+          </p>
+          <p className="flex items-center gap-2">
+            <MousePointerClick className="size-3.5 shrink-0 text-brand" aria-hidden="true" />
+            Toca un departamento para ver su detalle completo.
+          </p>
+        </div>
+
         <div className="relative">
           <svg
             viewBox={`0 0 ${MAP_VIEWBOX.width} ${MAP_VIEWBOX.height}`}
@@ -159,6 +186,12 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
           />
           <span className="text-xs text-muted-foreground">{max.toLocaleString("es-CO")}</span>
         </div>
+        <p className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground/80">
+          <span>{activeTopic.lowLabel}</span>
+          <span>{activeTopic.highLabel}</span>
+        </p>
+
+        <p className="mt-3 text-xs text-muted-foreground">{activeTopic.unitExplainer}</p>
 
         <p className="mt-4 text-xs text-muted-foreground">
           Fuente: {activeTopic.source} · Datos {activeTopic.year} ·{" "}
@@ -216,14 +249,19 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
               exit={{ opacity: 0 }}
               className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
             >
-              Selecciona un departamento en el mapa para ver el detalle.
+              Toca cualquier departamento en el mapa (o en la lista de abajo) para ver sus
+              tres cifras en detalle.
             </motion.div>
           )}
         </AnimatePresence>
 
         <div className="rounded-2xl border border-border bg-surface p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Ranking · {activeTopic.label}
+            {activeTopic.higherIsBetter ? "Los que más tienen" : "Los que más registran"} ·{" "}
+            {activeTopic.label}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Departamentos ordenados de mayor a menor, según los datos de {activeTopic.year}.
           </p>
           <ol className="mt-4 flex flex-col gap-2.5">
             {ranked.slice(0, 8).map((d, i) => (
