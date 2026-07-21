@@ -281,13 +281,17 @@ export async function getNationalTheftTrend(
 
 /** Tendencia nacional del PIB nominal (miles de millones COP) por año. */
 export async function getNationalGdpTrend(
-  years: number = 10
+  years: number = 10,
+  basis: "corrientes" | "constantes" = "corrientes"
 ): Promise<{ year: number; total: number }[]> {
+  const tipoDePrecios =
+    basis === "corrientes" ? "PIB a precios corrientes" : "PIB a precios constantes de 2015";
+
   const rows = await querySocrataDataset<{ a_o: string; total: string }>(
     GOV_DATASETS.pibDepartamental.id,
     {
       $select: "a_o, sum(valor_miles_de_millones_de) as total",
-      $where: "tipo_de_precios='PIB a precios corrientes'",
+      $where: `tipo_de_precios='${tipoDePrecios}'`,
       $group: "a_o",
       $order: "a_o",
     }

@@ -42,22 +42,35 @@ export async function ColombiaDashboard() {
     hurtos,
     homicideTrend,
     theftTrend,
-    gdpTrend;
+    gdpTrendNominal,
+    gdpTrendReal;
 
   try {
-    [shapes, homicidios, pib, mdm, integra, educacion, hurtos, homicideTrend, theftTrend, gdpTrend] =
-      await Promise.all([
-        getColombiaDepartmentShapes(),
-        getHomicidesByDepartment(),
-        getGdpByDepartment(),
-        getGovernmentPerformanceByDepartment(),
-        getAnticorruptionIndexByDepartment(),
-        getEducationCoverageByDepartment(),
-        getTheftsByDepartment(),
-        getNationalHomicideTrend(),
-        getNationalTheftTrend(),
-        getNationalGdpTrend(),
-      ]);
+    [
+      shapes,
+      homicidios,
+      pib,
+      mdm,
+      integra,
+      educacion,
+      hurtos,
+      homicideTrend,
+      theftTrend,
+      gdpTrendNominal,
+      gdpTrendReal,
+    ] = await Promise.all([
+      getColombiaDepartmentShapes(),
+      getHomicidesByDepartment(),
+      getGdpByDepartment(),
+      getGovernmentPerformanceByDepartment(),
+      getAnticorruptionIndexByDepartment(),
+      getEducationCoverageByDepartment(),
+      getTheftsByDepartment(),
+      getNationalHomicideTrend(),
+      getNationalTheftTrend(),
+      getNationalGdpTrend(10, "corrientes"),
+      getNationalGdpTrend(10, "constantes"),
+    ]);
   } catch {
     return (
       <section className="py-16 sm:py-24">
@@ -229,13 +242,24 @@ export async function ColombiaDashboard() {
     },
   ];
 
+  // PIB nominal vs. PIB real (a precios constantes de 2015, es decir,
+  // ya descontada la inflación): la brecha entre ambas líneas es lo más
+  // cercano a "poder adquisitivo" que se puede mostrar con series
+  // nacionales del DANE sin inventar un índice propio.
   const economyTrendSeries: TrendSeries[] = [
     {
-      id: "pib",
-      label: "PIB nacional",
+      id: "pib-nominal",
+      label: "PIB nominal",
       color: "var(--brand)",
-      data: gdpTrend,
-      projection: projectLinearTrend(gdpTrend, PROJECTION_YEARS),
+      data: gdpTrendNominal,
+      projection: projectLinearTrend(gdpTrendNominal, PROJECTION_YEARS),
+    },
+    {
+      id: "pib-real",
+      label: "PIB real (precios 2015)",
+      color: "var(--accent)",
+      data: gdpTrendReal,
+      projection: projectLinearTrend(gdpTrendReal, PROJECTION_YEARS),
     },
   ];
 
@@ -298,10 +322,14 @@ export async function ColombiaDashboard() {
 
           <Reveal className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
             <p className="text-sm font-semibold">
-              Economía, {gdpTrend[0]?.year}–{gdpTrend[gdpTrend.length - 1]?.year}
+              Economía, {gdpTrendNominal[0]?.year}–{gdpTrendNominal[gdpTrendNominal.length - 1]?.year}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              PIB nacional nominal por año, en miles de millones de pesos.
+              PIB nacional en miles de millones de pesos. El <strong>nominal</strong> crece más
+              rápido porque incluye inflación; el <strong>real</strong> (a precios constantes de
+              2015) descuenta la inflación — la diferencia entre ambas líneas es, en la práctica,
+              cuánto de ese crecimiento se traduce en más poder adquisitivo y cuánto es solo
+              aumento de precios.
             </p>
             <div className="mt-4">
               <NationalTrendChart series={economyTrendSeries} />
