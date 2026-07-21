@@ -263,6 +263,29 @@ export async function ColombiaDashboard() {
     },
   ];
 
+  // Deflactor implícito del PIB = PIB nominal / PIB real × 100, con base
+  // 100 en 2015. Es un proxy de inflación a nivel de toda la economía —
+  // NO es el salario real ni el costo de vida de los hogares, y se
+  // etiqueta así explícitamente para no sobre-interpretarlo.
+  const deflatorTrend = gdpTrendNominal
+    .map((n) => {
+      const real = gdpTrendReal.find((r) => r.year === n.year);
+      if (!real || real.total === 0) return null;
+      return { year: n.year, total: Math.round((n.total / real.total) * 100 * 10) / 10 };
+    })
+    .filter((d): d is { year: number; total: number } => d !== null);
+
+  const deflatorSeries: TrendSeries[] = [
+    {
+      id: "deflactor",
+      label: "Deflactor del PIB (base 2015 = 100)",
+      color: "#eab308",
+      data: deflatorTrend,
+      projection: projectLinearTrend(deflatorTrend, PROJECTION_YEARS),
+    },
+  ];
+  const latestDeflator = deflatorTrend[deflatorTrend.length - 1]?.total ?? null;
+
   return (
     <section className="py-16 sm:py-24">
       <Container>
@@ -336,6 +359,33 @@ export async function ColombiaDashboard() {
             </div>
           </Reveal>
         </div>
+
+        {/* Deflactor del PIB: la aproximación más honesta a "inflación
+            general" que se puede calcular con los datos oficiales que ya
+            tenemos, sin traer una fuente nueva sin verificar. */}
+        <Reveal className="mt-6 rounded-2xl border border-border bg-surface p-4 sm:p-6">
+          <p className="text-sm font-semibold">
+            Deflactor del PIB, {deflatorTrend[0]?.year}–{deflatorTrend[deflatorTrend.length - 1]?.year}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Calculado como PIB nominal ÷ PIB real × 100 (base 2015 = 100), con los mismos datos
+            del DANE de arriba.{" "}
+            {latestDeflator !== null && (
+              <>
+                En {deflatorTrend[deflatorTrend.length - 1].year}, algo que costaba $100 en 2015
+                cuesta en promedio <strong>${latestDeflator.toLocaleString("es-CO")}</strong> —
+                un {Math.round(latestDeflator - 100)}% más.
+              </>
+            )}{" "}
+            <strong>No es</strong> el salario real ni el costo de vida de los hogares (para eso
+            haría falta el IPC y el salario mínimo real, que no encontré en una fuente oficial
+            verificable con acceso público por API) — es un indicador de precios a nivel de toda
+            la economía.
+          </p>
+          <div className="mt-4">
+            <NationalTrendChart series={deflatorSeries} />
+          </div>
+        </Reveal>
 
         <div className="mt-6">
           <ColombiaDashboardClient shapes={shapes} topics={topics} />
