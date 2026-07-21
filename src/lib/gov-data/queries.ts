@@ -278,3 +278,21 @@ export async function getNationalTheftTrend(
     .map((r) => ({ year: Number(r.anio), total: Number(r.total) }))
     .filter((r) => r.year >= startYear && r.year <= endYear);
 }
+
+/** Tendencia nacional del PIB nominal (miles de millones COP) por año. */
+export async function getNationalGdpTrend(
+  years: number = 10
+): Promise<{ year: number; total: number }[]> {
+  const rows = await querySocrataDataset<{ a_o: string; total: string }>(
+    GOV_DATASETS.pibDepartamental.id,
+    {
+      $select: "a_o, sum(valor_miles_de_millones_de) as total",
+      $where: "tipo_de_precios='PIB a precios corrientes'",
+      $group: "a_o",
+      $order: "a_o",
+    }
+  );
+
+  const all = rows.map((r) => ({ year: Number(r.a_o), total: Number(r.total) }));
+  return all.slice(Math.max(all.length - years, 0));
+}

@@ -10,11 +10,13 @@ import {
   getGdpByDepartment,
   getGovernmentPerformanceByDepartment,
   getHomicidesByDepartment,
+  getNationalGdpTrend,
   getNationalHomicideTrend,
   getNationalTheftTrend,
   getTheftsByDepartment,
   GOV_DATASETS,
 } from "@/lib/gov-data/queries";
+import { projectLinearTrend } from "@/lib/gov-data/trend-projection";
 import { ColombiaDashboardClient } from "./colombia-dashboard-client";
 import { NationalTrendChart } from "./national-trend-chart";
 import type { DashboardTopic, TrendSeries } from "./types";
@@ -31,10 +33,19 @@ function average(values: number[]): number {
  * las consultas se resuelven en el servidor antes de enviar HTML al cliente.
  */
 export async function ColombiaDashboard() {
-  let shapes, homicidios, pib, mdm, integra, educacion, hurtos, homicideTrend, theftTrend;
+  let shapes,
+    homicidios,
+    pib,
+    mdm,
+    integra,
+    educacion,
+    hurtos,
+    homicideTrend,
+    theftTrend,
+    gdpTrend;
 
   try {
-    [shapes, homicidios, pib, mdm, integra, educacion, hurtos, homicideTrend, theftTrend] =
+    [shapes, homicidios, pib, mdm, integra, educacion, hurtos, homicideTrend, theftTrend, gdpTrend] =
       await Promise.all([
         getColombiaDepartmentShapes(),
         getHomicidesByDepartment(),
@@ -45,6 +56,7 @@ export async function ColombiaDashboard() {
         getTheftsByDepartment(),
         getNationalHomicideTrend(),
         getNationalTheftTrend(),
+        getNationalGdpTrend(),
       ]);
   } catch {
     return (
@@ -195,9 +207,36 @@ export async function ColombiaDashboard() {
     },
   ];
 
-  const trendSeries: TrendSeries[] = [
-    { id: "homicidios", label: "Homicidios", color: "var(--destructive)", data: homicideTrend },
-    { id: "hurtos", label: "Hurtos", color: "#d946ef", data: theftTrend },
+  const PROJECTION_YEARS = 3;
+
+  // Nota: PIB va en una gráfica aparte porque su escala (miles de
+  // millones) no es comparable con conteos de casos — superponerlos en
+  // el mismo eje aplanaría una de las dos series y sería engañoso.
+  const securityTrendSeries: TrendSeries[] = [
+    {
+      id: "homicidios",
+      label: "Homicidios",
+      color: "var(--destructive)",
+      data: homicideTrend,
+      projection: projectLinearTrend(homicideTrend, PROJECTION_YEARS),
+    },
+    {
+      id: "hurtos",
+      label: "Hurtos",
+      color: "#d946ef",
+      data: theftTrend,
+      projection: projectLinearTrend(theftTrend, PROJECTION_YEARS),
+    },
+  ];
+
+  const economyTrendSeries: TrendSeries[] = [
+    {
+      id: "pib",
+      label: "PIB nacional",
+      color: "var(--brand)",
+      data: gdpTrend,
+      projection: projectLinearTrend(gdpTrend, PROJECTION_YEARS),
+    },
   ];
 
   return (
@@ -241,21 +280,34 @@ export async function ColombiaDashboard() {
           })}
         </Reveal>
 
-        {/* Tendencia en el tiempo: complementa el mapa, que solo compara un año a la vez.
-            Permite superponer indicadores y compara el promedio por periodo presidencial. */}
-        <Reveal className="mt-6 rounded-2xl border border-border bg-surface p-4 sm:p-6">
-          <p className="text-sm font-semibold">
-            Tendencia nacional, {homicideTrend[0]?.year}–{homicideTrend[homicideTrend.length - 1]?.year}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Total nacional por año. Activa o desactiva indicadores para compararlos, y pasa el
-            mouse sobre cada punto para ver el dato exacto. Las franjas de color marcan cada
-            gobierno.
-          </p>
-          <div className="mt-4">
-            <NationalTrendChart series={trendSeries} />
-          </div>
-        </Reveal>
+        {/* Tendencias en el tiempo: complementan el mapa, que solo compara un año a la vez.
+            Permiten superponer indicadores, comparar promedio por gobierno y ver una
+            proyección estadística opcional (sin atribución causal ni política). */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <Reveal className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+            <p className="text-sm font-semibold">
+              Seguridad, {homicideTrend[0]?.year}–{homicideTrend[homicideTrend.length - 1]?.year}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Homicidios y hurtos a nivel nacional. Actívalos o desactívalos para comparar.
+            </p>
+            <div className="mt-4">
+              <NationalTrendChart series={securityTrendSeries} />
+            </div>
+          </Reveal>
+
+          <Reveal className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+            <p className="text-sm font-semibold">
+              Economía, {gdpTrend[0]?.year}–{gdpTrend[gdpTrend.length - 1]?.year}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              PIB nacional nominal por año, en miles de millones de pesos.
+            </p>
+            <div className="mt-4">
+              <NationalTrendChart series={economyTrendSeries} />
+            </div>
+          </Reveal>
+        </div>
 
         <div className="mt-6">
           <ColombiaDashboardClient shapes={shapes} topics={topics} />

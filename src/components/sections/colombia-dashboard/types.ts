@@ -56,4 +56,11 @@ export type TrendSeries = {
   label: string;
   color: string;
   data: TrendPoint[];
+  /**
+   * Extrapolación estadística de la tendencia histórica (regresión
+   * lineal simple). No es un pronóstico oficial ni representa el efecto
+   * de ninguna decisión de gobierno — es solo la continuación
+   * matemática de la línea histórica.
+   */
+  projection?: TrendPoint[];
 };
