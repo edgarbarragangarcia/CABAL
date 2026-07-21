@@ -3,8 +3,22 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { scaleSequential } from "d3-scale";
-import { interpolateBlues, interpolateGreens, interpolateReds } from "d3-scale-chromatic";
-import { ExternalLink, Landmark, Lightbulb, MousePointerClick, Palette, ShieldAlert, TrendingUp } from "lucide-react";
+import {
+  interpolateBlues,
+  interpolateGreens,
+  interpolatePurples,
+  interpolateReds,
+} from "d3-scale-chromatic";
+import {
+  ExternalLink,
+  Landmark,
+  Lightbulb,
+  MousePointerClick,
+  Palette,
+  Scale,
+  ShieldAlert,
+  TrendingUp,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { MAP_VIEWBOX, type ColombiaDashboardData, type DashboardTopicId } from "./types";
@@ -16,6 +30,7 @@ const TOPIC_META: Record<
   violencia: { icon: ShieldAlert, interpolator: interpolateReds },
   economia: { icon: TrendingUp, interpolator: interpolateGreens },
   gobierno: { icon: Landmark, interpolator: interpolateBlues },
+  corrupcion: { icon: Scale, interpolator: interpolatePurples },
 };
 
 function formatValue(value: number, unit: string): string {
@@ -51,10 +66,7 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
   );
 
   const ranked = React.useMemo(
-    () =>
-      [...activeTopic.data].sort((a, b) =>
-        activeTopic.higherIsBetter ? b.value - a.value : b.value - a.value
-      ),
+    () => [...activeTopic.data].sort((a, b) => b.value - a.value),
     [activeTopic]
   );
 
@@ -257,8 +269,7 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
 
         <div className="rounded-2xl border border-border bg-surface p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {activeTopic.higherIsBetter ? "Los que más tienen" : "Los que más registran"} ·{" "}
-            {activeTopic.label}
+            {activeTopic.highLabel} · {activeTopic.label}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             Departamentos ordenados de mayor a menor, según los datos de {activeTopic.year}.

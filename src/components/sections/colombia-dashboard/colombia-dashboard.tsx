@@ -1,7 +1,11 @@
+import { AlertTriangle, Banknote, Landmark, ShieldAlert } from "lucide-react";
+
 import { Container } from "@/components/ui/container";
 import { Reveal } from "@/components/animations/reveal";
+import { AnimatedCounter } from "@/components/animations/animated-counter";
 import { getColombiaDepartmentShapes } from "@/lib/gov-data/colombia-geo";
 import {
+  getAnticorruptionIndexByDepartment,
   getGdpByDepartment,
   getGovernmentPerformanceByDepartment,
   getHomicidesByDepartment,
@@ -10,21 +14,27 @@ import {
 import { ColombiaDashboardClient } from "./colombia-dashboard-client";
 import type { DashboardTopic } from "./types";
 
+function average(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
 /**
  * Observatorio de datos regionales: mapa interactivo de Colombia con
- * cifras oficiales del Estado (Policía Nacional, DANE, DNP) consultadas
- * en vivo vía la API de datos.gov.co. Server Component: todas las
- * consultas se resuelven en el servidor antes de enviar HTML al cliente.
+ * cifras oficiales del Estado (Policía Nacional, DANE, DNP, Procuraduría)
+ * consultadas en vivo vía la API de datos.gov.co. Server Component: todas
+ * las consultas se resuelven en el servidor antes de enviar HTML al cliente.
  */
 export async function ColombiaDashboard() {
-  let shapes, homicidios, pib, mdm;
+  let shapes, homicidios, pib, mdm, integra;
 
   try {
-    [shapes, homicidios, pib, mdm] = await Promise.all([
+    [shapes, homicidios, pib, mdm, integra] = await Promise.all([
       getColombiaDepartmentShapes(),
       getHomicidesByDepartment(),
       getGdpByDepartment(),
       getGovernmentPerformanceByDepartment(),
+      getAnticorruptionIndexByDepartment(),
     ]);
   } catch {
     return (
@@ -87,6 +97,49 @@ export async function ColombiaDashboard() {
       lowLabel: "Peor gestión",
       highLabel: "Mejor gestión",
     },
+    {
+      id: "corrupcion",
+      label: "Corrupción",
+      unit: "puntos",
+      year: integra.year,
+      source: GOV_DATASETS.integraLegalidad.source,
+      sourceUrl: GOV_DATASETS.integraLegalidad.url,
+      data: integra.data,
+      higherIsBetter: true,
+      explainer:
+        "Este mapa muestra el Índice Integral de Legalidad (INTEGRA) de la Procuraduría, que combina contratación, control interno, transparencia y manejo financiero para medir el riesgo de corrupción institucional. Mientras más oscuro el color morado, menor es el riesgo (mejor legalidad).",
+      unitExplainer:
+        "El puntaje va de 0 a 100: entre más alto, menor es el riesgo de corrupción según este índice oficial.",
+      lowLabel: "Mayor riesgo de corrupción",
+      highLabel: "Menor riesgo de corrupción",
+    },
+  ];
+
+  const nationalStats = [
+    {
+      icon: ShieldAlert,
+      label: `Homicidios en ${homicidios.year} (total nacional)`,
+      value: homicidios.data.reduce((sum, d) => sum + d.value, 0),
+      suffix: "",
+    },
+    {
+      icon: Banknote,
+      label: `PIB nacional ${pib.year} (miles de millones COP)`,
+      value: Math.round(pib.data.reduce((sum, d) => sum + d.value, 0)),
+      suffix: "",
+    },
+    {
+      icon: Landmark,
+      label: `Desempeño municipal promedio (${mdm.year})`,
+      value: Math.round(average(mdm.data.map((d) => d.value)) * 10) / 10,
+      suffix: " / 100",
+    },
+    {
+      icon: AlertTriangle,
+      label: `Legalidad institucional promedio (${integra.year})`,
+      value: Math.round(average(integra.data.map((d) => d.value)) * 10) / 10,
+      suffix: " / 100",
+    },
   ];
 
   return (
@@ -97,7 +150,7 @@ export async function ColombiaDashboard() {
             Observatorio regional
           </span>
           <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Colombia, departamento por departamento
+            Así va el país
           </h2>
           <p className="mt-4 text-muted-foreground">
             Cifras oficiales del Estado colombiano, consultadas en vivo desde{" "}
@@ -109,8 +162,25 @@ export async function ColombiaDashboard() {
             >
               datos.gov.co
             </a>
-            . Explora violencia, economía y desempeño de gobiernos locales por región.
+            . Explora violencia, economía, gestión de gobiernos locales y riesgo de
+            corrupción, departamento por departamento.
           </p>
+        </Reveal>
+
+        {/* Resumen nacional: da contexto de país antes de entrar al detalle por departamento */}
+        <Reveal className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {nationalStats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div key={stat.label} className="rounded-2xl border border-border bg-surface p-4">
+                <Icon className="size-4 text-brand" aria-hidden="true" />
+                <p className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
+                  <AnimatedCounter value={stat.value} suffix={stat.suffix} />
+                </p>
+                <p className="mt-1 text-xs leading-snug text-muted-foreground">{stat.label}</p>
+              </div>
+            );
+          })}
         </Reveal>
 
         <div className="mt-10">

@@ -26,6 +26,12 @@ export const GOV_DATASETS = {
     source: "Departamento Nacional de Planeación (DNP)",
     url: "https://www.datos.gov.co/Agricultura-y-Desarrollo-Rural/DNP-Medici-n-del-Desempe-o-Municipal/nkjx-rsq7",
   },
+  integraLegalidad: {
+    id: "i594-3uqz",
+    title: "Índice Integral de Legalidad (INTEGRA)",
+    source: "Procuraduría General de la Nación",
+    url: "https://www.datos.gov.co/Funci-n-p-blica/INTEGRA-ndice-Integral-de-Legalidad-/i594-3uqz",
+  },
 } as const;
 
 const currentYear = new Date().getFullYear();
@@ -115,6 +121,45 @@ export async function getGovernmentPerformanceByDepartment(): Promise<{
       .filter((r) => r.departamento)
       .map((r) => ({
         code: normalizeDeptCode(r.codigo_departamento),
+        name: r.departamento,
+        value: Math.round(Number(r.promedio) * 10) / 10,
+      })),
+  };
+}
+
+/**
+ * Promedio departamental del Índice Integral de Legalidad (INTEGRA) de la
+ * Procuraduría: mide riesgo de corrupción institucional (contratación,
+ * control interno, transparencia y gestión financiera). 0-100, más alto
+ * es mejor (menor riesgo).
+ */
+export async function getAnticorruptionIndexByDepartment(): Promise<{
+  data: DepartmentDatum[];
+  year: number;
+}> {
+  const [{ max_periodo }] = await querySocrataDataset<{ max_periodo: string }>(
+    GOV_DATASETS.integraLegalidad.id,
+    { $select: "max(periodo_medicion) as max_periodo" }
+  );
+  const year = Number(max_periodo);
+
+  const rows = await querySocrataDataset<{
+    dpto_ccdgo: string;
+    departamento: string;
+    promedio: string;
+  }>(GOV_DATASETS.integraLegalidad.id, {
+    $select: "dpto_ccdgo, departamento, avg(integra::number) as promedio",
+    $where: `periodo_medicion='${year}'`,
+    $group: "dpto_ccdgo, departamento",
+    $limit: 40,
+  });
+
+  return {
+    year,
+    data: rows
+      .filter((r) => r.departamento && r.dpto_ccdgo)
+      .map((r) => ({
+        code: normalizeDeptCode(r.dpto_ccdgo),
         name: r.departamento,
         value: Math.round(Number(r.promedio) * 10) / 10,
       })),
