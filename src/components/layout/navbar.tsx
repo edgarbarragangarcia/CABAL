@@ -11,10 +11,10 @@ import {
   ChevronDown,
   FileText,
   Gavel,
+  LineChart,
   Menu,
   Newspaper,
   Radio,
-  ScrollText,
   X,
 } from "lucide-react";
 
@@ -26,8 +26,8 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
 const CHILD_ICONS: Record<string, React.ElementType> = {
   "/academia/publicaciones": FileText,
   "/academia/observatorio-legislativo": Gavel,
-  "/academia/boletin-derechos-humanos": ScrollText,
-  "/academia/boletin-prensa": Newspaper,
+  "/academia/observatorio-economico": LineChart,
+  "/academia/boletines": Newspaper,
 };
 
 export function Navbar() {

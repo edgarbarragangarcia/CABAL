@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/sections/page-header";
 import { FeedEmptyState } from "@/components/sections/feed-empty-state";
 import { LegislativeStats } from "@/components/sections/legislative-stats";
-import { ColombiaDashboard } from "@/components/sections/colombia-dashboard/colombia-dashboard";
 
 export const metadata: Metadata = {
   title: "Observatorio Legislativo",
@@ -19,7 +18,6 @@ export default function ObservatorioLegislativoPage() {
       />
       <LegislativeStats />
       <FeedEmptyState message="El detalle proyecto a proyecto se está migrando a esta plataforma. Vuelve pronto." />
-      <ColombiaDashboard />
     </>
   );
 }

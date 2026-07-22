@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, FileText, Gavel, Newspaper, ScrollText } from "lucide-react";
+import { ArrowUpRight, FileText, Gavel, LineChart, Newspaper } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { PageHeader } from "@/components/sections/page-header";
@@ -16,8 +16,8 @@ export const metadata: Metadata = {
 const ICONS: Record<string, React.ElementType> = {
   "/academia/publicaciones": FileText,
   "/academia/observatorio-legislativo": Gavel,
-  "/academia/boletin-derechos-humanos": ScrollText,
-  "/academia/boletin-prensa": Newspaper,
+  "/academia/observatorio-economico": LineChart,
+  "/academia/boletines": Newspaper,
 };
 
 export default function AcademiaPage() {
