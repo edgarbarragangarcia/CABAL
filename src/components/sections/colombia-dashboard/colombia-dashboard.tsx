@@ -289,30 +289,8 @@ export async function ColombiaDashboard() {
   return (
     <section className="py-16 sm:py-24">
       <Container>
-        <Reveal className="max-w-2xl">
-          <span className="mb-4 inline-block rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand">
-            Observatorio regional
-          </span>
-          <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Así va el país
-          </h2>
-          <p className="mt-4 text-muted-foreground">
-            Cifras oficiales del Estado colombiano, consultadas en vivo desde{" "}
-            <a
-              href="https://www.datos.gov.co"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-brand hover:underline"
-            >
-              datos.gov.co
-            </a>
-            . Explora violencia, economía, gestión de gobiernos locales y riesgo de
-            corrupción, departamento por departamento.
-          </p>
-        </Reveal>
-
         {/* Resumen nacional: da contexto de país antes de entrar al detalle por departamento */}
-        <Reveal className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <Reveal className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           {nationalStats.map((stat) => {
             const Icon = stat.icon;
             return (
