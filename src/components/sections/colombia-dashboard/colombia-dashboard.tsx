@@ -287,7 +287,7 @@ export async function ColombiaDashboard() {
   const latestDeflator = deflatorTrend[deflatorTrend.length - 1]?.total ?? null;
 
   return (
-    <section className="py-16 sm:py-24">
+    <section className="pb-16 sm:pb-24">
       <Container>
         {/* Resumen nacional: da contexto de país antes de entrar al detalle por departamento */}
         <Reveal className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
