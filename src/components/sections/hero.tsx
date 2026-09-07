@@ -1,185 +1,260 @@
 "use client";
 
-import { useState } from "react";
+import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowRight, ImageOff, PlayCircle, Sparkles, UserRound } from "lucide-react";
+import {
+  motion,
+  useMotionValue,
+  useSpring,
+  useReducedMotion,
+} from "framer-motion";
+import { ArrowRight, ChevronDown, ImageOff, PlayCircle, UserRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Reveal } from "@/components/animations/reveal";
+import { AnimatedCounter } from "@/components/animations/animated-counter";
+import { HeroAurora } from "@/components/sections/hero-aurora";
 import { LiveRadioWidget } from "@/components/sections/live-radio-widget";
 import { staggerContainer, fadeUp } from "@/lib/motion";
-import { cabalStats, cabalQuote } from "@/config/maria-fernanda-cabal";
+import { cabalStats, cabalQuote, cabalBills } from "@/config/maria-fernanda-cabal";
 
-export function Hero() {
-  const [photoFailed, setPhotoFailed] = useState(false);
+function splitStat(value: string) {
+  const m = value.match(/^(\D*)(\d+)(.*)$/);
+  if (!m) return { prefix: "", number: null as number | null, suffix: value };
+  return { prefix: m[1], number: Number(m[2]), suffix: m[3] };
+}
+
+/** Retrato a sangre con leve paralaje 3D siguiendo el cursor. */
+function PortraitBleed() {
+  const reduce = useReducedMotion();
+  const [failed, setFailed] = React.useState(false);
+  const rx = useSpring(useMotionValue(0), { stiffness: 90, damping: 16 });
+  const ry = useSpring(useMotionValue(0), { stiffness: 90, damping: 16 });
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (reduce) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    ry.set(((e.clientX - r.left) / r.width - 0.5) * 8);
+    rx.set(-((e.clientY - r.top) / r.height - 0.5) * 8);
+  };
+  const reset = () => {
+    rx.set(0);
+    ry.set(0);
+  };
 
   return (
-    <section className="relative isolate overflow-hidden pt-40 pb-24 sm:pt-48 sm:pb-32">
-      {/* Fondo: malla de gradientes animada, sin cuadrícula */}
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <motion.div
-          aria-hidden="true"
-          className="absolute left-1/2 top-[-12rem] h-[42rem] w-[42rem] -translate-x-1/2 rounded-full opacity-40 blur-3xl"
-          style={{
-            background:
-              "conic-gradient(from 90deg at 50% 50%, var(--brand), var(--accent), var(--brand))",
-          }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+    <motion.div
+      onMouseMove={onMove}
+      onMouseLeave={reset}
+      initial={{ opacity: 0, scale: 1.06 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+      style={{ rotateX: rx, rotateY: ry }}
+      className="relative mx-auto aspect-[4/5] w-full max-w-sm overflow-hidden rounded-[1.75rem] border border-white/10 [transform-style:preserve-3d] lg:mx-0 lg:aspect-auto lg:h-full lg:max-w-none lg:rounded-none lg:border-0"
+    >
+      {failed ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/[0.03] text-zinc-400">
+          <div className="flex size-20 items-center justify-center rounded-full bg-white/5">
+            <UserRound className="size-10" aria-hidden="true" strokeWidth={1.5} />
+          </div>
+          <span className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-[11px] font-medium">
+            <ImageOff className="size-3.5" aria-hidden="true" />
+            Foto pendiente de autorización
+          </span>
+        </div>
+      ) : (
+        <Image
+          src="/cabal-hero.jpg"
+          alt="María Fernanda Cabal"
+          fill
+          priority
+          sizes="(min-width: 1024px) 48vw, 100vw"
+          className="object-cover object-top"
+          onError={() => setFailed(true)}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/60 to-background" />
-      </div>
+      )}
 
-      <Container>
-        <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-16">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={staggerContainer}
-            className="flex min-w-0 flex-col items-center text-center lg:items-start lg:text-left"
-          >
-            <motion.h1
-              variants={fadeUp}
-              className="text-balance text-4xl font-semibold tracking-tight sm:text-6xl"
-            >
-              Construimos{" "}
-              <span className="animate-gradient-x bg-[linear-gradient(90deg,var(--brand),var(--accent),var(--brand))] bg-[length:200%_auto] bg-clip-text text-transparent">
-                libertad a través de la educación
-              </span>
-            </motion.h1>
+      {/* mezcla del retrato con el fondo aurora */}
+      <div className="pointer-events-none absolute inset-0 hidden lg:block lg:[background:linear-gradient(90deg,#07080a_0%,rgba(7,8,10,0.35)_28%,transparent_60%)]" />
+      <div className="pointer-events-none absolute inset-0 lg:[background:linear-gradient(0deg,#07080a_2%,transparent_38%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 lg:[background:linear-gradient(180deg,#07080a,transparent)]" />
+    </motion.div>
+  );
+}
 
-            <motion.blockquote
-              variants={fadeUp}
-              className="mt-6 max-w-xl border-l-2 border-brand pl-4 text-balance text-lg italic text-muted-foreground sm:text-xl lg:text-left"
-            >
-              “{cabalQuote.text}”
-              <footer className="mt-2 text-sm not-italic text-muted-foreground/80">
-                — María Fernanda Cabal ·{" "}
-                <a
-                  href={cabalQuote.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="underline decoration-dotted underline-offset-2 hover:text-foreground"
-                >
-                  {cabalQuote.sourceLabel}
-                </a>
-              </footer>
-            </motion.blockquote>
+export function Hero() {
+  const marquee = [...cabalBills, ...cabalBills];
 
-            <motion.div
-              variants={fadeUp}
-              className="mt-10 flex flex-col items-center gap-4 sm:flex-row"
-            >
-              <Button asChild size="lg" variant="accent">
-                <Link href="/donar">
-                  Donar / Apoyar
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="/proyectos">
-                  <PlayCircle className="size-4" aria-hidden="true" />
-                  Conoce nuestro impacto
-                </Link>
-              </Button>
-            </motion.div>
+  return (
+    <section className="relative isolate flex min-h-screen flex-col overflow-hidden pt-32 text-white sm:pt-36">
+      <HeroAurora />
 
-            <motion.div
-              variants={fadeUp}
-              id="radio-en-vivo"
-              className="mt-12 w-full scroll-mt-32"
-            >
-              <LiveRadioWidget />
-            </motion.div>
-          </motion.div>
-
-          {/* Panel de foto de María Fernanda Cabal; si la imagen no carga, cae al placeholder */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-            className="relative mx-auto -mt-6 mb-10 w-full max-w-sm lg:-mt-10 lg:mb-12"
-          >
-            <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-border bg-gradient-to-b from-surface-muted to-border/40 shadow-xl">
-              {photoFailed ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                  <div className="flex size-20 items-center justify-center rounded-full bg-surface/80 shadow-sm">
-                    <UserRound className="size-10" aria-hidden="true" strokeWidth={1.5} />
-                  </div>
-                  <span className="flex items-center gap-1.5 rounded-full bg-surface/80 px-3 py-1 text-[11px] font-medium shadow-sm">
-                    <ImageOff className="size-3.5" aria-hidden="true" />
-                    Foto pendiente de autorización
-                  </span>
-                </div>
-              ) : (
-                <Image
-                  src="/cabal-hero.jpg"
-                  alt="María Fernanda Cabal"
-                  fill
-                  priority
-                  sizes="(min-width: 640px) 24rem, 100vw"
-                  className="object-cover object-top"
-                  onError={() => setPhotoFailed(true)}
-                />
-              )}
-            </div>
-
-            {/* Tarjeta superpuesta, estilo "hito" */}
-            <Reveal
-              delay={0.2}
-              className="absolute inset-x-4 -bottom-8 rounded-2xl border border-border bg-surface p-5 shadow-2xl sm:-bottom-10 sm:p-6"
-            >
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand">
-                <Sparkles className="size-3.5" aria-hidden="true" />
-                Trayectoria legislativa
-              </span>
-              <p className="mt-2 text-2xl font-semibold tracking-tight">
-                {cabalStats[0].value}
-              </p>
-              <p className="text-xs text-muted-foreground">{cabalStats[0].label}</p>
-            </Reveal>
-          </motion.div>
+      {/* Retrato a sangre en el borde derecho (desktop) */}
+      <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[48%] lg:block xl:w-[46%]">
+        <div className="pointer-events-auto h-full">
+          <PortraitBleed />
         </div>
 
-        <Reveal className="mx-auto mt-16 max-w-2xl border-t border-border pt-10 text-center">
-          <dl className="grid grid-cols-3 gap-6">
-            {cabalStats.map((stat) => (
-              <div key={stat.label} className="flex flex-col items-center gap-1">
-                <dt className="sr-only">{stat.label}</dt>
-                <dd className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {stat.value}
-                </dd>
-                <span className="text-xs text-muted-foreground sm:text-sm">{stat.label}</span>
-              </div>
-            ))}
-          </dl>
-
-          <p className="mt-4 text-xs text-muted-foreground">
-            Fuente:{" "}
-            <a
-              href={cabalStats[0].sourceUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="underline decoration-dotted underline-offset-2 hover:text-foreground"
-            >
-              {cabalStats[0].sourceLabel}
-            </a>{" "}
-            y{" "}
-            <a
-              href={cabalStats[2].sourceUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="underline decoration-dotted underline-offset-2 hover:text-foreground"
-            >
-              {cabalStats[2].sourceLabel}
-            </a>
-            .
+        {/* fichas flotantes sobre el retrato */}
+        <Reveal
+          delay={0.35}
+          className="glass-panel animate-float-y pointer-events-auto absolute left-0 top-[28%] -translate-x-1/2 rounded-2xl px-4 py-3 shadow-2xl"
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#22c58a]">
+            Trayectoria
           </p>
+          <p className="mt-0.5 text-2xl font-semibold tracking-tight">
+            {cabalStats[0].value}
+          </p>
+          <p className="text-[10px] text-zinc-400">en el Congreso</p>
+        </Reveal>
+
+        <Reveal
+          delay={0.5}
+          className="glass-panel pointer-events-auto absolute bottom-[22%] left-4 rounded-2xl px-4 py-3 shadow-2xl"
+        >
+          <p className="text-2xl font-semibold tracking-tight">{cabalStats[2].value}</p>
+          <p className="text-[10px] text-zinc-400">proyectos de ley 2024–25</p>
+        </Reveal>
+      </div>
+
+      <Container className="relative flex flex-1 flex-col justify-center py-16">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={staggerContainer}
+          className="flex max-w-2xl flex-col items-center text-center lg:items-start lg:text-left"
+        >
+          <motion.span
+            variants={fadeUp}
+            className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-zinc-300 backdrop-blur-md"
+          >
+            <span className="relative flex size-1.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#22c58a] opacity-75" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-[#22c58a]" />
+            </span>
+            Fundación Escuela Libertad
+          </motion.span>
+
+          <motion.h1
+            variants={fadeUp}
+            className="mt-6 text-balance text-[2.75rem] font-semibold leading-[0.98] tracking-[-0.03em] sm:text-7xl lg:text-8xl"
+          >
+            Construimos{" "}
+            <span className="animate-shimmer bg-[linear-gradient(110deg,#22c58a_20%,#ffc94a_45%,#22c58a_70%)] bg-[length:200%_auto] bg-clip-text text-transparent">
+              libertad
+            </span>{" "}
+            a través de la educación
+          </motion.h1>
+
+          <motion.p
+            variants={fadeUp}
+            className="mt-6 max-w-md border-l-2 border-[#22c58a]/60 pl-4 text-left text-sm italic text-zinc-400 sm:text-base"
+          >
+            “{cabalQuote.text}”
+            <span className="mt-1 block text-xs not-italic text-zinc-600">
+              — María Fernanda Cabal ·{" "}
+              <a
+                href={cabalQuote.sourceUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="underline decoration-dotted underline-offset-2 hover:text-zinc-400"
+              >
+                {cabalQuote.sourceLabel}
+              </a>
+            </span>
+          </motion.p>
+
+          <motion.div
+            variants={fadeUp}
+            className="mt-9 flex flex-col items-center gap-3 sm:flex-row"
+          >
+            <Button
+              asChild
+              size="lg"
+              className="bg-[#22c58a] text-[#04140d] shadow-[0_0_40px_-8px_rgba(34,197,138,0.7)] hover:bg-[#2ee59c] hover:shadow-[0_0_55px_-6px_rgba(34,197,138,0.9)]"
+            >
+              <Link href="/donar">
+                Donar / Apoyar
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              className="border border-white/15 bg-white/5 text-white backdrop-blur-md hover:bg-white/10"
+            >
+              <Link href="/proyectos">
+                <PlayCircle className="size-4" aria-hidden="true" />
+                Conoce nuestro impacto
+              </Link>
+            </Button>
+          </motion.div>
+
+          {/* Retrato en el flujo para móvil / tablet */}
+          <motion.div
+            variants={fadeUp}
+            className="mt-10 w-full max-w-sm lg:hidden"
+          >
+            <PortraitBleed />
+          </motion.div>
+
+          <motion.div
+            variants={fadeUp}
+            id="radio-en-vivo"
+            className="mt-10 w-full max-w-md scroll-mt-32 [&_*]:!border-white/10"
+          >
+            <LiveRadioWidget />
+          </motion.div>
+        </motion.div>
+
+        {/* Cifras grandes, integradas al pie del hero */}
+        <Reveal className="mt-16 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/5 lg:max-w-3xl">
+          {cabalStats.map((stat) => {
+            const { prefix, number, suffix } = splitStat(stat.value);
+            return (
+              <div key={stat.label} className="bg-[#07080a]/60 p-4 backdrop-blur-sm sm:p-5">
+                <p className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">
+                  {number === null ? (
+                    stat.value
+                  ) : (
+                    <>
+                      {prefix}
+                      <AnimatedCounter value={number} />
+                      {suffix}
+                    </>
+                  )}
+                </p>
+                <p className="mt-1 text-[11px] leading-snug text-zinc-500">{stat.label}</p>
+              </div>
+            );
+          })}
         </Reveal>
       </Container>
+
+      {/* Ticker de iniciativas al pie del hero */}
+      <div className="relative mt-auto flex items-center gap-4 border-t border-white/10 bg-[#07080a]/70 py-3 backdrop-blur-sm">
+        <span className="ml-6 hidden shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[#22c58a] sm:flex">
+          <ChevronDown className="size-3.5 animate-bounce" aria-hidden="true" />
+          Iniciativas
+        </span>
+        <div className="flex overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_6%,#000_94%,transparent)]">
+          <div className="animate-marquee flex shrink-0 items-center gap-8 pr-8">
+            {marquee.map((bill, i) => (
+              <span
+                key={`${bill.title}-${i}`}
+                className="flex items-center gap-2 whitespace-nowrap text-sm"
+              >
+                <span className="size-1 rounded-full bg-[#22c58a]" />
+                <span className="font-medium text-zinc-300">{bill.title}</span>
+                <span className="text-zinc-600">· {bill.topic}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }

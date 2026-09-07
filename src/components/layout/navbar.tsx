@@ -42,6 +42,10 @@ export function Navbar() {
     setScrolled(latest > 16);
   });
 
+  // La home tiene un hero oscuro a pantalla completa: mientras no se hace
+  // scroll, la barra adopta el esquema oscuro para contrastar sobre él.
+  const onDark = pathname === "/" && !scrolled;
+
   const openWithIntent = (label: string) => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setOpenMenu(label);
@@ -86,7 +90,7 @@ export function Navbar() {
         initial={{ y: -24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="px-4 pt-3 sm:pt-4"
+        className={cn("px-4 pt-3 transition-colors duration-300 sm:pt-4", onDark && "dark")}
       >
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
           {/* Marca: cápsula independiente, separada del bloque de navegación */}

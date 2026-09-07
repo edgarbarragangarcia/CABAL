@@ -81,6 +81,12 @@
   --animate-pulse-glow: pulse-glow 2.4s ease-in-out infinite;
   --animate-fade-up: fade-up 0.6s ease forwards;
   --animate-marquee: marquee 32s linear infinite;
+  --animate-aurora-a: aurora-a 22s ease-in-out infinite;
+  --animate-aurora-b: aurora-b 28s ease-in-out infinite;
+  --animate-aurora-c: aurora-c 34s ease-in-out infinite;
+  --animate-spin-slow: spin-slow 26s linear infinite;
+  --animate-float-y: float-y 7s ease-in-out infinite;
+  --animate-shimmer: shimmer 6s linear infinite;
 
   @keyframes gradient-x {
     0%,
@@ -120,6 +126,97 @@
     to {
       transform: translateX(-50%);
     }
+  }
+
+  @keyframes aurora-a {
+    0%,
+    100% {
+      transform: translate3d(-6%, -4%, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(8%, 6%, 0) scale(1.25);
+    }
+  }
+
+  @keyframes aurora-b {
+    0%,
+    100% {
+      transform: translate3d(6%, 8%, 0) scale(1.1);
+    }
+    50% {
+      transform: translate3d(-8%, -6%, 0) scale(0.85);
+    }
+  }
+
+  @keyframes aurora-c {
+    0%,
+    100% {
+      transform: translate3d(0, 4%, 0) scale(0.9) rotate(0deg);
+    }
+    50% {
+      transform: translate3d(-4%, -8%, 0) scale(1.15) rotate(12deg);
+    }
+  }
+
+  @keyframes spin-slow {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes float-y {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: 200% center;
+    }
+  }
+}
+
+@layer utilities {
+  /* Grano sutil para superficies oscuras premium */
+  .bg-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+
+  .glass-panel {
+    background: color-mix(in oklab, #0d1013 62%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    border: 1px solid color-mix(in oklab, #ffffff 12%, transparent);
+  }
+
+  .ring-glow {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--brand) 40%, transparent),
+      0 0 60px -12px color-mix(in oklab, var(--brand) 55%, transparent),
+      0 30px 80px -30px rgb(0 0 0 / 0.7);
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-aurora-a,
+  .animate-aurora-b,
+  .animate-aurora-c,
+  .animate-spin-slow,
+  .animate-float-y,
+  .animate-shimmer,
+  .animate-gradient-x,
+  .animate-pulse-glow,
+  .animate-marquee {
+    animation: none !important;
   }
 }
 
