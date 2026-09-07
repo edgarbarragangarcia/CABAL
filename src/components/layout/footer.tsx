@@ -1,5 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
-import { AtSign, GraduationCap, MessageCircle, ShieldCheck, Video } from "lucide-react";
+import { AtSign, MessageCircle, ShieldCheck, Video } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { footerNav, siteConfig } from "@/config/site";
 
@@ -9,9 +10,13 @@ export function Footer() {
       <Container className="grid gap-12 py-16 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
         <div>
           <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <span className="flex size-8 items-center justify-center rounded-full bg-brand text-brand-foreground">
-              <GraduationCap className="size-4.5" aria-hidden="true" />
-            </span>
+            <Image
+              src="/logo-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              className="size-8 shrink-0 object-contain"
+            />
             {siteConfig.name}
           </Link>
           <p className="mt-4 max-w-xs text-sm text-muted-foreground">

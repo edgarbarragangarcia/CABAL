@@ -1,13 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "framer-motion";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Accordion from "@radix-ui/react-accordion";
 import {
-  BookOpen,
   ChevronDown,
   FileText,
   Gavel,
@@ -99,9 +99,14 @@ export function Navbar() {
                 : "border-transparent bg-surface/30 backdrop-blur-md"
             )}
           >
-            <span className="flex size-8 items-center justify-center rounded-full bg-brand text-brand-foreground">
-              <BookOpen className="size-4.5" aria-hidden="true" />
-            </span>
+            <Image
+              src="/logo-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              priority
+              className="size-8 shrink-0 object-contain"
+            />
             <span className="hidden sm:inline">Escuela Libertad</span>
           </Link>
 

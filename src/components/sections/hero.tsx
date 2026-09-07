@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, ImageOff, PlayCircle, Sparkles, UserRound } from "lucide-react";
@@ -12,6 +14,8 @@ import { staggerContainer, fadeUp } from "@/lib/motion";
 import { cabalStats, cabalQuote } from "@/config/maria-fernanda-cabal";
 
 export function Hero() {
+  const [photoFailed, setPhotoFailed] = useState(false);
+
   return (
     <section className="relative isolate overflow-hidden pt-40 pb-24 sm:pt-48 sm:pb-32">
       {/* Fondo: malla de gradientes animada, sin cuadrícula */}
@@ -92,7 +96,7 @@ export function Hero() {
             </motion.div>
           </motion.div>
 
-          {/* Panel de foto: placeholder a la espera de una imagen con derechos confirmados */}
+          {/* Panel de foto de María Fernanda Cabal; si la imagen no carga, cae al placeholder */}
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -100,15 +104,27 @@ export function Hero() {
             className="relative mx-auto -mt-6 mb-10 w-full max-w-sm lg:-mt-10 lg:mb-12"
           >
             <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-border bg-gradient-to-b from-surface-muted to-border/40 shadow-xl">
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                <div className="flex size-20 items-center justify-center rounded-full bg-surface/80 shadow-sm">
-                  <UserRound className="size-10" aria-hidden="true" strokeWidth={1.5} />
+              {photoFailed ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                  <div className="flex size-20 items-center justify-center rounded-full bg-surface/80 shadow-sm">
+                    <UserRound className="size-10" aria-hidden="true" strokeWidth={1.5} />
+                  </div>
+                  <span className="flex items-center gap-1.5 rounded-full bg-surface/80 px-3 py-1 text-[11px] font-medium shadow-sm">
+                    <ImageOff className="size-3.5" aria-hidden="true" />
+                    Foto pendiente de autorización
+                  </span>
                 </div>
-                <span className="flex items-center gap-1.5 rounded-full bg-surface/80 px-3 py-1 text-[11px] font-medium shadow-sm">
-                  <ImageOff className="size-3.5" aria-hidden="true" />
-                  Foto pendiente de autorización
-                </span>
-              </div>
+              ) : (
+                <Image
+                  src="/cabal-hero.jpg"
+                  alt="María Fernanda Cabal"
+                  fill
+                  priority
+                  sizes="(min-width: 640px) 24rem, 100vw"
+                  className="object-cover object-top"
+                  onError={() => setPhotoFailed(true)}
+                />
+              )}
             </div>
 
             {/* Tarjeta superpuesta, estilo "hito" */}
