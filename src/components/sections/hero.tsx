@@ -127,20 +127,9 @@ export function Hero() {
           variants={staggerContainer}
           className="flex max-w-2xl flex-col items-center text-center lg:items-start lg:text-left"
         >
-          <motion.span
-            variants={fadeUp}
-            className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-zinc-300 backdrop-blur-md"
-          >
-            <span className="relative flex size-1.5">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#22c58a] opacity-75" />
-              <span className="relative inline-flex size-1.5 rounded-full bg-[#22c58a]" />
-            </span>
-            Fundación Escuela Libertad
-          </motion.span>
-
           <motion.h1
             variants={fadeUp}
-            className="mt-6 text-balance text-[2.75rem] font-semibold leading-[0.98] tracking-[-0.03em] sm:text-7xl lg:text-8xl"
+            className="text-balance text-[2.75rem] font-semibold leading-[0.98] tracking-[-0.03em] sm:text-7xl lg:text-8xl"
           >
             Construimos{" "}
             <span className="animate-shimmer bg-[linear-gradient(110deg,#22c58a_20%,#ffc94a_45%,#22c58a_70%)] bg-[length:200%_auto] bg-clip-text text-transparent">
