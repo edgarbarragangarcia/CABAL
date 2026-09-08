@@ -16,6 +16,7 @@ import { Container } from "@/components/ui/container";
 import { Reveal } from "@/components/animations/reveal";
 import { AnimatedCounter } from "@/components/animations/animated-counter";
 import { HeroAurora } from "@/components/sections/hero-aurora";
+import { TrajectoryDialog } from "@/components/sections/trajectory-dialog";
 import { LiveRadioWidget } from "@/components/sections/live-radio-widget";
 import { staggerContainer, fadeUp } from "@/lib/motion";
 import { cabalStats, cabalQuote, cabalBills } from "@/config/maria-fernanda-cabal";
@@ -100,26 +101,56 @@ export function Hero() {
           <PortraitBleed />
         </div>
 
-        {/* fichas flotantes sobre el retrato */}
+        {/* fichas flotantes sobre el retrato — abren el detalle de trayectoria */}
         <Reveal
           delay={0.35}
-          className="glass-panel animate-float-y pointer-events-auto absolute left-0 top-[28%] -translate-x-1/2 rounded-2xl px-4 py-3 shadow-2xl"
+          className="pointer-events-auto absolute left-0 top-[28%] -translate-x-1/2"
         >
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#22c58a]">
-            Trayectoria
-          </p>
-          <p className="mt-0.5 text-2xl font-semibold tracking-tight">
-            {cabalStats[0].value}
-          </p>
-          <p className="text-[10px] text-zinc-400">en el Congreso</p>
+          <TrajectoryDialog
+            trigger={
+              <button
+                type="button"
+                className="glass-panel animate-float-y group block rounded-2xl px-4 py-3 text-left shadow-2xl transition-transform duration-200 hover:scale-[1.03]"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#22c58a]">
+                  Trayectoria
+                </p>
+                <p className="mt-0.5 text-2xl font-semibold tracking-tight text-white">
+                  {cabalStats[0].value}
+                </p>
+                <p className="text-[10px] text-zinc-400">
+                  en el Congreso ·{" "}
+                  <span className="underline decoration-dotted underline-offset-2 group-hover:text-white">
+                    ver detalle
+                  </span>
+                </p>
+              </button>
+            }
+          />
         </Reveal>
 
         <Reveal
           delay={0.5}
-          className="glass-panel pointer-events-auto absolute bottom-[22%] left-4 rounded-2xl px-4 py-3 shadow-2xl"
+          className="pointer-events-auto absolute bottom-[22%] left-4"
         >
-          <p className="text-2xl font-semibold tracking-tight">{cabalStats[2].value}</p>
-          <p className="text-[10px] text-zinc-400">proyectos de ley 2024–25</p>
+          <TrajectoryDialog
+            trigger={
+              <button
+                type="button"
+                className="glass-panel group block rounded-2xl px-4 py-3 text-left shadow-2xl transition-transform duration-200 hover:scale-[1.03]"
+              >
+                <p className="text-2xl font-semibold tracking-tight text-white">
+                  {cabalStats[2].value}
+                </p>
+                <p className="text-[10px] text-zinc-400">
+                  proyectos de ley 2024–25 ·{" "}
+                  <span className="underline decoration-dotted underline-offset-2 group-hover:text-white">
+                    ver
+                  </span>
+                </p>
+              </button>
+            }
+          />
         </Reveal>
       </div>
 
@@ -202,27 +233,47 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* Cifras grandes, integradas al pie del hero */}
-        <Reveal className="mt-16 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/5 lg:max-w-3xl">
-          {cabalStats.map((stat) => {
-            const { prefix, number, suffix } = splitStat(stat.value);
-            return (
-              <div key={stat.label} className="bg-[#07080a]/60 p-4 backdrop-blur-sm sm:p-5">
-                <p className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">
-                  {number === null ? (
-                    stat.value
-                  ) : (
-                    <>
-                      {prefix}
-                      <AnimatedCounter value={number} />
-                      {suffix}
-                    </>
-                  )}
-                </p>
-                <p className="mt-1 text-[11px] leading-snug text-zinc-500">{stat.label}</p>
-              </div>
-            );
-          })}
+        {/* Cifras grandes, integradas al pie del hero — abren el detalle */}
+        <Reveal className="mt-16 lg:max-w-3xl">
+          <TrajectoryDialog
+            trigger={
+              <button
+                type="button"
+                className="group block w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-left transition-colors hover:border-white/25"
+              >
+                <div className="grid grid-cols-3 gap-px">
+                  {cabalStats.map((stat) => {
+                    const { prefix, number, suffix } = splitStat(stat.value);
+                    return (
+                      <div
+                        key={stat.label}
+                        className="bg-[#07080a]/60 p-4 backdrop-blur-sm sm:p-5"
+                      >
+                        <p className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">
+                          {number === null ? (
+                            stat.value
+                          ) : (
+                            <>
+                              {prefix}
+                              <AnimatedCounter value={number} />
+                              {suffix}
+                            </>
+                          )}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                          {stat.label}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <span className="flex items-center justify-center gap-1.5 border-t border-white/10 bg-white/[0.02] py-2 text-[11px] font-medium text-zinc-400 group-hover:text-white">
+                  Ver iniciativas y fuentes
+                  <ArrowRight className="size-3.5" aria-hidden="true" />
+                </span>
+              </button>
+            }
+          />
         </Reveal>
       </Container>
 
