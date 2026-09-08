@@ -97,14 +97,15 @@ export function Hero() {
 
       {/* Retrato a sangre en el borde derecho (desktop) */}
       <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[48%] lg:block xl:w-[46%]">
-        <div className="pointer-events-auto h-full">
-          <PortraitBleed />
-        </div>
+        <PortraitBleed />
+      </div>
 
-        {/* fichas flotantes sobre el retrato — abren el detalle de trayectoria */}
+      {/* Fichas flotantes: capa propia por encima del contenido, para que el
+          clic siempre llegue aunque el titular se solape */}
+      <div className="pointer-events-none absolute inset-0 z-30 hidden lg:block">
         <Reveal
           delay={0.35}
-          className="pointer-events-auto absolute left-0 top-[28%] -translate-x-1/2"
+          className="pointer-events-auto absolute left-[52%] top-[34%] -translate-x-1/2"
         >
           <TrajectoryDialog
             trigger={
@@ -131,7 +132,7 @@ export function Hero() {
 
         <Reveal
           delay={0.5}
-          className="pointer-events-auto absolute bottom-[22%] left-4"
+          className="pointer-events-auto absolute bottom-[24%] left-[calc(52%+1rem)] -translate-x-1/2"
         >
           <TrajectoryDialog
             trigger={
@@ -163,7 +164,7 @@ export function Hero() {
         >
           <motion.h1
             variants={fadeUp}
-            className="text-balance text-[2.75rem] font-semibold leading-[0.98] tracking-[-0.03em] sm:text-7xl lg:text-8xl"
+            className="pointer-events-none text-balance text-[2.75rem] font-semibold leading-[0.98] tracking-[-0.03em] sm:text-7xl lg:text-8xl"
           >
             Construimos{" "}
             <span className="animate-shimmer bg-[linear-gradient(110deg,#22c58a_20%,#ffc94a_45%,#22c58a_70%)] bg-[length:200%_auto] bg-clip-text text-transparent">
