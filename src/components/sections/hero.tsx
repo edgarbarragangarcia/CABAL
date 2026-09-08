@@ -76,6 +76,9 @@ function PortraitBleed() {
         />
       )}
 
+      {/* grano sutil: disimula el reescalado de la foto */}
+      <div className="bg-grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay" />
+
       {/* mezcla del retrato con el fondo aurora */}
       <div className="pointer-events-none absolute inset-0 hidden lg:block lg:[background:linear-gradient(90deg,#07080a_0%,rgba(7,8,10,0.35)_28%,transparent_60%)]" />
       <div className="pointer-events-none absolute inset-0 lg:[background:linear-gradient(0deg,#07080a_2%,transparent_38%)]" />
