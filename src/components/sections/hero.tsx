@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   motion,
@@ -9,7 +8,14 @@ import {
   useSpring,
   useReducedMotion,
 } from "framer-motion";
-import { ArrowRight, ChevronDown, ImageOff, PlayCircle, UserRound } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronDown,
+  PlayCircle,
+  UserRound,
+  VideoOff,
+  Wand2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -27,10 +33,11 @@ function splitStat(value: string) {
   return { prefix: m[1], number: Number(m[2]), suffix: m[3] };
 }
 
-/** Retrato a sangre con leve paralaje 3D siguiendo el cursor. */
+/** Retrato/video a sangre con leve paralaje 3D siguiendo el cursor. */
 function PortraitBleed() {
   const reduce = useReducedMotion();
   const [failed, setFailed] = React.useState(false);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
   const rx = useSpring(useMotionValue(0), { stiffness: 90, damping: 16 });
   const ry = useSpring(useMotionValue(0), { stiffness: 90, damping: 16 });
 
@@ -44,6 +51,15 @@ function PortraitBleed() {
     rx.set(0);
     ry.set(0);
   };
+
+  // Respeta prefers-reduced-motion: no autorreproduce, queda en el póster.
+  React.useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    if (reduce) v.pause();
+    else v.play().catch(() => {});
+  }, [reduce]);
 
   return (
     <motion.div
@@ -61,29 +77,42 @@ function PortraitBleed() {
             <UserRound className="size-10" aria-hidden="true" strokeWidth={1.5} />
           </div>
           <span className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-[11px] font-medium">
-            <ImageOff className="size-3.5" aria-hidden="true" />
-            Foto pendiente de autorización
+            <VideoOff className="size-3.5" aria-hidden="true" />
+            Contenido pendiente de autorización
           </span>
         </div>
       ) : (
-        <Image
-          src="/cabal-hero.jpg"
-          alt="María Fernanda Cabal"
-          fill
-          priority
-          sizes="(min-width: 1024px) 48vw, 100vw"
-          className="object-cover object-top"
+        <video
+          ref={videoRef}
+          poster="/cabal-hero-poster.jpg"
+          autoPlay={!reduce}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-label="María Fernanda Cabal, video generado con inteligencia artificial"
+          className="absolute inset-0 size-full object-cover object-top"
           onError={() => setFailed(true)}
-        />
+        >
+          <source src="/cabal-hero.mp4" type="video/mp4" />
+        </video>
       )}
 
-      {/* grano sutil: disimula el reescalado de la foto */}
+      {/* grano sutil: disimula el reescalado de la imagen base */}
       <div className="bg-grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay" />
 
       {/* mezcla del retrato con el fondo aurora */}
       <div className="pointer-events-none absolute inset-0 hidden lg:block lg:[background:linear-gradient(90deg,#07080a_0%,rgba(7,8,10,0.35)_28%,transparent_60%)]" />
       <div className="pointer-events-none absolute inset-0 lg:[background:linear-gradient(0deg,#07080a_2%,transparent_38%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 lg:[background:linear-gradient(180deg,#07080a,transparent)]" />
+
+      {/* divulgación: contenido generado con IA, siempre visible */}
+      {!failed && (
+        <span className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-medium text-zinc-200 backdrop-blur-md lg:right-6 lg:top-28">
+          <Wand2 className="size-3" aria-hidden="true" />
+          Video generado con IA
+        </span>
+      )}
     </motion.div>
   );
 }
