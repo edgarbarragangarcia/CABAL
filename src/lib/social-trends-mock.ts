@@ -196,3 +196,38 @@ export function getDepartmentMentions(
   }
   return out;
 }
+
+/** Un hash determinístico simple para variar el sentimiento por nombre. */
+function hashSeed(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 100000;
+  return h + 1;
+}
+
+/**
+ * Sentimiento simulado de un departamento — variación determinística
+ * alrededor del promedio nacional (sentimentBreakdown), para no inventar
+ * cifras completamente arbitrarias por refresco.
+ */
+export function getDepartmentSentiment(name: string): SentimentSlice[] {
+  const rand = seededRandom(hashSeed(name));
+  const jitter = () => Math.round((rand() - 0.5) * 16);
+  let pos = sentimentBreakdown[0].value + jitter();
+  let neu = sentimentBreakdown[1].value + jitter();
+  let neg = sentimentBreakdown[2].value + jitter();
+  pos = Math.max(5, pos);
+  neu = Math.max(5, neu);
+  neg = Math.max(5, neg);
+  const total = pos + neu + neg;
+  return [
+    { label: "Positivo", value: Math.round((pos / total) * 100), color: "#22c58a" },
+    { label: "Neutral", value: Math.round((neu / total) * 100), color: "#a1a1aa" },
+    { label: "Negativo", value: Math.round((neg / total) * 100), color: "#f97066" },
+  ];
+}
+
+/** Tema en tendencia "local" simulado: rota determinísticamente por departamento. */
+export function getDepartmentTopTopic(name: string): TrendingTopic {
+  const idx = hashSeed(name) % trendingTopics.length;
+  return trendingTopics[idx];
+}

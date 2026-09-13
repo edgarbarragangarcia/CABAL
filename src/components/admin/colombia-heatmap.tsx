@@ -36,14 +36,20 @@ function heatColor(t: number) {
 
 export function ColombiaHeatmap({
   values,
+  selected,
+  onSelect,
 }: {
   /** Menciones (u otra métrica) por nombre de departamento. */
   values: Record<string, number>;
+  /** Departamento seleccionado (clic) — se resalta con borde fijo. */
+  selected?: string | null;
+  onSelect?: (name: string) => void;
 }) {
   const [hovered, setHovered] = React.useState<string | null>(null);
   const max = Math.max(...Object.values(values), 1);
 
-  const hoveredValue = hovered ? values[hovered] : undefined;
+  const activeName = hovered ?? selected ?? null;
+  const activeValue = activeName ? values[activeName] : undefined;
 
   return (
     <div className="relative">
@@ -57,17 +63,19 @@ export function ColombiaHeatmap({
           const value = values[dept.name] ?? 0;
           const t = value / max;
           const isHovered = hovered === dept.name;
+          const isSelected = selected === dept.name;
           return (
             <path
               key={dept.name}
               d={dept.path}
               fill={heatColor(t)}
-              stroke={isHovered ? "#fff" : "rgba(255,255,255,0.15)"}
-              strokeWidth={isHovered ? 1.5 : 0.6}
+              stroke={isSelected ? "#ffc94a" : isHovered ? "#fff" : "rgba(255,255,255,0.15)"}
+              strokeWidth={isSelected ? 2 : isHovered ? 1.5 : 0.6}
               className="cursor-pointer transition-[stroke,filter] duration-150"
-              style={isHovered ? { filter: "brightness(1.15)" } : undefined}
+              style={isHovered || isSelected ? { filter: "brightness(1.15)" } : undefined}
               onMouseEnter={() => setHovered(dept.name)}
               onMouseLeave={() => setHovered((h) => (h === dept.name ? null : h))}
+              onClick={() => onSelect?.(dept.name)}
             >
               <title>
                 {dept.name}: {value.toLocaleString("es-CO")} menciones
@@ -89,9 +97,9 @@ export function ColombiaHeatmap({
         <span>Más</span>
       </div>
 
-      {hovered && (
+      {activeName && (
         <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium shadow-lg">
-          {hovered} · {(hoveredValue ?? 0).toLocaleString("es-CO")} menciones
+          {activeName} · {(activeValue ?? 0).toLocaleString("es-CO")} menciones
         </div>
       )}
     </div>

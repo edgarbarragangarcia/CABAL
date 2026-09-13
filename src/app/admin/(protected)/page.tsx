@@ -27,6 +27,8 @@ import {
   RANGE_DAYS,
   getDailyMentions,
   getDepartmentMentions,
+  getDepartmentSentiment,
+  getDepartmentTopTopic,
   platformBreakdown,
   platformShare,
   samplePosts,
@@ -183,6 +185,20 @@ export default function CentroDeControlPage() {
     [totalMentions]
   );
 
+  const departmentsSorted = React.useMemo(
+    () => Object.entries(departmentValues).sort((a, b) => b[1] - a[1]),
+    [departmentValues]
+  );
+
+  const [selectedDept, setSelectedDept] = React.useState<string | null>(null);
+  const selectedRank = selectedDept
+    ? departmentsSorted.findIndex(([name]) => name === selectedDept) + 1
+    : 0;
+  const selectedMentions = selectedDept ? departmentValues[selectedDept] ?? 0 : 0;
+  const selectedShareOfTotal = totalMentions
+    ? Math.round((selectedMentions / totalMentions) * 100)
+    : 0;
+
   const filteredPosts = samplePosts.filter(
     (p) =>
       (platform === "todas" || p.platform === platform) &&
@@ -318,7 +334,84 @@ export default function CentroDeControlPage() {
           icon={MapPin}
           className="relative mt-4"
         >
-          <ColombiaHeatmap values={departmentValues} />
+          <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
+            <ColombiaHeatmap
+              values={departmentValues}
+              selected={selectedDept}
+              onSelect={(name) => setSelectedDept((prev) => (prev === name ? null : name))}
+            />
+
+            <div className="flex flex-col gap-3">
+              {/* Lista de departamentos — selección única, estilo checkbox */}
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-border">
+                {departmentsSorted.map(([name, value]) => (
+                  <label
+                    key={name}
+                    className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0 hover:bg-surface-muted"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDept === name}
+                      onChange={() => setSelectedDept((prev) => (prev === name ? null : name))}
+                      className="size-3.5 shrink-0 accent-brand"
+                    />
+                    <span className="min-w-0 flex-1 truncate">{name}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {value.toLocaleString("es-CO")}
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              {/* Detalle del seleccionado */}
+              {selectedDept ? (
+                <div className="rounded-xl border border-border bg-surface-muted p-3">
+                  <p className="text-sm font-semibold">{selectedDept}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    #{selectedRank} de {departmentsSorted.length} · {selectedShareOfTotal}% del
+                    total nacional
+                  </p>
+
+                  <p className="mt-3 text-2xl font-semibold tabular-nums">
+                    {selectedMentions.toLocaleString("es-CO")}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">menciones en el periodo</p>
+
+                  <div className="mt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Sentimiento estimado
+                    </p>
+                    <div className="mt-1.5 flex h-2 overflow-hidden rounded-full">
+                      {getDepartmentSentiment(selectedDept).map((s) => (
+                        <span
+                          key={s.label}
+                          style={{ width: `${s.value}%`, backgroundColor: s.color }}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+                      {getDepartmentSentiment(selectedDept).map((s) => (
+                        <span key={s.label}>
+                          {s.label} {s.value}%
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Tema con más tracción aquí
+                  </p>
+                  <p className="text-xs font-medium text-brand">
+                    {getDepartmentTopTopic(selectedDept).tag}
+                  </p>
+                </div>
+              ) : (
+                <p className="rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+                  Marca un departamento para ver su detalle.
+                </p>
+              )}
+            </div>
+          </div>
         </Panel>
 
         <Panel title="Publicaciones de ejemplo" icon={MessagesSquare} className="relative mt-4">
