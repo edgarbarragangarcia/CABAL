@@ -42,8 +42,9 @@ export type NavItem = {
 export const mainNav: NavItem[] = [
   { label: "Inicio", href: "/" },
   { label: "Nosotros", href: "/nosotros" },
+  { label: "Academia", href: "/cursos" },
   {
-    label: "Academia",
+    label: "Observatorios",
     href: "/academia",
     children: [
       {
@@ -77,7 +78,8 @@ export const mainNav: NavItem[] = [
 export const footerNav = {
   fundacion: [
     { label: "Quiénes somos", href: "/nosotros" },
-    { label: "Academia", href: "/academia" },
+    { label: "Academia", href: "/cursos" },
+    { label: "Observatorios", href: "/academia" },
     { label: "Opinión", href: "/opinion" },
     { label: "Eventos", href: "/eventos" },
   ],

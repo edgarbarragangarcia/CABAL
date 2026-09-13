@@ -98,6 +98,7 @@ export function Navbar() {
             href="/"
             className={cn(
               "flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm font-bold uppercase tracking-tight transition-all duration-300",
+              onDark ? "text-white" : "text-foreground",
               scrolled
                 ? "border-border bg-surface/70 shadow-lg shadow-black/[0.03] backdrop-blur-xl"
                 : "border-transparent bg-surface/30 backdrop-blur-md"
@@ -191,7 +192,7 @@ export function Navbar() {
                                     <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
                                       <Icon className="size-4" aria-hidden="true" />
                                     </span>
-                                    <span className="text-sm font-semibold leading-tight">
+                                    <span className="text-sm font-semibold leading-tight text-foreground">
                                       {child.label}
                                     </span>
                                     <span className="text-xs leading-snug text-muted-foreground">

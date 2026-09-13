@@ -162,6 +162,15 @@ export default function LmsPage() {
                 >
                   Ver contenido
                 </Link>
+                {course.status === "publicado" && (
+                  <Link
+                    href={`/cursos/${course.id}`}
+                    target="_blank"
+                    className="flex-1 rounded-lg border border-border py-2 text-center text-xs font-medium hover:bg-surface-muted"
+                  >
+                    Ver público
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={() => deleteCourse(course.id)}

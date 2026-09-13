@@ -8,7 +8,7 @@ import { RevealGroup, Reveal } from "@/components/animations/reveal";
 import { mainNav } from "@/config/site";
 
 export const metadata: Metadata = {
-  title: "Academia",
+  title: "Observatorios",
   description:
     "Investigación, seguimiento legislativo y publicaciones de la Fundación Escuela Libertad.",
 };
@@ -26,7 +26,7 @@ export default function AcademiaPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Academia"
+        eyebrow="Observatorios"
         title="Investigación con impacto en el debate público"
         description="Producimos análisis, seguimiento legislativo y reportes que sustentan nuestra posición pública sobre libertad, institucionalidad y derechos."
       />
