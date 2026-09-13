@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/animations/theme-provider";
 import { Button } from "@/components/ui/button";
 
 // Devuelve `false` durante el render del servidor y `true` una vez montado

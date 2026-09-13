@@ -50,6 +50,11 @@ export const viewport: Viewport = {
   ],
 };
 
+// Script anti-parpadeo: se ejecuta antes de pintar, en el <head> del
+// documento (no como hijo de un componente cliente), así que no dispara
+// el aviso de React sobre <script> renderizados dentro del árbol.
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':true;var r=document.documentElement;r.classList.toggle('dark',d);r.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -61,6 +66,9 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="h-full antialiased">
         <ThemeProvider>
           <SmoothScrollProvider>{children}</SmoothScrollProvider>

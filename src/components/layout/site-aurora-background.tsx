@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/animations/theme-provider";
 
 import { HeroAurora } from "@/components/sections/hero-aurora";
 
