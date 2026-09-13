@@ -14,6 +14,8 @@ import {
   PlayCircle,
   UserRound,
   VideoOff,
+  Volume2,
+  VolumeX,
   Wand2,
 } from "lucide-react";
 
@@ -37,6 +39,7 @@ function splitStat(value: string) {
 function PortraitBleed() {
   const reduce = useReducedMotion();
   const [failed, setFailed] = React.useState(false);
+  const [muted, setMuted] = React.useState(true);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const rx = useSpring(useMotionValue(0), { stiffness: 90, damping: 16 });
   const ry = useSpring(useMotionValue(0), { stiffness: 90, damping: 16 });
@@ -53,13 +56,26 @@ function PortraitBleed() {
   };
 
   // Respeta prefers-reduced-motion: no autorreproduce, queda en el póster.
+  // El video empieza siempre muteado (los navegadores bloquean el
+  // autoplay con sonido); el botón de audio lo activa a petición.
   React.useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    v.muted = true;
     if (reduce) v.pause();
     else v.play().catch(() => {});
   }, [reduce]);
+
+  function toggleSound() {
+    setMuted((prev) => {
+      const next = !prev;
+      const v = videoRef.current;
+      if (v) {
+        v.muted = next;
+        if (!next) v.play().catch(() => {});
+      }
+      return next;
+    });
+  }
 
   return (
     <motion.div
@@ -86,7 +102,7 @@ function PortraitBleed() {
           ref={videoRef}
           poster="/cabal-hero-poster.jpg"
           autoPlay={!reduce}
-          muted
+          muted={muted}
           loop
           playsInline
           preload="metadata"
@@ -98,11 +114,25 @@ function PortraitBleed() {
         </video>
       )}
 
+      {!failed && (
+        <button
+          type="button"
+          onClick={toggleSound}
+          aria-label={muted ? "Activar sonido" : "Silenciar"}
+          className="glass-panel absolute bottom-3 right-3 z-10 flex size-9 items-center justify-center rounded-full text-white transition-transform hover:scale-105"
+        >
+          {muted ? (
+            <VolumeX className="size-4" aria-hidden="true" />
+          ) : (
+            <Volume2 className="size-4" aria-hidden="true" />
+          )}
+        </button>
+      )}
+
       {/* grano sutil: disimula el reescalado de la imagen base */}
       <div className="bg-grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay" />
 
-      {/* mezcla del retrato con el fondo aurora */}
-      <div className="pointer-events-none absolute inset-0 hidden lg:block lg:[background:linear-gradient(90deg,#07080a_0%,#07080a_14%,rgba(7,8,10,0.8)_32%,rgba(7,8,10,0.4)_55%,transparent_82%)]" />
+      {/* mezcla vertical con el fondo aurora */}
       <div className="pointer-events-none absolute inset-0 lg:[background:linear-gradient(0deg,#07080a_2%,transparent_38%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 lg:[background:linear-gradient(180deg,#07080a,transparent)]" />
 
@@ -121,25 +151,25 @@ export function Hero() {
   const marquee = [...cabalBills, ...cabalBills];
 
   return (
-    <section className="relative isolate flex min-h-screen flex-col overflow-hidden pt-32 text-white sm:pt-36">
+    <section className="relative isolate flex min-h-screen flex-col overflow-hidden bg-[#07080a] pt-32 text-white sm:pt-36">
+      {/* El hero es siempre oscuro (independiente del tema claro/oscuro del
+          resto del sitio, que sí sigue el toggle) — su texto está fijado en
+          blanco, así que necesita su propio fondo aurora garantizado. */}
       <HeroAurora />
 
-      {/* Retrato a sangre en el borde derecho (desktop) */}
-      <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[48%] lg:block xl:w-[46%]">
+      {/* Retrato a sangre en el borde derecho (desktop). El borde izquierdo
+          se enmascara a transparente (sin blur, sin overlay de color): deja
+          ver el propio fondo aurora que ya está detrás, así que el empalme
+          es exacto por construcción, no por intentar igualar el color. */}
+      <div
+        className="pointer-events-none absolute inset-y-0 right-0 hidden w-[48%] lg:block xl:w-[46%]"
+        style={{
+          maskImage: "linear-gradient(90deg, transparent 0%, black 24%)",
+          WebkitMaskImage: "linear-gradient(90deg, transparent 0%, black 24%)",
+        }}
+      >
         <PortraitBleed />
       </div>
-
-      {/* Difumina la costura entre el fondo aurora y el retrato: desenfoca
-          lo que hay detrás en una franja angosta centrada en el borde,
-          con máscara suave para no crear a su vez un borde nuevo. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-[52%] hidden w-72 -translate-x-1/2 backdrop-blur-[64px] lg:block"
-        style={{
-          maskImage: "linear-gradient(90deg, transparent, black, transparent)",
-          WebkitMaskImage: "linear-gradient(90deg, transparent, black, transparent)",
-        }}
-      />
 
       {/* Fichas flotantes: capa propia por encima del contenido, para que el
           clic siempre llegue aunque el titular se solape */}

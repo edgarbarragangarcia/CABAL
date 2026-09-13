@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { BookOpen, Eye, EyeOff, Loader2, LogIn, ShieldAlert } from "lucide-react";
+import { Eye, EyeOff, Loader2, LogIn, ShieldAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -55,9 +55,13 @@ function LoginForm() {
       className="glass-panel w-full max-w-sm rounded-3xl p-8 text-white shadow-2xl"
     >
       <div className="flex items-center gap-2">
-        <span className="flex size-9 items-center justify-center rounded-full bg-[#22c58a] text-[#04140d]">
-          <BookOpen className="size-4.5" aria-hidden="true" />
-        </span>
+        <Image
+          src="/logo-mark.png"
+          alt=""
+          width={36}
+          height={36}
+          className="size-9 shrink-0 object-contain"
+        />
         <div>
           <p className="text-sm font-semibold leading-tight">Escuela Libertad</p>
           <p className="text-xs text-zinc-400">Panel administrativo</p>

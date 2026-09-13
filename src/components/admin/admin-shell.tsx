@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BookOpen, GraduationCap, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { GraduationCap, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -62,9 +63,13 @@ export function AdminShell({
       {/* Sidebar de escritorio */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface p-4 lg:flex">
         <Link href="/admin" className="flex items-center gap-2 px-1 py-2">
-          <span className="flex size-8 items-center justify-center rounded-full bg-brand text-brand-foreground">
-            <BookOpen className="size-4" aria-hidden="true" />
-          </span>
+          <Image
+            src="/logo-mark.png"
+            alt=""
+            width={32}
+            height={32}
+            className="size-8 shrink-0 object-contain"
+          />
           <div>
             <p className="text-sm font-semibold leading-tight">Escuela Libertad</p>
             <p className="text-[11px] text-muted-foreground">Panel administrativo</p>
@@ -92,9 +97,13 @@ export function AdminShell({
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 lg:hidden">
           <Link href="/admin" className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-full bg-brand text-brand-foreground">
-              <BookOpen className="size-3.5" aria-hidden="true" />
-            </span>
+            <Image
+              src="/logo-mark.png"
+              alt=""
+              width={28}
+              height={28}
+              className="size-7 shrink-0 object-contain"
+            />
             <p className="text-sm font-semibold">Panel administrativo</p>
           </Link>
           <button
