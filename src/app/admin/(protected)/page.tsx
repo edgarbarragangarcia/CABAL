@@ -21,7 +21,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import { useLmsCourses } from "@/lib/lms-store";
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
 import { ColombiaHeatmap } from "@/components/admin/colombia-heatmap";
 import {
@@ -162,15 +161,6 @@ function SegmentedControl<T extends string>({
 }
 
 export default function CentroDeControlPage() {
-  const { courses, ready } = useLmsCourses();
-
-  const totalModulos = courses.reduce((acc, c) => acc + c.modules.length, 0);
-  const totalLecciones = courses.reduce(
-    (acc, c) => acc + c.modules.reduce((a, m) => a + m.lessons.length, 0),
-    0
-  );
-  const publicados = courses.filter((c) => c.status === "publicado").length;
-
   const [range, setRange] = React.useState<DateRange>("30d");
   const [platform, setPlatform] = React.useState<PlatformFilter>("todas");
   const [sentimentFilter, setSentimentFilter] = React.useState<SentimentFilter>("todos");
@@ -216,17 +206,6 @@ export default function CentroDeControlPage() {
           Ver el sitio
           <ExternalLink className="size-3.5" aria-hidden="true" />
         </Link>
-      </div>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatCard
-          icon={GraduationCap}
-          label="Cursos"
-          value={ready ? courses.length : "—"}
-          hint={`${publicados} publicados`}
-        />
-        <StatCard icon={Sparkles} label="Módulos" value={ready ? totalModulos : "—"} />
-        <StatCard icon={CheckCircle2} label="Lecciones" value={ready ? totalLecciones : "—"} />
       </div>
 
       {/* Tendencia en redes sociales — SIMULADO, pendiente de fuente real */}
