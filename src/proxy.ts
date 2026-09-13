@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { siteConfig } from "@/config/site";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 
 // Rutas de API que mutan estado (contacto, donaciones, newsletter) y por
 // tanto requieren rate limiting + verificación de origen (defensa CSRF).
@@ -36,8 +37,39 @@ function isSameOrigin(request: NextRequest): boolean {
   return false;
 }
 
+/** Protege /admin/* con la sesión de admin-auth (usuario fijo, sin BD). */
+async function guardAdmin(request: NextRequest): Promise<NextResponse | null> {
+  const { pathname } = request.nextUrl;
+  const isLoginPage = pathname === "/admin/login";
+
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = await verifySessionToken(token);
+
+  if (!session && !isLoginPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/login";
+    url.search = "";
+    url.searchParams.set("from", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  if (session && isLoginPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  return null;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/admin")) {
+    const redirect = await guardAdmin(request);
+    if (redirect) return redirect;
+  }
 
   if (!pathname.startsWith(PROTECTED_API_PREFIX)) {
     return NextResponse.next();
@@ -75,5 +107,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/api/:path*", "/admin/:path*"],
 };

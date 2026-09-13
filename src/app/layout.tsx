@@ -5,8 +5,6 @@ import "./globals.css";
 import { siteConfig } from "@/config/site";
 import { ThemeProvider } from "@/components/animations/theme-provider";
 import { SmoothScrollProvider } from "@/components/animations/smooth-scroll-provider";
-import { Navbar } from "@/components/layout/navbar";
-import { Footer } from "@/components/layout/footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -63,13 +61,9 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">
+      <body className="h-full antialiased">
         <ThemeProvider>
-          <SmoothScrollProvider>
-            <Navbar />
-            <main className="flex-1">{children}</main>
-            <Footer />
-          </SmoothScrollProvider>
+          <SmoothScrollProvider>{children}</SmoothScrollProvider>
         </ThemeProvider>
       </body>
     </html>
