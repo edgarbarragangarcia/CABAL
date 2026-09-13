@@ -8,6 +8,8 @@
  * consulta a la fuente real, manteniendo la misma forma de los tipos.
  */
 
+import { colombiaDepartments } from "@/lib/colombia-departments";
+
 export type DailyMention = {
   date: string; // "dd/mm"
   mentions: number;
@@ -20,8 +22,10 @@ export type SentimentSlice = {
   color: string;
 };
 
+export type Platform = "X" | "Facebook" | "Instagram" | "YouTube";
+
 export type PlatformSlice = {
-  label: string;
+  label: Platform;
   value: number;
   color: string;
 };
@@ -33,11 +37,17 @@ export type TrendingTopic = {
 };
 
 export type SamplePost = {
-  platform: "X" | "Facebook" | "Instagram" | "YouTube";
+  platform: Platform;
   excerpt: string;
   mentions: number;
   sentiment: "positivo" | "neutral" | "negativo";
 };
+
+export type DateRange = "7d" | "30d" | "90d";
+export type PlatformFilter = Platform | "todas";
+export type SentimentFilter = "positivo" | "neutral" | "negativo" | "todos";
+
+export const RANGE_DAYS: Record<DateRange, number> = { "7d": 7, "30d": 30, "90d": 90 };
 
 function seededRandom(seed: number) {
   let s = seed;
@@ -47,19 +57,18 @@ function seededRandom(seed: number) {
   };
 }
 
-/** Genera una serie de 30 días determinística (misma cada carga). */
-export function getDailyMentions(): DailyMention[] {
+/** Serie diaria determinística (misma cada carga) para los últimos `days` días. */
+export function getDailyMentions(days: number = 30): DailyMention[] {
   const rand = seededRandom(42);
   const points: DailyMention[] = [];
   const today = new Date();
   let base = 320;
 
-  for (let i = 29; i >= 0; i--) {
+  for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     base += Math.round((rand() - 0.42) * 60);
     base = Math.max(120, Math.min(1400, base));
-    // picos ocasionales (simulando un evento mediático)
     const spike = rand() > 0.93 ? Math.round(rand() * 500) : 0;
     points.push({
       date: d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit" }),
@@ -82,6 +91,13 @@ export const platformBreakdown: PlatformSlice[] = [
   { label: "Instagram", value: 21, color: "#ffb020" },
   { label: "YouTube", value: 13, color: "#a1a1aa" },
 ];
+
+/** Fracción 0-1 de menciones que corresponde a cada plataforma. */
+export function platformShare(platform: PlatformFilter): number {
+  if (platform === "todas") return 1;
+  const slice = platformBreakdown.find((p) => p.label === platform);
+  return (slice?.value ?? 0) / 100;
+}
 
 export const trendingTopics: TrendingTopic[] = [
   { tag: "#LibertadEconómica", mentions: 4820, deltaPct: 18 },
@@ -116,4 +132,67 @@ export const samplePosts: SamplePost[] = [
     mentions: 503,
     sentiment: "negativo",
   },
+  {
+    platform: "YouTube",
+    excerpt: "Publicación de ejemplo: fragmento de una intervención en el Senado.",
+    mentions: 388,
+    sentiment: "positivo",
+  },
 ];
+
+// Peso relativo aproximado por departamento (población/actividad en redes),
+// solo para que el mapa de calor simulado se vea creíble — no son cifras
+// reales de menciones.
+const DEPARTMENT_WEIGHT: Record<string, number> = {
+  "Bogotá D.C.": 100,
+  Antioquia: 78,
+  "Valle del Cauca": 62,
+  Atlántico: 48,
+  Santander: 40,
+  Cundinamarca: 38,
+  Bolívar: 34,
+  "Norte de Santander": 26,
+  Córdoba: 24,
+  Tolima: 22,
+  Boyacá: 20,
+  Caldas: 18,
+  Risaralda: 18,
+  Huila: 16,
+  Cauca: 16,
+  Magdalena: 16,
+  Meta: 14,
+  Nariño: 14,
+  Sucre: 12,
+  Cesar: 12,
+  "La Guajira": 10,
+  Quindío: 9,
+  Casanare: 7,
+  Caquetá: 6,
+  Arauca: 5,
+  Putumayo: 4,
+  Chocó: 4,
+  Amazonas: 2,
+  Guaviare: 2,
+  Vichada: 1.5,
+  Guainía: 1,
+  Vaupés: 1,
+  "San Andrés y Providencia": 3,
+};
+
+/** Menciones simuladas por departamento, escaladas por rango y plataforma. */
+export function getDepartmentMentions(
+  totalMentions: number
+): Record<string, number> {
+  const totalWeight = colombiaDepartments.reduce(
+    (a, d) => a + (DEPARTMENT_WEIGHT[d.name] ?? 2),
+    0
+  );
+  const rand = seededRandom(7);
+  const out: Record<string, number> = {};
+  for (const dept of colombiaDepartments) {
+    const weight = DEPARTMENT_WEIGHT[dept.name] ?? 2;
+    const jitter = 0.85 + rand() * 0.3;
+    out[dept.name] = Math.round((weight / totalWeight) * totalMentions * jitter);
+  }
+  return out;
+}

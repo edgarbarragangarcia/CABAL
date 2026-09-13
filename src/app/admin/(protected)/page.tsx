@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -11,8 +12,10 @@ import {
   Gauge,
   GraduationCap,
   Hash,
+  MapPin,
   MessagesSquare,
   Plus,
+  SlidersHorizontal,
   Sparkles,
   TrendingDown,
   TrendingUp,
@@ -20,12 +23,19 @@ import {
 
 import { useLmsCourses } from "@/lib/lms-store";
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
+import { ColombiaHeatmap } from "@/components/admin/colombia-heatmap";
 import {
+  RANGE_DAYS,
   getDailyMentions,
+  getDepartmentMentions,
   platformBreakdown,
+  platformShare,
   samplePosts,
   sentimentBreakdown,
   trendingTopics,
+  type DateRange,
+  type PlatformFilter,
+  type SentimentFilter,
 } from "@/lib/social-trends-mock";
 
 function StatCard({
@@ -116,6 +126,41 @@ const PLATFORM_DOT: Record<string, string> = {
   YouTube: "bg-zinc-400",
 };
 
+const RANGE_OPTIONS: { value: DateRange; label: string }[] = [
+  { value: "7d", label: "7 días" },
+  { value: "30d", label: "30 días" },
+  { value: "90d", label: "90 días" },
+];
+
+function SegmentedControl<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-background p-0.5">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={
+            opt.value === value
+              ? "rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground"
+              : "rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          }
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function CentroDeControlPage() {
   const { courses, ready } = useLmsCourses();
 
@@ -126,13 +171,33 @@ export default function CentroDeControlPage() {
   );
   const publicados = courses.filter((c) => c.status === "publicado").length;
 
-  const dailyMentions = getDailyMentions();
-  const totalMentions30d = dailyMentions.reduce((a, d) => a + d.mentions, 0);
+  const [range, setRange] = React.useState<DateRange>("30d");
+  const [platform, setPlatform] = React.useState<PlatformFilter>("todas");
+  const [sentimentFilter, setSentimentFilter] = React.useState<SentimentFilter>("todos");
+
+  const share = platformShare(platform);
+  const dailyMentions = React.useMemo(() => {
+    const base = getDailyMentions(RANGE_DAYS[range]);
+    return base.map((d) => ({ ...d, mentions: Math.round(d.mentions * share) }));
+  }, [range, share]);
+
+  const totalMentions = dailyMentions.reduce((a, d) => a + d.mentions, 0);
   const avgSentiment =
     dailyMentions.reduce((a, d) => a + d.sentiment, 0) / dailyMentions.length;
   const last = dailyMentions[dailyMentions.length - 1].mentions;
   const prev = dailyMentions[dailyMentions.length - 2]?.mentions ?? last;
   const dayDeltaPct = prev ? Math.round(((last - prev) / prev) * 100) : 0;
+
+  const departmentValues = React.useMemo(
+    () => getDepartmentMentions(totalMentions),
+    [totalMentions]
+  );
+
+  const filteredPosts = samplePosts.filter(
+    (p) =>
+      (platform === "todas" || p.platform === platform) &&
+      (sentimentFilter === "todos" || p.sentiment === sentimentFilter)
+  );
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -186,11 +251,42 @@ export default function CentroDeControlPage() {
           una fuente real de social listening ni a una base de datos.
         </p>
 
+        {/* Filtros — recalculan las cifras y gráficas de abajo en vivo */}
+        <div className="relative mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface/80 p-3">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+            Filtros
+          </span>
+          <SegmentedControl value={range} onChange={setRange} options={RANGE_OPTIONS} />
+          <select
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value as PlatformFilter)}
+            className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
+          >
+            <option value="todas">Todas las plataformas</option>
+            {platformBreakdown.map((p) => (
+              <option key={p.label} value={p.label}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sentimentFilter}
+            onChange={(e) => setSentimentFilter(e.target.value as SentimentFilter)}
+            className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
+          >
+            <option value="todos">Todo el sentimiento</option>
+            <option value="positivo">Positivo</option>
+            <option value="neutral">Neutral</option>
+            <option value="negativo">Negativo</option>
+          </select>
+        </div>
+
         <div className="relative mt-5 grid gap-4 sm:grid-cols-3">
           <StatCard
             icon={MessagesSquare}
-            label="Menciones (30 días)"
-            value={totalMentions30d.toLocaleString("es-CO")}
+            label={`Menciones (${RANGE_OPTIONS.find((o) => o.value === range)?.label})`}
+            value={totalMentions.toLocaleString("es-CO")}
             hint={`${dayDeltaPct >= 0 ? "+" : ""}${dayDeltaPct}% vs. ayer`}
           />
           <StatCard
@@ -238,9 +334,22 @@ export default function CentroDeControlPage() {
           </Panel>
         </div>
 
+        <Panel
+          title="Menciones por departamento"
+          icon={MapPin}
+          className="relative mt-4"
+        >
+          <ColombiaHeatmap values={departmentValues} />
+        </Panel>
+
         <Panel title="Publicaciones de ejemplo" icon={MessagesSquare} className="relative mt-4">
+          {filteredPosts.length === 0 && (
+            <p className="py-4 text-center text-xs text-muted-foreground">
+              Ninguna publicación de ejemplo coincide con estos filtros.
+            </p>
+          )}
           <ul className="-my-1 divide-y divide-border">
-            {samplePosts.map((post, i) => (
+            {filteredPosts.map((post, i) => (
               <li key={i} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span
