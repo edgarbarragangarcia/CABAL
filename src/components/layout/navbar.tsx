@@ -12,6 +12,7 @@ import {
   FileText,
   Gavel,
   LineChart,
+  LogIn,
   Menu,
   Newspaper,
   Radio,
@@ -212,6 +213,14 @@ export function Navbar() {
             </nav>
 
             <div className="flex items-center gap-1 pl-2">
+              <Link
+                href="/admin/login"
+                aria-label="Acceso administrativo"
+                title="Acceso administrativo"
+                className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+              >
+                <LogIn className="size-4" aria-hidden="true" />
+              </Link>
               <ThemeToggle />
             </div>
           </div>
@@ -313,7 +322,18 @@ export function Navbar() {
                         </Accordion.Root>
 
                         <div className="mt-6 flex items-center justify-between border-t border-border pt-6">
-                          <ThemeToggle />
+                          <div className="flex items-center gap-1">
+                            <ThemeToggle />
+                            <Link
+                              href="/admin/login"
+                              onClick={() => setMobileOpen(false)}
+                              aria-label="Acceso administrativo"
+                              title="Acceso administrativo"
+                              className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                            >
+                              <LogIn className="size-4" aria-hidden="true" />
+                            </Link>
+                          </div>
                           <Button asChild variant="accent">
                             <Link href="/donar">Donar ahora</Link>
                           </Button>

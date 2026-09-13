@@ -102,7 +102,7 @@ function PortraitBleed() {
       <div className="bg-grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay" />
 
       {/* mezcla del retrato con el fondo aurora */}
-      <div className="pointer-events-none absolute inset-0 hidden lg:block lg:[background:linear-gradient(90deg,#07080a_0%,rgba(7,8,10,0.35)_28%,transparent_60%)]" />
+      <div className="pointer-events-none absolute inset-0 hidden lg:block lg:[background:linear-gradient(90deg,#07080a_0%,#07080a_14%,rgba(7,8,10,0.8)_32%,rgba(7,8,10,0.4)_55%,transparent_82%)]" />
       <div className="pointer-events-none absolute inset-0 lg:[background:linear-gradient(0deg,#07080a_2%,transparent_38%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 lg:[background:linear-gradient(180deg,#07080a,transparent)]" />
 
@@ -128,6 +128,18 @@ export function Hero() {
       <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[48%] lg:block xl:w-[46%]">
         <PortraitBleed />
       </div>
+
+      {/* Difumina la costura entre el fondo aurora y el retrato: desenfoca
+          lo que hay detrás en una franja angosta centrada en el borde,
+          con máscara suave para no crear a su vez un borde nuevo. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-[52%] hidden w-72 -translate-x-1/2 backdrop-blur-[64px] lg:block"
+        style={{
+          maskImage: "linear-gradient(90deg, transparent, black, transparent)",
+          WebkitMaskImage: "linear-gradient(90deg, transparent, black, transparent)",
+        }}
+      />
 
       {/* Fichas flotantes: capa propia por encima del contenido, para que el
           clic siempre llegue aunque el titular se solape */}
