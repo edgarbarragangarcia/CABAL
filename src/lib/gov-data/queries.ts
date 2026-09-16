@@ -374,3 +374,37 @@ export async function getNationalGdpTrend(
   const all = rows.map((r) => ({ year: Number(r.a_o), total: Number(r.total) }));
   return all.slice(Math.max(all.length - years, 0));
 }
+
+export type CandidateVotes = { candidato: string; partido: string; votos: number };
+
+/**
+ * Candidatos con más votos al Senado 2018, agregando el dataset a nivel de
+ * mesa por candidato. Excluye votos en blanco/nulos y los votos marcados
+ * "solo por el partido" (sin preferencia por un candidato), que no son
+ * candidatos y distorsionarían el ranking si se incluyeran.
+ */
+export async function getTopSenateCandidates(
+  limit: number = 15
+): Promise<{ data: CandidateVotes[]; year: number }> {
+  const rows = await querySocrataDataset<{
+    candidato: string;
+    partido: string;
+    total: string;
+  }>(GOV_DATASETS.senado2018.id, {
+    $select: "candidato, partido, sum(votos) as total",
+    $where:
+      "candidato not in('VOTOS EN BLANCO','VOTOS NULOS','VOTOS NO MARCADOS','SOLO POR EL PARTIDO')",
+    $group: "candidato, partido",
+    $order: "total DESC",
+    $limit: limit,
+  });
+
+  return {
+    year: 2018,
+    data: rows.map((r) => ({
+      candidato: r.candidato,
+      partido: r.partido ?? "",
+      votos: Number(r.total),
+    })),
+  };
+}

@@ -15,11 +15,13 @@ import {
   getNationalTheftTrend,
   getSenateVotesByDepartment,
   getTheftsByDepartment,
+  getTopSenateCandidates,
   GOV_DATASETS,
 } from "@/lib/gov-data/queries";
 import { projectLinearTrend } from "@/lib/gov-data/trend-projection";
 import { ColombiaDashboardClient } from "./colombia-dashboard-client";
 import { NationalTrendChart } from "./national-trend-chart";
+import { TopCandidates } from "./top-candidates";
 import type { DashboardTopic, TrendSeries } from "./types";
 
 function average(values: number[]): number {
@@ -42,6 +44,7 @@ export async function ColombiaDashboard() {
     educacion,
     hurtos,
     votaciones,
+    topCandidates,
     homicideTrend,
     theftTrend,
     gdpTrendNominal,
@@ -57,6 +60,7 @@ export async function ColombiaDashboard() {
       educacion,
       hurtos,
       votaciones,
+      topCandidates,
       homicideTrend,
       theftTrend,
       gdpTrendNominal,
@@ -70,6 +74,7 @@ export async function ColombiaDashboard() {
       getEducationCoverageByDepartment(),
       getTheftsByDepartment(),
       getSenateVotesByDepartment(),
+      getTopSenateCandidates(15),
       getNationalHomicideTrend(),
       getNationalTheftTrend(),
       getNationalGdpTrend(10, "corrientes"),
@@ -394,6 +399,15 @@ export async function ColombiaDashboard() {
         <div className="mt-6">
           <ColombiaDashboardClient shapes={shapes} topics={topics} />
         </div>
+
+        <Reveal className="mt-6">
+          <TopCandidates
+            candidates={topCandidates.data}
+            year={topCandidates.year}
+            source={GOV_DATASETS.senado2018.source}
+            sourceUrl={GOV_DATASETS.senado2018.url}
+          />
+        </Reveal>
       </Container>
     </section>
   );

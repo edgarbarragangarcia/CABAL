@@ -161,7 +161,7 @@ export function Hero() {
           ver el propio fondo aurora que ya está detrás, así que el empalme
           es exacto por construcción, no por intentar igualar el color. */}
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 hidden w-[48%] lg:block xl:w-[46%]"
+        className="pointer-events-none absolute inset-y-0 right-0 hidden w-[36%] lg:block xl:w-[34%]"
         style={{
           maskImage: "linear-gradient(90deg, transparent 0%, black 24%)",
           WebkitMaskImage: "linear-gradient(90deg, transparent 0%, black 24%)",
@@ -290,7 +290,7 @@ export function Hero() {
           {/* Retrato en el flujo para móvil / tablet */}
           <motion.div
             variants={fadeUp}
-            className="mt-10 w-full max-w-sm lg:hidden"
+            className="mt-10 w-full max-w-xs lg:hidden"
           >
             <PortraitBleed />
           </motion.div>
