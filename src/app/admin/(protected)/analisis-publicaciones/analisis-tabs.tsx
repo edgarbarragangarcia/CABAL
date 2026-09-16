@@ -2,19 +2,21 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Loader2, LineChart, Vote, Wand2 } from "lucide-react";
+import { Bot, Loader2, LineChart, Vote, Wand2 } from "lucide-react";
 
 import type { ElectoralData } from "./page";
 import { AnalisisPublicacionesClient } from "./analisis-publicaciones-client";
+import { AsistenteTab } from "./asistente-tab";
 import { PrediccionesTab } from "./predicciones-tab";
 import { VotacionesResolved } from "./votaciones-resolved";
 
-type TabId = "tendencias" | "votaciones" | "predicciones";
+type TabId = "tendencias" | "votaciones" | "predicciones" | "asistente";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "tendencias", label: "Tendencias", icon: LineChart },
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Predicciones", icon: Wand2 },
+  { id: "asistente", label: "Asistente", icon: Bot },
 ];
 
 function VotacionesSkeleton() {
@@ -73,6 +75,7 @@ export function AnalisisTabs({
           </React.Suspense>
         )}
         {tab === "predicciones" && <PrediccionesTab />}
+        {tab === "asistente" && <AsistenteTab />}
       </div>
     </div>
   );
