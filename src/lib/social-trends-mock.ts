@@ -110,6 +110,13 @@ export function platformShare(platform: PlatformFilter): number {
   return (slice?.value ?? 0) / 100;
 }
 
+/** Fracción 0-1 de menciones que corresponde a cada sentimiento. */
+export function sentimentShare(filter: SentimentFilter): number {
+  if (filter === "todos") return 1;
+  const slice = sentimentBreakdown.find((s) => s.label.toLowerCase() === filter);
+  return (slice?.value ?? 0) / 100;
+}
+
 export const trendingTopics: TrendingTopic[] = [
   { tag: "#LibertadEconómica", mentions: 4820, deltaPct: 18 },
   { tag: "#ReformaLaboral", mentions: 3910, deltaPct: -6 },

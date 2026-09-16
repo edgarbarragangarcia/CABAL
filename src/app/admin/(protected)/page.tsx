@@ -36,6 +36,7 @@ import {
   platformShare,
   samplePosts,
   sentimentBreakdown,
+  sentimentShare,
   trendingTopics,
   type DateRange,
   type PlatformFilter,
@@ -150,18 +151,51 @@ export default function CentroDeControlPage() {
   const [selectedDate, setSelectedDate] = React.useState<string>("");
   const [topicFilter, setTopicFilter] = React.useState<string>("todos");
 
-  const share = platformShare(platform);
+  // Combina las dos fracciones: filtrar por plataforma Y por sentimiento
+  // reduce las menciones simuladas por ambas a la vez, igual que pasaría
+  // con datos reales — antes solo la plataforma afectaba estas cifras y
+  // el filtro de sentimiento quedaba sin efecto en las tarjetas de arriba.
+  const share = platformShare(platform) * sentimentShare(sentimentFilter);
   const dailyMentions = React.useMemo(() => {
     const base = getDailyMentions(RANGE_DAYS[range]);
     return base.map((d) => ({ ...d, mentions: Math.round(d.mentions * share) }));
   }, [range, share]);
 
-  const totalMentions = dailyMentions.reduce((a, d) => a + d.mentions, 0);
-  const avgSentiment =
-    dailyMentions.reduce((a, d) => a + d.sentiment, 0) / dailyMentions.length;
+  // "dd/mm" (mismo formato que dailyMentions) a partir de la fecha exacta
+  // elegida en el filtro, para poder mostrar solo ese día en vez del rango.
+  const selectedDayLabel = selectedDate
+    ? new Date(`${selectedDate}T00:00:00`).toLocaleDateString("es-CO", {
+        day: "2-digit",
+        month: "2-digit",
+      })
+    : null;
+  const selectedDayMentions = selectedDayLabel
+    ? dailyMentions.find((d) => d.date === selectedDayLabel)
+    : null;
+
+  const totalMentions = selectedDayMentions
+    ? selectedDayMentions.mentions
+    : dailyMentions.reduce((a, d) => a + d.mentions, 0);
   const last = dailyMentions[dailyMentions.length - 1].mentions;
   const prev = dailyMentions[dailyMentions.length - 2]?.mentions ?? last;
   const dayDeltaPct = prev ? Math.round(((last - prev) / prev) * 100) : 0;
+
+  // El sentimiento promedio de la serie diaria es independiente del
+  // filtro de sentimiento (cada día trae un único puntaje simulado, no un
+  // desglose) — si el usuario ya filtró por un sentimiento específico, la
+  // tarjeta debe mostrar ESE sentimiento, no recalcular uno ajeno al filtro.
+  const rawAvgSentiment =
+    dailyMentions.reduce((a, d) => a + d.sentiment, 0) / dailyMentions.length;
+  const sentimentLabel =
+    sentimentFilter === "todos"
+      ? rawAvgSentiment >= 0
+        ? "Positivo"
+        : "Negativo"
+      : sentimentFilter[0].toUpperCase() + sentimentFilter.slice(1);
+  const sentimentHint =
+    sentimentFilter === "todos"
+      ? `índice ${rawAvgSentiment.toFixed(2)} (-1 a 1)`
+      : `${Math.round(sentimentShare(sentimentFilter) * 100)}% de las menciones`;
 
   const departmentValues = React.useMemo(
     () => getDepartmentMentions(totalMentions),
@@ -277,15 +311,19 @@ export default function CentroDeControlPage() {
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <StatCard
               icon={MessagesSquare}
-              label={`Menciones (${RANGE_OPTIONS.find((o) => o.value === range)?.label})`}
+              label={
+                selectedDayLabel
+                  ? `Menciones (${selectedDayLabel})`
+                  : `Menciones (${RANGE_OPTIONS.find((o) => o.value === range)?.label})`
+              }
               value={totalMentions.toLocaleString("es-CO")}
-              hint={`${dayDeltaPct >= 0 ? "+" : ""}${dayDeltaPct}% vs. ayer`}
+              hint={selectedDayLabel ? "de ese día" : `${dayDeltaPct >= 0 ? "+" : ""}${dayDeltaPct}% vs. ayer`}
             />
             <StatCard
               icon={Gauge}
               label="Sentimiento promedio"
-              value={avgSentiment >= 0 ? "Positivo" : "Negativo"}
-              hint={`índice ${avgSentiment.toFixed(2)} (-1 a 1)`}
+              value={sentimentLabel}
+              hint={sentimentHint}
               tone="accent"
             />
             <StatCard
