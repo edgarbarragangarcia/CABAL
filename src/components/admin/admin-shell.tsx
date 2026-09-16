@@ -4,13 +4,14 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { GraduationCap, LayoutDashboard, LogOut, Menu, Newspaper, X } from "lucide-react";
+import { BarChart3, GraduationCap, LayoutDashboard, LogOut, Menu, Newspaper, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
   { href: "/admin", label: "Centro de control", icon: LayoutDashboard },
+  { href: "/admin/analisis-publicaciones", label: "Análisis", icon: BarChart3 },
   { href: "/admin/lms", label: "LMS", icon: GraduationCap },
   { href: "/admin/redactor", label: "Redactor", icon: Newspaper },
 ];

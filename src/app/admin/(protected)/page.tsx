@@ -15,14 +15,15 @@ import {
   MapPin,
   MessagesSquare,
   Plus,
-  SlidersHorizontal,
   Sparkles,
+  SlidersHorizontal,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
 
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
 import { ColombiaHeatmap } from "@/components/admin/colombia-heatmap";
+import { DashboardGrid, type DashboardWidget } from "@/components/admin/dashboard-grid";
 import {
   RANGE_DAYS,
   getDailyMentions,
@@ -81,28 +82,6 @@ function StatCard({
           </span>
         )}
       </div>
-    </div>
-  );
-}
-
-function Panel({
-  title,
-  icon: Icon,
-  children,
-  className,
-}: {
-  title: string;
-  icon: LucideIcon;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-2xl border border-border bg-surface p-5 shadow-sm ${className ?? ""}`}>
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        <Icon className="size-3.5 text-brand" aria-hidden="true" />
-        {title}
-      </p>
-      <div className="mt-4">{children}</div>
     </div>
   );
 }
@@ -205,216 +184,203 @@ export default function CentroDeControlPage() {
       (sentimentFilter === "todos" || p.sentiment === sentimentFilter)
   );
 
-  return (
-    <div className="mx-auto max-w-5xl">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Centro de control</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Estado del panel y accesos rápidos.
-          </p>
-        </div>
-        <Link
-          href="/"
-          target="_blank"
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-surface-muted"
-        >
-          Ver el sitio
-          <ExternalLink className="size-3.5" aria-hidden="true" />
-        </Link>
-      </div>
-
-      {/* Tendencia en redes sociales — SIMULADO, pendiente de fuente real */}
-      <div className="relative mt-8 overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-brand-soft/60 via-surface to-surface p-6 shadow-sm">
-        <div className="pointer-events-none absolute -left-10 -top-16 size-56 rounded-full bg-brand/10 blur-3xl" />
-        <div className="pointer-events-none absolute -right-10 bottom-0 size-56 rounded-full bg-accent/10 blur-3xl" />
-
-        <div className="relative flex flex-wrap items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2.5 text-base font-semibold">
-            <span className="flex size-8 items-center justify-center rounded-xl bg-brand text-brand-foreground">
-              <BarChart3 className="size-4" aria-hidden="true" />
+  const widgets: DashboardWidget[] = [
+    {
+      id: "resumen",
+      title: "Resumen y filtros",
+      icon: BarChart3,
+      defaultWide: true,
+      content: (
+        <>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface-muted p-3">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+              Filtros
             </span>
-            Tendencia en redes sociales
-          </h2>
-          <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
-            <FlaskConical className="size-3" aria-hidden="true" />
-            Datos simulados — vista previa
-          </span>
-        </div>
-        <p className="relative mt-1.5 max-w-xl text-xs text-muted-foreground">
-          Maqueta del dashboard con datos de ejemplo. Aún no está conectado a
-          una fuente real de social listening ni a una base de datos.
-        </p>
-
-        {/* Filtros — recalculan las cifras y gráficas de abajo en vivo */}
-        <div className="relative mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface/80 p-3">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-            Filtros
-          </span>
-          <SegmentedControl value={range} onChange={setRange} options={RANGE_OPTIONS} />
-          <select
-            value={platform}
-            onChange={(e) => setPlatform(e.target.value as PlatformFilter)}
-            className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
-          >
-            <option value="todas">Todas las plataformas</option>
-            {platformBreakdown.map((p) => (
-              <option key={p.label} value={p.label}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={sentimentFilter}
-            onChange={(e) => setSentimentFilter(e.target.value as SentimentFilter)}
-            className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
-          >
-            <option value="todos">Todo el sentimiento</option>
-            <option value="positivo">Positivo</option>
-            <option value="neutral">Neutral</option>
-            <option value="negativo">Negativo</option>
-          </select>
-        </div>
-
-        <div className="relative mt-5 grid gap-4 sm:grid-cols-3">
-          <StatCard
-            icon={MessagesSquare}
-            label={`Menciones (${RANGE_OPTIONS.find((o) => o.value === range)?.label})`}
-            value={totalMentions.toLocaleString("es-CO")}
-            hint={`${dayDeltaPct >= 0 ? "+" : ""}${dayDeltaPct}% vs. ayer`}
-          />
-          <StatCard
-            icon={Gauge}
-            label="Sentimiento promedio"
-            value={avgSentiment >= 0 ? "Positivo" : "Negativo"}
-            hint={`índice ${avgSentiment.toFixed(2)} (-1 a 1)`}
-            tone="accent"
-          />
-          <StatCard
-            icon={Hash}
-            label="Iniciativa con más tracción"
-            value={trendingTopics[0].tag}
-            hint={`${trendingTopics[0].mentions.toLocaleString("es-CO")} menciones`}
-          />
-        </div>
-
-        <div className="relative mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-          <Panel title="Menciones por día" icon={TrendingUp}>
-            <TrendArea data={dailyMentions.map((d) => ({ label: d.date, value: d.mentions }))} />
-            <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-              <span>{dailyMentions[0].date}</span>
-              <span>{dailyMentions[dailyMentions.length - 1].date}</span>
-            </div>
-          </Panel>
-
-          <Panel title="Sentimiento" icon={Gauge}>
-            <DonutChart slices={sentimentBreakdown} />
-          </Panel>
-        </div>
-
-        <div className="relative mt-4 grid gap-4 lg:grid-cols-2">
-          <Panel title="Temas en tendencia" icon={Hash}>
-            <BarList
-              items={trendingTopics.map((t) => ({
-                label: t.tag,
-                value: t.mentions,
-                hint: `${t.deltaPct >= 0 ? "+" : ""}${t.deltaPct}%`,
-              }))}
-            />
-          </Panel>
-
-          <Panel title="Distribución por plataforma" icon={BarChart3}>
-            <DonutChart slices={platformBreakdown} />
-          </Panel>
-        </div>
-
-        <Panel
-          title="Menciones por departamento"
-          icon={MapPin}
-          className="relative mt-4"
-        >
-          <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
-            <ColombiaHeatmap
-              values={departmentValues}
-              selected={selectedDept}
-              onSelect={(name) => setSelectedDept((prev) => (prev === name ? null : name))}
-            />
-
-            <div className="flex flex-col gap-3">
-              {/* Lista de departamentos — selección única, estilo checkbox */}
-              <div className="max-h-56 overflow-y-auto rounded-xl border border-border">
-                {departmentsSorted.map(([name, value]) => (
-                  <label
-                    key={name}
-                    className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0 hover:bg-surface-muted"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedDept === name}
-                      onChange={() => setSelectedDept((prev) => (prev === name ? null : name))}
-                      className="size-3.5 shrink-0 accent-brand"
-                    />
-                    <span className="min-w-0 flex-1 truncate">{name}</span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {value.toLocaleString("es-CO")}
-                    </span>
-                  </label>
-                ))}
-              </div>
-
-              {/* Detalle del seleccionado */}
-              {selectedDept ? (
-                <div className="rounded-xl border border-border bg-surface-muted p-3">
-                  <p className="text-sm font-semibold">{selectedDept}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    #{selectedRank} de {departmentsSorted.length} · {selectedShareOfTotal}% del
-                    total nacional
-                  </p>
-
-                  <p className="mt-3 text-2xl font-semibold tabular-nums">
-                    {selectedMentions.toLocaleString("es-CO")}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">menciones en el periodo</p>
-
-                  <div className="mt-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Sentimiento estimado
-                    </p>
-                    <div className="mt-1.5 flex h-2 overflow-hidden rounded-full">
-                      {getDepartmentSentiment(selectedDept).map((s) => (
-                        <span
-                          key={s.label}
-                          style={{ width: `${s.value}%`, backgroundColor: s.color }}
-                        />
-                      ))}
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
-                      {getDepartmentSentiment(selectedDept).map((s) => (
-                        <span key={s.label}>
-                          {s.label} {s.value}%
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Tema con más tracción aquí
-                  </p>
-                  <p className="text-xs font-medium text-brand">
-                    {getDepartmentTopTopic(selectedDept).tag}
-                  </p>
-                </div>
-              ) : (
-                <p className="rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
-                  Marca un departamento para ver su detalle.
-                </p>
-              )}
-            </div>
+            <SegmentedControl value={range} onChange={setRange} options={RANGE_OPTIONS} />
+            <select
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value as PlatformFilter)}
+              className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
+            >
+              <option value="todas">Todas las plataformas</option>
+              {platformBreakdown.map((p) => (
+                <option key={p.label} value={p.label}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={sentimentFilter}
+              onChange={(e) => setSentimentFilter(e.target.value as SentimentFilter)}
+              className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
+            >
+              <option value="todos">Todo el sentimiento</option>
+              <option value="positivo">Positivo</option>
+              <option value="neutral">Neutral</option>
+              <option value="negativo">Negativo</option>
+            </select>
+            <span className="ml-auto flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
+              <FlaskConical className="size-3" aria-hidden="true" />
+              Datos simulados — vista previa
+            </span>
           </div>
-        </Panel>
 
-        <Panel title="Publicaciones de ejemplo" icon={MessagesSquare} className="relative mt-4">
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <StatCard
+              icon={MessagesSquare}
+              label={`Menciones (${RANGE_OPTIONS.find((o) => o.value === range)?.label})`}
+              value={totalMentions.toLocaleString("es-CO")}
+              hint={`${dayDeltaPct >= 0 ? "+" : ""}${dayDeltaPct}% vs. ayer`}
+            />
+            <StatCard
+              icon={Gauge}
+              label="Sentimiento promedio"
+              value={avgSentiment >= 0 ? "Positivo" : "Negativo"}
+              hint={`índice ${avgSentiment.toFixed(2)} (-1 a 1)`}
+              tone="accent"
+            />
+            <StatCard
+              icon={Hash}
+              label="Iniciativa con más tracción"
+              value={trendingTopics[0].tag}
+              hint={`${trendingTopics[0].mentions.toLocaleString("es-CO")} menciones`}
+            />
+          </div>
+        </>
+      ),
+    },
+    {
+      id: "menciones-dia",
+      title: "Menciones por día",
+      icon: TrendingUp,
+      content: (
+        <>
+          <TrendArea data={dailyMentions.map((d) => ({ label: d.date, value: d.mentions }))} />
+          <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+            <span>{dailyMentions[0].date}</span>
+            <span>{dailyMentions[dailyMentions.length - 1].date}</span>
+          </div>
+        </>
+      ),
+    },
+    {
+      id: "sentimiento",
+      title: "Sentimiento",
+      icon: Gauge,
+      content: <DonutChart slices={sentimentBreakdown} />,
+    },
+    {
+      id: "temas-tendencia",
+      title: "Temas en tendencia",
+      icon: Hash,
+      content: (
+        <BarList
+          items={trendingTopics.map((t) => ({
+            label: t.tag,
+            value: t.mentions,
+            hint: `${t.deltaPct >= 0 ? "+" : ""}${t.deltaPct}%`,
+          }))}
+        />
+      ),
+    },
+    {
+      id: "distribucion-plataforma",
+      title: "Distribución por plataforma",
+      icon: BarChart3,
+      content: <DonutChart slices={platformBreakdown} />,
+    },
+    {
+      id: "menciones-departamento",
+      title: "Menciones por departamento",
+      icon: MapPin,
+      defaultWide: true,
+      content: (
+        <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
+          <ColombiaHeatmap
+            values={departmentValues}
+            selected={selectedDept}
+            onSelect={(name) => setSelectedDept((prev) => (prev === name ? null : name))}
+          />
+
+          <div className="flex flex-col gap-3">
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-border">
+              {departmentsSorted.map(([name, value]) => (
+                <label
+                  key={name}
+                  className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0 hover:bg-surface-muted"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedDept === name}
+                    onChange={() => setSelectedDept((prev) => (prev === name ? null : name))}
+                    className="size-3.5 shrink-0 accent-brand"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{name}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {value.toLocaleString("es-CO")}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {selectedDept ? (
+              <div className="rounded-xl border border-border bg-surface-muted p-3">
+                <p className="text-sm font-semibold">{selectedDept}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  #{selectedRank} de {departmentsSorted.length} · {selectedShareOfTotal}% del
+                  total nacional
+                </p>
+
+                <p className="mt-3 text-2xl font-semibold tabular-nums">
+                  {selectedMentions.toLocaleString("es-CO")}
+                </p>
+                <p className="text-[11px] text-muted-foreground">menciones en el periodo</p>
+
+                <div className="mt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Sentimiento estimado
+                  </p>
+                  <div className="mt-1.5 flex h-2 overflow-hidden rounded-full">
+                    {getDepartmentSentiment(selectedDept).map((s) => (
+                      <span
+                        key={s.label}
+                        style={{ width: `${s.value}%`, backgroundColor: s.color }}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+                    {getDepartmentSentiment(selectedDept).map((s) => (
+                      <span key={s.label}>
+                        {s.label} {s.value}%
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Tema con más tracción aquí
+                </p>
+                <p className="text-xs font-medium text-brand">
+                  {getDepartmentTopTopic(selectedDept).tag}
+                </p>
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+                Marca un departamento para ver su detalle.
+              </p>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "publicaciones-ejemplo",
+      title: "Publicaciones de ejemplo",
+      icon: MessagesSquare,
+      defaultWide: true,
+      content: (
+        <>
           {filteredPosts.length === 0 && (
             <p className="py-4 text-center text-xs text-muted-foreground">
               Ninguna publicación de ejemplo coincide con estos filtros.
@@ -451,30 +417,38 @@ export default function CentroDeControlPage() {
               </li>
             ))}
           </ul>
-        </Panel>
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-        <Panel title="Accesos rápidos" icon={Sparkles}>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Link
-              href="/admin/lms"
-              className="flex items-center gap-2.5 rounded-xl border border-border p-3 text-sm font-medium transition-colors hover:border-brand hover:bg-brand-soft"
-            >
-              <GraduationCap className="size-4 text-brand" aria-hidden="true" />
-              Gestionar el LMS
-            </Link>
-            <Link
-              href="/admin/lms?nuevo=1"
-              className="flex items-center gap-2.5 rounded-xl border border-border p-3 text-sm font-medium transition-colors hover:border-brand hover:bg-brand-soft"
-            >
-              <Plus className="size-4 text-brand" aria-hidden="true" />
-              Crear un curso
-            </Link>
-          </div>
-        </Panel>
-
-        <Panel title="Estado del sistema" icon={CheckCircle2}>
+        </>
+      ),
+    },
+    {
+      id: "accesos-rapidos",
+      title: "Accesos rápidos",
+      icon: Sparkles,
+      content: (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Link
+            href="/admin/lms"
+            className="flex items-center gap-2.5 rounded-xl border border-border p-3 text-sm font-medium transition-colors hover:border-brand hover:bg-brand-soft"
+          >
+            <GraduationCap className="size-4 text-brand" aria-hidden="true" />
+            Gestionar el LMS
+          </Link>
+          <Link
+            href="/admin/lms?nuevo=1"
+            className="flex items-center gap-2.5 rounded-xl border border-border p-3 text-sm font-medium transition-colors hover:border-brand hover:bg-brand-soft"
+          >
+            <Plus className="size-4 text-brand" aria-hidden="true" />
+            Crear un curso
+          </Link>
+        </div>
+      ),
+    },
+    {
+      id: "estado-sistema",
+      title: "Estado del sistema",
+      icon: CheckCircle2,
+      content: (
+        <>
           <ul className="-my-2 divide-y divide-border">
             <StatusRow ok label="Acceso: usuario fijo, sin base de datos" />
             <StatusRow ok={false} label="Base de datos: no configurada" />
@@ -486,7 +460,32 @@ export default function CentroDeControlPage() {
             compartirlos entre dispositivos o usuarios, hace falta conectar
             una base de datos real.
           </p>
-        </Panel>
+        </>
+      ),
+    },
+  ];
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Centro de control</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tu tablero de decisiones — arrastra, achica/amplía o quita los widgets a tu gusto.
+          </p>
+        </div>
+        <Link
+          href="/"
+          target="_blank"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-surface-muted"
+        >
+          Ver el sitio
+          <ExternalLink className="size-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+
+      <div className="mt-6">
+        <DashboardGrid widgets={widgets} storageKey="centro-control-layout-v1" />
       </div>
     </div>
   );
