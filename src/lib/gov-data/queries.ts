@@ -44,7 +44,81 @@ export const GOV_DATASETS = {
     source: "Policía Nacional de Colombia (DIPON)",
     url: "https://www.datos.gov.co/Seguridad-y-Defensa/Reporte-Hurto-por-Modalidades-Polic-a-Nacional/6sqw-8cg5",
   },
+  senado2018: {
+    id: "75f2-fe2s",
+    title: "Resultados electorales 2018 — Senado de la República",
+    source: "Registraduría Nacional del Estado Civil",
+    url: "https://www.datos.gov.co/Participaci-n-Ciudadana/RESULTADOS-ELECTORALES-2018-SENADO-DE-LA-REP-BLI/75f2-fe2s",
+  },
 } as const;
+
+/**
+ * El dataset de la Registraduría trae el nombre del departamento como
+ * texto libre (a veces truncado, ej. "NORTE DE SAN"), no como código
+ * DIVIPOLA. No incluye CESAR (ausente en la fuente oficial, no es un
+ * error de esta app) ni "CONSULADOS" (votos en el exterior, sin
+ * departamento). Mapea a los mismos códigos que usa el GeoJSON del mapa.
+ */
+const ELECTION_DEPT_NAME_TO_CODE: Record<string, string> = {
+  AMAZONAS: "91",
+  ANTIOQUIA: "05",
+  ARAUCA: "81",
+  ATLANTICO: "08",
+  "BOGOTA D.C.": "11",
+  BOLIVAR: "13",
+  BOYACA: "15",
+  CALDAS: "17",
+  CAQUETA: "18",
+  CASANARE: "85",
+  CAUCA: "19",
+  CHOCO: "27",
+  CORDOBA: "23",
+  CUNDINAMARCA: "25",
+  GUAINIA: "94",
+  GUAVIARE: "95",
+  HUILA: "41",
+  "LA GUAJIRA": "44",
+  MAGDALENA: "47",
+  META: "50",
+  "NARIÑO": "52",
+  "NORTE DE SAN": "54",
+  PUTUMAYO: "86",
+  QUINDIO: "63",
+  RISARALDA: "66",
+  "SAN ANDRES": "88",
+  SANTANDER: "68",
+  SUCRE: "70",
+  TOLIMA: "73",
+  VALLE: "76",
+  VAUPES: "97",
+  VICHADA: "99",
+};
+
+/** Total de votos válidos + blanco/nulo por departamento (Senado 2018). */
+export async function getSenateVotesByDepartment(): Promise<{
+  data: DepartmentDatum[];
+  year: number;
+}> {
+  const rows = await querySocrataDataset<{ ndepto: string; total: string }>(
+    GOV_DATASETS.senado2018.id,
+    {
+      $select: "ndepto, sum(votos) as total",
+      $group: "ndepto",
+      $limit: 40,
+    }
+  );
+
+  return {
+    year: 2018,
+    data: rows
+      .map((r) => ({
+        code: ELECTION_DEPT_NAME_TO_CODE[r.ndepto],
+        name: r.ndepto,
+        value: Number(r.total),
+      }))
+      .filter((d): d is DepartmentDatum => Boolean(d.code)),
+  };
+}
 
 const currentYear = new Date().getFullYear();
 

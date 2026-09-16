@@ -17,17 +17,31 @@ function getClientIp(request: NextRequest): string {
   return request.headers.get("x-real-ip") ?? "127.0.0.1";
 }
 
+/** En desarrollo, Next puede levantar el server en cualquier puerto libre
+ * (3000 ocupado por otro proyecto, autoPort, etc.), así que se acepta
+ * cualquier origen localhost/127.0.0.1 en vez de un puerto fijo. */
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  if (process.env.NODE_ENV === "production") return false;
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === "localhost" || hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 function isSameOrigin(request: NextRequest): boolean {
   const origin = request.headers.get("origin");
   // Las solicitudes same-origin de navegadores modernos incluyen el header
   // Origin en peticiones mutantes (POST/PUT/PATCH/DELETE). Si no viene,
   // se valida contra el header Referer como respaldo.
-  if (origin) return ALLOWED_ORIGINS.has(origin);
+  if (origin) return isAllowedOrigin(origin);
 
   const referer = request.headers.get("referer");
   if (referer) {
     try {
-      return ALLOWED_ORIGINS.has(new URL(referer).origin);
+      return isAllowedOrigin(new URL(referer).origin);
     } catch {
       return false;
     }

@@ -1,4 +1,4 @@
-import { AlertTriangle, Banknote, GraduationCap, Landmark, ShieldAlert, Siren } from "lucide-react";
+import { AlertTriangle, Banknote, GraduationCap, Landmark, ShieldAlert, Siren, Vote } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { Reveal } from "@/components/animations/reveal";
@@ -13,6 +13,7 @@ import {
   getNationalGdpTrend,
   getNationalHomicideTrend,
   getNationalTheftTrend,
+  getSenateVotesByDepartment,
   getTheftsByDepartment,
   GOV_DATASETS,
 } from "@/lib/gov-data/queries";
@@ -40,6 +41,7 @@ export async function ColombiaDashboard() {
     integra,
     educacion,
     hurtos,
+    votaciones,
     homicideTrend,
     theftTrend,
     gdpTrendNominal,
@@ -54,6 +56,7 @@ export async function ColombiaDashboard() {
       integra,
       educacion,
       hurtos,
+      votaciones,
       homicideTrend,
       theftTrend,
       gdpTrendNominal,
@@ -66,6 +69,7 @@ export async function ColombiaDashboard() {
       getAnticorruptionIndexByDepartment(),
       getEducationCoverageByDepartment(),
       getTheftsByDepartment(),
+      getSenateVotesByDepartment(),
       getNationalHomicideTrend(),
       getNationalTheftTrend(),
       getNationalGdpTrend(10, "corrientes"),
@@ -179,6 +183,22 @@ export async function ColombiaDashboard() {
       lowLabel: "Menos casos",
       highLabel: "Más casos",
     },
+    {
+      id: "votaciones",
+      label: "Votaciones",
+      unit: "votos",
+      year: votaciones.year,
+      source: GOV_DATASETS.senado2018.source,
+      sourceUrl: GOV_DATASETS.senado2018.url,
+      data: votaciones.data,
+      higherIsBetter: true,
+      explainer:
+        "Este mapa muestra cuántos votos se registraron en cada departamento en la elección de Senado de 2018 (la más reciente publicada por la Registraduría en datos abiertos, a nivel de mesa). Mientras más oscuro el color, mayor fue la votación total en ese departamento. No incluye Cesar (ausente en la fuente oficial) ni los votos de colombianos en el exterior (no tienen departamento asignado).",
+      unitExplainer:
+        "\"Votos\" es el total de votos por senado registrados en las mesas de ese departamento, incluyendo votos en blanco y nulos.",
+      lowLabel: "Menos votos",
+      highLabel: "Más votos",
+    },
   ];
 
   const nationalStats = [
@@ -216,6 +236,12 @@ export async function ColombiaDashboard() {
       icon: Siren,
       label: `Hurtos en ${hurtos.year} (total nacional)`,
       value: hurtos.data.reduce((sum, d) => sum + d.value, 0),
+      suffix: "",
+    },
+    {
+      icon: Vote,
+      label: `Votos a Senado en ${votaciones.year} (total nacional)`,
+      value: votaciones.data.reduce((sum, d) => sum + d.value, 0),
       suffix: "",
     },
   ];

@@ -10,6 +10,7 @@ import {
   interpolatePurples,
   interpolateReds,
   interpolateRdPu,
+  interpolateViridis,
 } from "d3-scale-chromatic";
 import {
   ExternalLink,
@@ -22,6 +23,7 @@ import {
   ShieldAlert,
   Siren,
   TrendingUp,
+  Vote,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -37,6 +39,7 @@ const TOPIC_META: Record<
   corrupcion: { icon: Scale, interpolator: interpolatePurples },
   educacion: { icon: GraduationCap, interpolator: interpolateOranges },
   hurtos: { icon: Siren, interpolator: interpolateRdPu },
+  votaciones: { icon: Vote, interpolator: interpolateViridis },
 };
 
 function formatValue(value: number, unit: string): string {

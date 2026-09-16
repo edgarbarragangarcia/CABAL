@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 import { siteConfig } from "@/config/site";
@@ -50,9 +51,10 @@ export const viewport: Viewport = {
   ],
 };
 
-// Script anti-parpadeo: se ejecuta antes de pintar, en el <head> del
-// documento (no como hijo de un componente cliente), así que no dispara
-// el aviso de React sobre <script> renderizados dentro del árbol.
+// Script anti-parpadeo: con next/script y strategy="beforeInteractive",
+// Next.js lo inyecta directo en el HTML servido (fuera del árbol normal
+// de React), así que corre antes del primer paint sin disparar el aviso
+// de React sobre <script> renderizados como hijos de un componente.
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':true;var r=document.documentElement;r.classList.toggle('dark',d);r.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
 
 export default function RootLayout({
@@ -67,7 +69,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
       </head>
       <body className="h-full antialiased">
         <ThemeProvider>

@@ -17,7 +17,8 @@ export type DashboardTopicId =
   | "gobierno"
   | "corrupcion"
   | "educacion"
-  | "hurtos";
+  | "hurtos"
+  | "votaciones";
 
 export type DashboardTopic = {
   id: DashboardTopicId;
