@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 
 import { siteConfig } from "@/config/site";
@@ -63,12 +62,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        {/* Script anti-parpadeo como archivo estático con `src` (no inline
-            dangerouslySetInnerHTML): React 19 solo aplica su hoisting de
-            recursos —y evita el aviso de "script tag" en hidratación— a
-            <script> con `src`; uno inline dispara la advertencia incluso
-            dentro de un Server Component. */}
-        <Script src="/theme-init.js" strategy="beforeInteractive" />
+        {/* Script anti-parpadeo como <script src async> nativo (sin
+            `next/script`). React 19 solo trata un <script> como "recurso"
+            hospedable —creado una vez y deduplicado, sin el aviso "Encountered
+            a script tag while rendering React component" ni el mismatch de
+            hidratación que eso provoca— cuando lleva `async`; sin él, incluso
+            dentro de <head>, lo renderiza como nodo normal del árbol y falla.
+            Al ser un archivo local minúsculo declarado primero en <head>, se
+            descarga y ejecuta antes de que el navegador pinte <body>. */}
+        <script src="/theme-init.js" async />
       </head>
       <body className="h-full antialiased">
         <ThemeProvider>
