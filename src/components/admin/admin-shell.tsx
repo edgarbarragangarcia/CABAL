@@ -8,6 +8,7 @@ import { BarChart3, GraduationCap, LayoutDashboard, LogOut, Menu, Newspaper, X }
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 const NAV = [
   { href: "/admin", label: "Centro de control", icon: LayoutDashboard },
@@ -84,7 +85,13 @@ export function AdminShell({
           </div>
         </Link>
 
-        <div className="mt-6">
+        {/* Siempre visible (no depende del hover): el admin no tiene otra
+            forma de ver/cambiar el tema, a diferencia del sitio público. */}
+        <div className="mt-2">
+          <ThemeToggle />
+        </div>
+
+        <div className="mt-4">
           <nav className="flex flex-1 flex-col gap-1">
             {NAV.map((item) => {
               const active =
@@ -143,14 +150,17 @@ export function AdminShell({
             />
             <p className="text-sm font-semibold">Panel administrativo</p>
           </Link>
-          <button
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
-            className="flex size-9 items-center justify-center rounded-full border border-border"
-          >
-            {mobileOpen ? <X className="size-4" /> : <Menu className="size-4" />}
-          </button>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
+              className="flex size-9 items-center justify-center rounded-full border border-border"
+            >
+              {mobileOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+            </button>
+          </div>
         </header>
 
         {mobileOpen && (
