@@ -24,6 +24,7 @@ export function AnalisisTabs({
   departmentsYear,
   source,
   sourceUrl,
+  candidateDeptMaps,
 }: {
   candidates: CandidateVotes[] | null;
   departments: DepartmentDatum[] | null;
@@ -31,6 +32,7 @@ export function AnalisisTabs({
   departmentsYear: number;
   source: string;
   sourceUrl: string;
+  candidateDeptMaps: Record<string, Record<string, number>>;
 }) {
   const [tab, setTab] = React.useState<TabId>("tendencias");
 
@@ -68,6 +70,7 @@ export function AnalisisTabs({
             departmentsYear={departmentsYear}
             source={source}
             sourceUrl={sourceUrl}
+            candidateDeptMaps={candidateDeptMaps}
           />
         )}
         {tab === "predicciones" && <PrediccionesTab />}

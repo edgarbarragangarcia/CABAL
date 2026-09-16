@@ -408,3 +408,68 @@ export async function getTopSenateCandidates(
     })),
   };
 }
+
+/**
+ * Igual que ELECTION_DEPT_NAME_TO_CODE pero hacia el nombre "bonito" que
+ * usa el mapa de calor del admin (`src/lib/colombia-departments.ts`), que
+ * no tiene códigos DIVIPOLA, solo nombres. Mismo hueco de Cesar (ausente
+ * en el dataset de la Registraduría) y de Consulados (voto exterior, sin
+ * departamento).
+ */
+const ELECTION_DEPT_NAME_TO_DISPLAY: Record<string, string> = {
+  AMAZONAS: "Amazonas",
+  ANTIOQUIA: "Antioquia",
+  ARAUCA: "Arauca",
+  ATLANTICO: "Atlántico",
+  "BOGOTA D.C.": "Bogotá D.C.",
+  BOLIVAR: "Bolívar",
+  BOYACA: "Boyacá",
+  CALDAS: "Caldas",
+  CAQUETA: "Caquetá",
+  CASANARE: "Casanare",
+  CAUCA: "Cauca",
+  CHOCO: "Chocó",
+  CORDOBA: "Córdoba",
+  CUNDINAMARCA: "Cundinamarca",
+  GUAINIA: "Guainía",
+  GUAVIARE: "Guaviare",
+  HUILA: "Huila",
+  "LA GUAJIRA": "La Guajira",
+  MAGDALENA: "Magdalena",
+  META: "Meta",
+  "NARIÑO": "Nariño",
+  "NORTE DE SAN": "Norte de Santander",
+  PUTUMAYO: "Putumayo",
+  QUINDIO: "Quindío",
+  RISARALDA: "Risaralda",
+  "SAN ANDRES": "San Andrés y Providencia",
+  SANTANDER: "Santander",
+  SUCRE: "Sucre",
+  TOLIMA: "Tolima",
+  VALLE: "Valle del Cauca",
+  VAUPES: "Vaupés",
+  VICHADA: "Vichada",
+};
+
+/** Votos de un candidato específico por departamento (Senado 2018), listo
+ * para el mapa de calor del admin (claves = nombres de colombia-departments.ts). */
+export async function getCandidateVotesByDepartment(
+  candidato: string
+): Promise<Record<string, number>> {
+  const rows = await querySocrataDataset<{ ndepto: string; total: string }>(
+    GOV_DATASETS.senado2018.id,
+    {
+      $select: "ndepto, sum(votos) as total",
+      $where: `candidato='${candidato.replace(/'/g, "''")}'`,
+      $group: "ndepto",
+      $limit: 40,
+    }
+  );
+
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    const display = ELECTION_DEPT_NAME_TO_DISPLAY[r.ndepto];
+    if (display) out[display] = Number(r.total);
+  }
+  return out;
+}

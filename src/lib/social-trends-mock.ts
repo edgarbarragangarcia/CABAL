@@ -41,7 +41,18 @@ export type SamplePost = {
   excerpt: string;
   mentions: number;
   sentiment: "positivo" | "neutral" | "negativo";
+  /** "YYYY-MM-DD" — para poder filtrar por fecha exacta en el panel. */
+  date: string;
+  /** Tag de `trendingTopics` con el que se relaciona esta publicación. */
+  topic: string;
 };
+
+/** "YYYY-MM-DD" de hoy menos `daysAgo` días. */
+function isoDaysAgo(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
 
 export type DateRange = "7d" | "30d" | "90d";
 export type PlatformFilter = Platform | "todas";
@@ -113,30 +124,120 @@ export const samplePosts: SamplePost[] = [
     excerpt: "Publicación de ejemplo sobre agenda legislativa y libertad económica.",
     mentions: 1284,
     sentiment: "positivo",
+    date: isoDaysAgo(0),
+    topic: "#LibertadEconómica",
   },
   {
     platform: "Facebook",
     excerpt: "Publicación de ejemplo sobre un debate en el Congreso.",
     mentions: 842,
     sentiment: "neutral",
+    date: isoDaysAgo(0),
+    topic: "#SenadoColombia",
   },
   {
     platform: "Instagram",
     excerpt: "Publicación de ejemplo sobre un evento comunitario de la fundación.",
     mentions: 611,
     sentiment: "positivo",
+    date: isoDaysAgo(1),
+    topic: "#EducaciónColombia",
   },
   {
     platform: "X",
     excerpt: "Publicación de ejemplo con reacciones divididas sobre una propuesta.",
     mentions: 503,
     sentiment: "negativo",
+    date: isoDaysAgo(1),
+    topic: "#ReformaLaboral",
   },
   {
     platform: "YouTube",
     excerpt: "Publicación de ejemplo: fragmento de una intervención en el Senado.",
     mentions: 388,
     sentiment: "positivo",
+    date: isoDaysAgo(2),
+    topic: "#SenadoColombia",
+  },
+  {
+    platform: "Facebook",
+    excerpt: "Publicación de ejemplo sobre la reforma laboral en discusión.",
+    mentions: 734,
+    sentiment: "negativo",
+    date: isoDaysAgo(3),
+    topic: "#ReformaLaboral",
+  },
+  {
+    platform: "X",
+    excerpt: "Publicación de ejemplo: hilo sobre seguridad ciudadana.",
+    mentions: 926,
+    sentiment: "neutral",
+    date: isoDaysAgo(3),
+    topic: "#SeguridadCiudadana",
+  },
+  {
+    platform: "Instagram",
+    excerpt: "Publicación de ejemplo: visita a un colegio rural.",
+    mentions: 455,
+    sentiment: "positivo",
+    date: isoDaysAgo(4),
+    topic: "#EducaciónColombia",
+  },
+  {
+    platform: "X",
+    excerpt: "Publicación de ejemplo sobre el debate del presupuesto nacional.",
+    mentions: 610,
+    sentiment: "neutral",
+    date: isoDaysAgo(5),
+    topic: "#LibertadEconómica",
+  },
+  {
+    platform: "YouTube",
+    excerpt: "Publicación de ejemplo: resumen semanal de actividad legislativa.",
+    mentions: 297,
+    sentiment: "positivo",
+    date: isoDaysAgo(6),
+    topic: "#SenadoColombia",
+  },
+  {
+    platform: "Facebook",
+    excerpt: "Publicación de ejemplo sobre encuentro con líderes gremiales.",
+    mentions: 388,
+    sentiment: "positivo",
+    date: isoDaysAgo(8),
+    topic: "#LibertadEconómica",
+  },
+  {
+    platform: "X",
+    excerpt: "Publicación de ejemplo criticando una decisión del gobierno.",
+    mentions: 1102,
+    sentiment: "negativo",
+    date: isoDaysAgo(10),
+    topic: "#SeguridadCiudadana",
+  },
+  {
+    platform: "Instagram",
+    excerpt: "Publicación de ejemplo: cobertura de un foro universitario.",
+    mentions: 349,
+    sentiment: "neutral",
+    date: isoDaysAgo(15),
+    topic: "#EducaciónColombia",
+  },
+  {
+    platform: "Facebook",
+    excerpt: "Publicación de ejemplo sobre el aniversario de la fundación.",
+    mentions: 812,
+    sentiment: "positivo",
+    date: isoDaysAgo(21),
+    topic: "#EducaciónColombia",
+  },
+  {
+    platform: "X",
+    excerpt: "Publicación de ejemplo sobre resultados de una comisión del Senado.",
+    mentions: 567,
+    sentiment: "neutral",
+    date: isoDaysAgo(30),
+    topic: "#SenadoColombia",
   },
 ];
 

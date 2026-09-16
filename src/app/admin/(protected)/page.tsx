@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  CalendarDays,
   CheckCircle2,
   CircleAlert,
   ExternalLink,
@@ -19,6 +20,7 @@ import {
   SlidersHorizontal,
   TrendingDown,
   TrendingUp,
+  X,
 } from "lucide-react";
 
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
@@ -145,6 +147,8 @@ export default function CentroDeControlPage() {
   const [range, setRange] = React.useState<DateRange>("30d");
   const [platform, setPlatform] = React.useState<PlatformFilter>("todas");
   const [sentimentFilter, setSentimentFilter] = React.useState<SentimentFilter>("todos");
+  const [selectedDate, setSelectedDate] = React.useState<string>("");
+  const [topicFilter, setTopicFilter] = React.useState<string>("todos");
 
   const share = platformShare(platform);
   const dailyMentions = React.useMemo(() => {
@@ -164,6 +168,16 @@ export default function CentroDeControlPage() {
     [totalMentions]
   );
 
+  // El tema en tendencia no es siempre el mismo cuando hay un filtro de
+  // tema activo: se muestra ESE tema (y sus menciones, escaladas por la
+  // misma fracción de plataforma que el resto del panel), no el más
+  // popular en general.
+  const activeTopic =
+    topicFilter === "todos"
+      ? trendingTopics[0]
+      : (trendingTopics.find((t) => t.tag === topicFilter) ?? trendingTopics[0]);
+  const activeTopicMentions = Math.round(activeTopic.mentions * share);
+
   const departmentsSorted = React.useMemo(
     () => Object.entries(departmentValues).sort((a, b) => b[1] - a[1]),
     [departmentValues]
@@ -181,7 +195,9 @@ export default function CentroDeControlPage() {
   const filteredPosts = samplePosts.filter(
     (p) =>
       (platform === "todas" || p.platform === platform) &&
-      (sentimentFilter === "todos" || p.sentiment === sentimentFilter)
+      (sentimentFilter === "todos" || p.sentiment === sentimentFilter) &&
+      (!selectedDate || p.date === selectedDate) &&
+      (topicFilter === "todos" || p.topic === topicFilter)
   );
 
   const widgets: DashboardWidget[] = [
@@ -220,6 +236,38 @@ export default function CentroDeControlPage() {
               <option value="neutral">Neutral</option>
               <option value="negativo">Negativo</option>
             </select>
+            <select
+              value={topicFilter}
+              onChange={(e) => setTopicFilter(e.target.value)}
+              className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
+            >
+              <option value="todos">Todos los temas</option>
+              {trendingTopics.map((t) => (
+                <option key={t.tag} value={t.tag}>
+                  {t.tag}
+                </option>
+              ))}
+            </select>
+            <label className="flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium">
+              <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                aria-label="Filtrar publicaciones por fecha exacta"
+              />
+            </label>
+            {selectedDate && (
+              <button
+                type="button"
+                onClick={() => setSelectedDate("")}
+                className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="size-3" aria-hidden="true" />
+                Quitar fecha
+              </button>
+            )}
             <span className="ml-auto flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
               <FlaskConical className="size-3" aria-hidden="true" />
               Datos simulados — vista previa
@@ -242,9 +290,13 @@ export default function CentroDeControlPage() {
             />
             <StatCard
               icon={Hash}
-              label="Iniciativa con más tracción"
-              value={trendingTopics[0].tag}
-              hint={`${trendingTopics[0].mentions.toLocaleString("es-CO")} menciones`}
+              label={topicFilter === "todos" ? "Iniciativa con más tracción" : "Tema filtrado"}
+              value={activeTopic.tag}
+              hint={`${activeTopicMentions.toLocaleString("es-CO")} menciones${
+                topicFilter === "todos"
+                  ? ""
+                  : ` · ${activeTopic.deltaPct >= 0 ? "+" : ""}${activeTopic.deltaPct}% vs. semana anterior`
+              }`}
             />
           </div>
         </>
@@ -394,9 +446,12 @@ export default function CentroDeControlPage() {
                     className={`size-1.5 shrink-0 rounded-full ${PLATFORM_DOT[post.platform] ?? "bg-zinc-400"}`}
                   />
                   <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {post.platform}
+                    {post.platform} · {post.date}
                   </span>
                   <span className="truncate text-muted-foreground">{post.excerpt}</span>
+                  <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-medium text-brand">
+                    {post.topic}
+                  </span>
                 </div>
                 <span
                   className={

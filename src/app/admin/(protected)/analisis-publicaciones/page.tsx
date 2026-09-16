@@ -1,6 +1,11 @@
 import { Vote } from "lucide-react";
 
-import { getSenateVotesByDepartment, getTopSenateCandidates, GOV_DATASETS } from "@/lib/gov-data/queries";
+import {
+  getCandidateVotesByDepartment,
+  getSenateVotesByDepartment,
+  getTopSenateCandidates,
+  GOV_DATASETS,
+} from "@/lib/gov-data/queries";
 import { AnalisisTabs } from "./analisis-tabs";
 
 /**
@@ -13,11 +18,18 @@ import { AnalisisTabs } from "./analisis-tabs";
  */
 export default async function AnalisisPublicacionesPage() {
   let candidates, departments;
+  let candidateDeptMaps: Record<string, Record<string, number>> = {};
   try {
     [candidates, departments] = await Promise.all([
       getTopSenateCandidates(10),
       getSenateVotesByDepartment(),
     ]);
+    const entries = await Promise.all(
+      candidates.data.map(
+        async (c) => [c.candidato, await getCandidateVotesByDepartment(c.candidato)] as const
+      )
+    );
+    candidateDeptMaps = Object.fromEntries(entries);
   } catch {
     candidates = null;
     departments = null;
@@ -42,6 +54,7 @@ export default async function AnalisisPublicacionesPage() {
           departmentsYear={departments?.year ?? 0}
           source={GOV_DATASETS.senado2018.source}
           sourceUrl={GOV_DATASETS.senado2018.url}
+          candidateDeptMaps={candidateDeptMaps}
         />
       </div>
     </div>

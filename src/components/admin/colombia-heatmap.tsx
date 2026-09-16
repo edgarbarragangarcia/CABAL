@@ -8,15 +8,17 @@ import {
   colombiaDepartments,
 } from "@/lib/colombia-departments";
 
-/** Interpola entre el verde de marca (bajo) y el ámbar/rojo (alto). */
+/** Interpola de una superficie clara (bajo) a verde de marca y ámbar (alto). */
 function heatColor(t: number) {
   const clamped = Math.max(0, Math.min(1, t));
-  // 0 -> superficie apagada, 0.5 -> verde marca, 1 -> ámbar intenso
+  // 0 -> gris muy claro (casi sin dato), 0.7 -> verde marca, 1 -> ámbar intenso.
+  // Pensado para tarjetas claras: el extremo bajo no puede ser oscuro o el
+  // mapa se ve como una mancha negra cuando un solo departamento domina.
   const stops: [number, [number, number, number]][] = [
-    [0, [39, 42, 46]],
-    [0.35, [15, 107, 76]],
-    [0.7, [34, 197, 138]],
-    [1, [255, 201, 74]],
+    [0, [228, 231, 229]],
+    [0.35, [134, 209, 178]],
+    [0.7, [15, 107, 76]],
+    [1, [255, 176, 32]],
   ];
   let a = stops[0];
   let b = stops[stops.length - 1];
@@ -61,7 +63,11 @@ export function ColombiaHeatmap({
       >
         {colombiaDepartments.map((dept) => {
           const value = values[dept.name] ?? 0;
-          const t = value / max;
+          // Raíz cuadrada en vez de lineal: cuando un departamento concentra
+          // la mayoría del total (p. ej. el bastión de un candidato), una
+          // escala lineal deja a casi todos los demás pegados al mínimo. La
+          // raíz cuadrada separa mejor los valores medios y bajos entre sí.
+          const t = Math.sqrt(value / max);
           const isHovered = hovered === dept.name;
           const isSelected = selected === dept.name;
           return (
@@ -69,7 +75,7 @@ export function ColombiaHeatmap({
               key={dept.name}
               d={dept.path}
               fill={heatColor(t)}
-              stroke={isSelected ? "#ffc94a" : isHovered ? "#fff" : "rgba(255,255,255,0.15)"}
+              stroke={isSelected ? "#0f6b4c" : isHovered ? "#0a0a0c" : "rgba(10,10,12,0.12)"}
               strokeWidth={isSelected ? 2 : isHovered ? 1.5 : 0.6}
               className="cursor-pointer transition-[stroke,filter] duration-150"
               style={isHovered || isSelected ? { filter: "brightness(1.15)" } : undefined}
