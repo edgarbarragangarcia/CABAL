@@ -51,12 +51,6 @@ export const viewport: Viewport = {
   ],
 };
 
-// Script anti-parpadeo: con next/script y strategy="beforeInteractive",
-// Next.js lo inyecta directo en el HTML servido (fuera del árbol normal
-// de React), así que corre antes del primer paint sin disparar el aviso
-// de React sobre <script> renderizados como hijos de un componente.
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':true;var r=document.documentElement;r.classList.toggle('dark',d);r.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -69,11 +63,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <Script
-          id="theme-init"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
-        />
+        {/* Script anti-parpadeo como archivo estático con `src` (no inline
+            dangerouslySetInnerHTML): React 19 solo aplica su hoisting de
+            recursos —y evita el aviso de "script tag" en hidratación— a
+            <script> con `src`; uno inline dispara la advertencia incluso
+            dentro de un Server Component. */}
+        <Script src="/theme-init.js" strategy="beforeInteractive" />
       </head>
       <body className="h-full antialiased">
         <ThemeProvider>

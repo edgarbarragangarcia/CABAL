@@ -45,11 +45,11 @@ export function TrajectoryDialog({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 10 }}
                 transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                className="glass-panel fixed left-1/2 top-1/2 z-[61] flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl text-white shadow-2xl"
+                className="glass-panel fixed left-1/2 top-1/2 z-[61] flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl text-foreground shadow-2xl"
               >
-                <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
+                <div className="flex items-start justify-between gap-4 border-b border-border p-6">
                   <div>
-                    <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#22c58a]">
+                    <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand">
                       <Sparkles className="size-3.5" aria-hidden="true" />
                       Trayectoria legislativa
                     </span>
@@ -58,7 +58,7 @@ export function TrajectoryDialog({
                     </Dialog.Title>
                   </div>
                   <Dialog.Close
-                    className="rounded-full border border-white/10 p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+                    className="rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
                     aria-label="Cerrar"
                   >
                     <X className="size-4" aria-hidden="true" />
@@ -70,29 +70,29 @@ export function TrajectoryDialog({
                     {cabalStats.map((stat) => (
                       <div
                         key={stat.label}
-                        className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                        className="rounded-xl border border-border bg-foreground/[0.03] p-3"
                       >
                         <dd className="text-lg font-semibold tracking-tight">
                           {stat.value}
                         </dd>
-                        <dt className="mt-1 text-[10px] leading-snug text-zinc-500">
+                        <dt className="mt-1 text-[10px] leading-snug text-muted-foreground">
                           {stat.label}
                         </dt>
                       </div>
                     ))}
                   </dl>
 
-                  <p className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <p className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Iniciativas radicadas · fuente Congreso Visible
                   </p>
                   <ul className="mt-3 space-y-2">
                     {cabalBills.map((bill) => (
                       <li
                         key={bill.title}
-                        className="flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                        className="flex items-start justify-between gap-3 rounded-xl border border-border bg-foreground/[0.03] p-3"
                       >
-                        <span className="text-sm text-zinc-200">{bill.title}</span>
-                        <span className="mt-0.5 shrink-0 rounded-full bg-[#22c58a]/15 px-2 py-0.5 text-[10px] font-medium text-[#22c58a]">
+                        <span className="text-sm text-foreground/80">{bill.title}</span>
+                        <span className="mt-0.5 shrink-0 rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-medium text-brand">
                           {bill.topic}
                         </span>
                       </li>
@@ -103,7 +103,7 @@ export function TrajectoryDialog({
                     href={cabalProfileUrl}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium transition-colors hover:bg-white/10"
+                    className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-border bg-foreground/5 px-4 py-2 text-sm font-medium transition-colors hover:bg-foreground/10"
                   >
                     Ver perfil completo en Congreso Visible
                     <ArrowUpRight className="size-4" aria-hidden="true" />

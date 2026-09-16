@@ -28,7 +28,7 @@ type ThemeContextValue = {
 const ThemeContext = React.createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = React.useState<Theme>("dark");
+  const [theme, setThemeState] = React.useState<Theme>("light");
 
   // Sincroniza con lo que el script del <head> ya aplicó al <html>, para
   // que el primer render en cliente coincida (sin depender de leer
@@ -62,8 +62,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme(): ThemeContextValue {
   const ctx = React.useContext(ThemeContext);
   if (!ctx) {
-    // Fuera del provider (no debería pasar): tema oscuro por defecto, sin op.
-    return { resolvedTheme: "dark", setTheme: () => {} };
+    // Fuera del provider (no debería pasar): tema claro por defecto, sin op.
+    return { resolvedTheme: "light", setTheme: () => {} };
   }
   return ctx;
 }

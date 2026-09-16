@@ -85,14 +85,14 @@ function PortraitBleed() {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
       style={{ rotateX: rx, rotateY: ry }}
-      className="relative mx-auto aspect-[4/5] w-full max-w-sm overflow-hidden rounded-[1.75rem] border border-white/10 [transform-style:preserve-3d] lg:mx-0 lg:aspect-auto lg:h-full lg:max-w-none lg:rounded-none lg:border-0"
+      className="relative mx-auto aspect-[4/5] w-full max-w-sm overflow-hidden rounded-[1.75rem] border border-border [transform-style:preserve-3d] lg:mx-0 lg:aspect-auto lg:h-full lg:max-w-none lg:rounded-none lg:border-0"
     >
       {failed ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/[0.03] text-zinc-400">
-          <div className="flex size-20 items-center justify-center rounded-full bg-white/5">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-foreground/[0.03] text-muted-foreground">
+          <div className="flex size-20 items-center justify-center rounded-full bg-foreground/5">
             <UserRound className="size-10" aria-hidden="true" strokeWidth={1.5} />
           </div>
-          <span className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-[11px] font-medium">
+          <span className="flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1 text-[11px] font-medium">
             <VideoOff className="size-3.5" aria-hidden="true" />
             Contenido pendiente de autorización
           </span>
@@ -132,11 +132,11 @@ function PortraitBleed() {
       {/* grano sutil: disimula el reescalado de la imagen base */}
       <div className="bg-grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay" />
 
-      {/* mezcla vertical con el fondo aurora */}
-      <div className="pointer-events-none absolute inset-0 lg:[background:linear-gradient(0deg,#07080a_2%,transparent_38%)]" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 lg:[background:linear-gradient(180deg,#07080a,transparent)]" />
+      {/* mezcla vertical con el fondo del hero */}
+      <div className="pointer-events-none absolute inset-0 lg:[background:linear-gradient(0deg,var(--background)_2%,transparent_38%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 lg:[background:linear-gradient(180deg,var(--background),transparent)]" />
 
-      {/* divulgación: contenido generado con IA, siempre visible */}
+      {/* divulgación: contenido generado con IA, siempre visible (sobre foto/video, con su propio scrim oscuro fijo por legibilidad) */}
       {!failed && (
         <span className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-medium text-zinc-200 backdrop-blur-md lg:right-6 lg:top-28">
           <Wand2 className="size-3" aria-hidden="true" />
@@ -151,10 +151,9 @@ export function Hero() {
   const marquee = [...cabalBills, ...cabalBills];
 
   return (
-    <section className="relative isolate flex min-h-screen flex-col overflow-hidden bg-[#07080a] pt-32 text-white sm:pt-36">
-      {/* El hero es siempre oscuro (independiente del tema claro/oscuro del
-          resto del sitio, que sí sigue el toggle) — su texto está fijado en
-          blanco, así que necesita su propio fondo aurora garantizado. */}
+    <section className="relative isolate flex min-h-screen flex-col overflow-hidden bg-background pt-32 text-foreground sm:pt-36">
+      {/* Fondo del hero: sigue el tema del sitio (claro por defecto, con
+          aurora animada solo en modo oscuro). */}
       <HeroAurora />
 
       {/* Retrato a sangre en el borde derecho (desktop). El borde izquierdo
@@ -184,15 +183,15 @@ export function Hero() {
                 type="button"
                 className="glass-panel animate-float-y group block rounded-2xl px-4 py-3 text-left shadow-2xl transition-transform duration-200 hover:scale-[1.03]"
               >
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#22c58a]">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-brand">
                   Trayectoria
                 </p>
-                <p className="mt-0.5 text-2xl font-semibold tracking-tight text-white">
+                <p className="mt-0.5 text-2xl font-semibold tracking-tight text-foreground">
                   {cabalStats[0].value}
                 </p>
-                <p className="text-[10px] text-zinc-400">
+                <p className="text-[10px] text-muted-foreground">
                   en el Congreso ·{" "}
-                  <span className="underline decoration-dotted underline-offset-2 group-hover:text-white">
+                  <span className="underline decoration-dotted underline-offset-2 group-hover:text-foreground">
                     ver detalle
                   </span>
                 </p>
@@ -211,12 +210,12 @@ export function Hero() {
                 type="button"
                 className="glass-panel group block rounded-2xl px-4 py-3 text-left shadow-2xl transition-transform duration-200 hover:scale-[1.03]"
               >
-                <p className="text-2xl font-semibold tracking-tight text-white">
+                <p className="text-2xl font-semibold tracking-tight text-foreground">
                   {cabalStats[2].value}
                 </p>
-                <p className="text-[10px] text-zinc-400">
+                <p className="text-[10px] text-muted-foreground">
                   proyectos de ley 2024–25 ·{" "}
-                  <span className="underline decoration-dotted underline-offset-2 group-hover:text-white">
+                  <span className="underline decoration-dotted underline-offset-2 group-hover:text-foreground">
                     ver
                   </span>
                 </p>
@@ -238,7 +237,7 @@ export function Hero() {
             className="pointer-events-none text-balance text-[2.75rem] font-semibold leading-[0.98] tracking-[-0.03em] sm:text-7xl lg:text-8xl"
           >
             Construimos{" "}
-            <span className="animate-shimmer bg-[linear-gradient(110deg,#22c58a_20%,#ffc94a_45%,#22c58a_70%)] bg-[length:200%_auto] bg-clip-text text-transparent">
+            <span className="animate-shimmer bg-[linear-gradient(110deg,var(--brand)_20%,var(--accent)_45%,var(--brand)_70%)] bg-[length:200%_auto] bg-clip-text text-transparent">
               libertad
             </span>{" "}
             a través de la educación
@@ -246,16 +245,16 @@ export function Hero() {
 
           <motion.p
             variants={fadeUp}
-            className="mt-6 max-w-md border-l-2 border-[#22c58a]/60 pl-4 text-left text-sm italic text-zinc-400 sm:text-base"
+            className="mt-6 max-w-md border-l-2 border-brand/60 pl-4 text-left text-sm italic text-muted-foreground sm:text-base"
           >
             “{cabalQuote.text}”
-            <span className="mt-1 block text-xs not-italic text-zinc-600">
+            <span className="mt-1 block text-xs not-italic text-muted-foreground/70">
               — María Fernanda Cabal ·{" "}
               <a
                 href={cabalQuote.sourceUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="underline decoration-dotted underline-offset-2 hover:text-zinc-400"
+                className="underline decoration-dotted underline-offset-2 hover:text-foreground"
               >
                 {cabalQuote.sourceLabel}
               </a>
@@ -269,7 +268,7 @@ export function Hero() {
             <Button
               asChild
               size="lg"
-              className="bg-[#22c58a] text-[#04140d] shadow-[0_0_40px_-8px_rgba(34,197,138,0.7)] hover:bg-[#2ee59c] hover:shadow-[0_0_55px_-6px_rgba(34,197,138,0.9)]"
+              className="ring-glow bg-brand text-brand-foreground hover:brightness-110"
             >
               <Link href="/donar">
                 Donar / Apoyar
@@ -279,7 +278,7 @@ export function Hero() {
             <Button
               asChild
               size="lg"
-              className="border border-white/15 bg-white/5 text-white backdrop-blur-md hover:bg-white/10"
+              className="border border-border bg-foreground/5 text-foreground backdrop-blur-md hover:bg-foreground/10"
             >
               <Link href="/proyectos">
                 <PlayCircle className="size-4" aria-hidden="true" />
@@ -299,7 +298,7 @@ export function Hero() {
           <motion.div
             variants={fadeUp}
             id="radio-en-vivo"
-            className="mt-10 w-full max-w-md scroll-mt-32 [&_*]:!border-white/10"
+            className="mt-10 w-full max-w-md scroll-mt-32 [&_*]:!border-border"
           >
             <LiveRadioWidget />
           </motion.div>
@@ -311,7 +310,7 @@ export function Hero() {
             trigger={
               <button
                 type="button"
-                className="group block w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-left transition-colors hover:border-white/25"
+                className="group block w-full overflow-hidden rounded-2xl border border-border bg-foreground/5 text-left transition-colors hover:border-foreground/25"
               >
                 <div className="grid grid-cols-3 gap-px">
                   {cabalStats.map((stat) => {
@@ -319,9 +318,9 @@ export function Hero() {
                     return (
                       <div
                         key={stat.label}
-                        className="bg-[#07080a]/60 p-4 backdrop-blur-sm sm:p-5"
+                        className="bg-background/60 p-4 backdrop-blur-sm sm:p-5"
                       >
-                        <p className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">
+                        <p className="text-2xl font-semibold tracking-tight text-foreground sm:text-4xl">
                           {number === null ? (
                             stat.value
                           ) : (
@@ -332,14 +331,14 @@ export function Hero() {
                             </>
                           )}
                         </p>
-                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
                           {stat.label}
                         </p>
                       </div>
                     );
                   })}
                 </div>
-                <span className="flex items-center justify-center gap-1.5 border-t border-white/10 bg-white/[0.02] py-2 text-[11px] font-medium text-zinc-400 group-hover:text-white">
+                <span className="flex items-center justify-center gap-1.5 border-t border-border bg-foreground/[0.02] py-2 text-[11px] font-medium text-muted-foreground group-hover:text-foreground">
                   Ver iniciativas y fuentes
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </span>
@@ -350,8 +349,8 @@ export function Hero() {
       </Container>
 
       {/* Ticker de iniciativas al pie del hero */}
-      <div className="relative mt-auto flex items-center gap-4 border-t border-white/10 bg-[#07080a]/70 py-3 backdrop-blur-sm">
-        <span className="ml-6 hidden shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[#22c58a] sm:flex">
+      <div className="relative mt-auto flex items-center gap-4 border-t border-border bg-background/70 py-3 backdrop-blur-sm">
+        <span className="ml-6 hidden shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-brand sm:flex">
           <ChevronDown className="size-3.5 animate-bounce" aria-hidden="true" />
           Iniciativas
         </span>
@@ -362,9 +361,9 @@ export function Hero() {
                 key={`${bill.title}-${i}`}
                 className="flex items-center gap-2 whitespace-nowrap text-sm"
               >
-                <span className="size-1 rounded-full bg-[#22c58a]" />
-                <span className="font-medium text-zinc-300">{bill.title}</span>
-                <span className="text-zinc-600">· {bill.topic}</span>
+                <span className="size-1 rounded-full bg-brand" />
+                <span className="font-medium text-foreground/80">{bill.title}</span>
+                <span className="text-muted-foreground">· {bill.topic}</span>
               </span>
             ))}
           </div>

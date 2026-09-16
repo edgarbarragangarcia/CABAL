@@ -188,10 +188,10 @@
   }
 
   .glass-panel {
-    background: color-mix(in oklab, #0d1013 62%, transparent);
+    background: color-mix(in oklab, var(--surface) 70%, transparent);
     backdrop-filter: blur(18px) saturate(1.4);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
-    border: 1px solid color-mix(in oklab, #ffffff 12%, transparent);
+    border: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
   }
 
   .ring-glow {
@@ -236,7 +236,12 @@
   }
 
   body {
-    background: var(--background);
+    background: radial-gradient(
+        120% 70% at 50% -10%,
+        color-mix(in oklab, var(--brand) 7%, var(--background)) 0%,
+        var(--background) 55%
+      )
+      var(--background);
     color: var(--foreground);
   }
 
