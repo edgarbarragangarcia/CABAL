@@ -5,35 +5,70 @@ import {
   getSenateVotesByDepartment,
   getTopSenateCandidates,
   GOV_DATASETS,
+  type CandidateVotes,
+  type DepartmentDatum,
 } from "@/lib/gov-data/queries";
 import { AnalisisTabs } from "./analisis-tabs";
+
+export type ElectoralData = {
+  candidates: CandidateVotes[] | null;
+  departments: DepartmentDatum[] | null;
+  candidatesYear: number;
+  departmentsYear: number;
+  candidateDeptMaps: Record<string, Record<string, number>>;
+};
+
+/**
+ * Solo precarga el desglose por departamento de los primeros 2 candidatos
+ * (los que el comparador muestra por defecto) en vez de los 10 — pedirle
+ * a Socrata 10 desgloses antes de poder pintar la página es justo lo que
+ * hacía lenta la navegación a esta pantalla. El resto de candidatos se
+ * piden bajo demanda desde el cliente (candidate-map-compare.tsx) cuando
+ * el usuario realmente los selecciona.
+ */
+async function loadElectoralData(): Promise<ElectoralData> {
+  try {
+    const [candidates, departments] = await Promise.all([
+      getTopSenateCandidates(10),
+      getSenateVotesByDepartment(),
+    ]);
+    const seedCandidates = candidates.data.slice(0, 2);
+    const entries = await Promise.all(
+      seedCandidates.map(
+        async (c) => [c.candidato, await getCandidateVotesByDepartment(c.candidato)] as const
+      )
+    );
+    return {
+      candidates: candidates.data,
+      departments: departments.data,
+      candidatesYear: candidates.year,
+      departmentsYear: departments.year,
+      candidateDeptMaps: Object.fromEntries(entries),
+    };
+  } catch {
+    return {
+      candidates: null,
+      departments: null,
+      candidatesYear: 0,
+      departmentsYear: 0,
+      candidateDeptMaps: {},
+    };
+  }
+}
 
 /**
  * Página de análisis del admin: combina datos ELECTORALES reales
  * (Registraduría, vía Socrata — los mismos que en el Observatorio público)
  * con el análisis de publicaciones en redes (MVP, datos simulados) y un
- * simulador de escenarios. Vive aquí porque este es el espacio de trabajo
- * para hacer análisis y tomar decisiones, no solo para mostrar cifras al
- * público.
+ * simulador de escenarios.
+ *
+ * No se espera (`await`) la carga electoral aquí: se pasa como promesa a
+ * un límite de Suspense en el cliente, así que el resto de la página
+ * (pestañas, "Tendencias") se pinta de inmediato en vez de bloquearse por
+ * las llamadas a Socrata.
  */
-export default async function AnalisisPublicacionesPage() {
-  let candidates, departments;
-  let candidateDeptMaps: Record<string, Record<string, number>> = {};
-  try {
-    [candidates, departments] = await Promise.all([
-      getTopSenateCandidates(10),
-      getSenateVotesByDepartment(),
-    ]);
-    const entries = await Promise.all(
-      candidates.data.map(
-        async (c) => [c.candidato, await getCandidateVotesByDepartment(c.candidato)] as const
-      )
-    );
-    candidateDeptMaps = Object.fromEntries(entries);
-  } catch {
-    candidates = null;
-    departments = null;
-  }
+export default function AnalisisPublicacionesPage() {
+  const electoralDataPromise = loadElectoralData();
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -48,13 +83,9 @@ export default async function AnalisisPublicacionesPage() {
 
       <div className="mt-6">
         <AnalisisTabs
-          candidates={candidates?.data ?? null}
-          departments={departments?.data ?? null}
-          candidatesYear={candidates?.year ?? 0}
-          departmentsYear={departments?.year ?? 0}
+          electoralDataPromise={electoralDataPromise}
           source={GOV_DATASETS.senado2018.source}
           sourceUrl={GOV_DATASETS.senado2018.url}
-          candidateDeptMaps={candidateDeptMaps}
         />
       </div>
     </div>

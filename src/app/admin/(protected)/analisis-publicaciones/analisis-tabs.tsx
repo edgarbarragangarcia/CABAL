@@ -2,12 +2,12 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { LineChart, Vote, Wand2 } from "lucide-react";
+import { Loader2, LineChart, Vote, Wand2 } from "lucide-react";
 
-import type { CandidateVotes, DepartmentDatum } from "@/lib/gov-data/queries";
+import type { ElectoralData } from "./page";
 import { AnalisisPublicacionesClient } from "./analisis-publicaciones-client";
 import { PrediccionesTab } from "./predicciones-tab";
-import { VotacionesTab } from "./votaciones-tab";
+import { VotacionesResolved } from "./votaciones-resolved";
 
 type TabId = "tendencias" | "votaciones" | "predicciones";
 
@@ -17,22 +17,23 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "predicciones", label: "Predicciones", icon: Wand2 },
 ];
 
+function VotacionesSkeleton() {
+  return (
+    <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-border p-16 text-sm text-muted-foreground">
+      <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+      Cargando cifras electorales de datos.gov.co...
+    </div>
+  );
+}
+
 export function AnalisisTabs({
-  candidates,
-  departments,
-  candidatesYear,
-  departmentsYear,
+  electoralDataPromise,
   source,
   sourceUrl,
-  candidateDeptMaps,
 }: {
-  candidates: CandidateVotes[] | null;
-  departments: DepartmentDatum[] | null;
-  candidatesYear: number;
-  departmentsYear: number;
+  electoralDataPromise: Promise<ElectoralData>;
   source: string;
   sourceUrl: string;
-  candidateDeptMaps: Record<string, Record<string, number>>;
 }) {
   const [tab, setTab] = React.useState<TabId>("tendencias");
 
@@ -63,15 +64,13 @@ export function AnalisisTabs({
       <div className="mt-6">
         {tab === "tendencias" && <AnalisisPublicacionesClient />}
         {tab === "votaciones" && (
-          <VotacionesTab
-            candidates={candidates}
-            departments={departments}
-            candidatesYear={candidatesYear}
-            departmentsYear={departmentsYear}
-            source={source}
-            sourceUrl={sourceUrl}
-            candidateDeptMaps={candidateDeptMaps}
-          />
+          <React.Suspense fallback={<VotacionesSkeleton />}>
+            <VotacionesResolved
+              electoralDataPromise={electoralDataPromise}
+              source={source}
+              sourceUrl={sourceUrl}
+            />
+          </React.Suspense>
         )}
         {tab === "predicciones" && <PrediccionesTab />}
       </div>
