@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
+import { Scatter3D } from "@/components/admin/scatter-3d";
 import {
   compareByMetric,
   getEngagementSummary,
@@ -24,8 +25,16 @@ import {
   getTopicBreakdown,
   getWeeklyPostingTrend,
   POLITICIANS,
+  type Platform,
   type PoliticianId,
 } from "@/lib/publications-analysis";
+
+const PLATFORMS: Platform[] = ["X", "Facebook", "Instagram", "YouTube"];
+const SENTIMENT_COLOR: Record<string, string> = {
+  positivo: "#22c58a",
+  neutral: "#94a3b8",
+  negativo: "#f97066",
+};
 
 function Panel({
   title,
@@ -201,6 +210,27 @@ export function AnalisisPublicacionesClient() {
             </li>
           ))}
         </ul>
+      </Panel>
+
+      <Panel title="Alcance en 3D: tiempo × plataforma × interacción" icon={Sparkles} className="mt-4">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Cada punto es una publicación de {politician.name}. Arrastra para rotar. Color = sentimiento
+          (verde positivo, gris neutral, rojo negativo).
+        </p>
+        {posts.length > 0 ? (
+          <Scatter3D
+            points={posts.map((p) => ({
+              date: p.date,
+              platform: p.platform,
+              engagement: p.likes + p.comments + p.shares,
+              color: SENTIMENT_COLOR[p.sentiment],
+              label: p.topic,
+            }))}
+            platforms={PLATFORMS}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">Sin publicaciones para graficar.</p>
+        )}
       </Panel>
 
       {/* Comparación entre políticos */}
