@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BarChart3,
   GraduationCap,
   LayoutDashboard,
   LogOut,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 
 const NAV = [
   { href: "/admin", label: "Centro de control", icon: LayoutDashboard },
+  { href: "/admin/analisis-publicaciones", label: "Análisis", icon: BarChart3 },
   { href: "/admin/lms", label: "LMS", icon: GraduationCap },
   { href: "/admin/redactor", label: "Redactor", icon: Newspaper },
 ];
@@ -35,7 +37,13 @@ export function AdminShell({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [desktopOpen, setDesktopOpen] = React.useState(true);
+  const [hovering, setHovering] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
+
+  // Cuando el sidebar está cerrado, pasar el mouse por el borde izquierdo lo
+  // muestra como overlay temporal; al salir del área (franja + sidebar) se
+  // vuelve a esconder.
+  const showAsOverlay = !desktopOpen && hovering;
 
   async function logout() {
     setLoggingOut(true);
@@ -71,23 +79,47 @@ export function AdminShell({
 
   return (
     <div className="flex min-h-screen bg-surface-muted">
-      {/* Sidebar de escritorio */}
-      {desktopOpen && (
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-hidden border-r border-border bg-surface p-4 lg:flex">
-          <div className="flex items-center justify-between gap-2">
-            <Link href="/admin" className="flex min-w-0 items-center gap-2 px-1 py-2">
-              <Image
-                src="/logo-mark.png"
-                alt=""
-                width={32}
-                height={32}
-                className="size-8 shrink-0 object-contain"
-              />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold leading-tight">Escuela Libertad</p>
-                <p className="truncate text-[11px] text-muted-foreground">Panel administrativo</p>
-              </div>
-            </Link>
+      {/* Franja para detectar el hover contra el borde izquierdo cuando el
+          sidebar está cerrado */}
+      {!desktopOpen && (
+        <div
+          onMouseEnter={() => setHovering(true)}
+          aria-hidden="true"
+          className="fixed inset-y-0 left-0 z-30 hidden w-3 lg:block"
+        />
+      )}
+
+      {/* Sidebar de escritorio: en flujo normal (sticky) cuando está
+          abierto, o superpuesto (fixed, oculto tras el borde) cuando está
+          cerrado y solo aparece al pasar el mouse. */}
+      <aside
+        onMouseEnter={() => !desktopOpen && setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
+        className={cn(
+          "z-30 hidden h-screen w-64 shrink-0 flex-col overflow-y-hidden border-r border-border bg-surface p-4 transition-transform duration-200 lg:flex",
+          desktopOpen
+            ? "sticky top-0"
+            : cn(
+                "fixed inset-y-0 left-0 shadow-xl",
+                showAsOverlay ? "translate-x-0" : "-translate-x-full"
+              )
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <Link href="/admin" className="flex min-w-0 items-center gap-2 px-1 py-2">
+            <Image
+              src="/logo-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              className="size-8 shrink-0 object-contain"
+            />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold leading-tight">Escuela Libertad</p>
+              <p className="truncate text-[11px] text-muted-foreground">Panel administrativo</p>
+            </div>
+          </Link>
+          {desktopOpen ? (
             <button
               type="button"
               onClick={() => setDesktopOpen(false)}
@@ -96,31 +128,42 @@ export function AdminShell({
             >
               <PanelLeftClose className="size-4" aria-hidden="true" />
             </button>
-          </div>
-
-          <div className="mt-6">{Nav}</div>
-
-          <div className="mt-auto space-y-2 border-t border-border pt-4">
-            <p className="truncate px-1 text-xs text-muted-foreground">{email}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={logout}
-              disabled={loggingOut}
-              className="w-full justify-start"
+          ) : (
+            <button
+              type="button"
+              onClick={() => setDesktopOpen(true)}
+              aria-label="Fijar barra lateral abierta"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-muted hover:text-foreground"
             >
-              <LogOut className="size-3.5" aria-hidden="true" />
-              Cerrar sesión
-            </Button>
-          </div>
-        </aside>
-      )}
+              <PanelLeftOpen className="size-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
 
-      {/* Botón para reabrir la barra lateral en escritorio */}
-      {!desktopOpen && (
+        <div className="mt-6">{Nav}</div>
+
+        <div className="mt-auto space-y-2 border-t border-border pt-4">
+          <p className="truncate px-1 text-xs text-muted-foreground">{email}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={logout}
+            disabled={loggingOut}
+            className="w-full justify-start"
+          >
+            <LogOut className="size-3.5" aria-hidden="true" />
+            Cerrar sesión
+          </Button>
+        </div>
+      </aside>
+
+      {/* Botón para reabrir la barra lateral en escritorio (se oculta
+          mientras el overlay por hover ya la muestra) */}
+      {!desktopOpen && !showAsOverlay && (
         <button
           type="button"
           onClick={() => setDesktopOpen(true)}
+          onMouseEnter={() => setHovering(true)}
           aria-label="Abrir barra lateral"
           className="fixed left-4 top-4 z-20 hidden size-9 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground shadow-sm hover:text-foreground lg:flex"
         >
