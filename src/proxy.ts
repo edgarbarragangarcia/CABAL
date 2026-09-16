@@ -17,10 +17,16 @@ function getClientIp(request: NextRequest): string {
   return request.headers.get("x-real-ip") ?? "127.0.0.1";
 }
 
-/** En desarrollo, Next puede levantar el server en cualquier puerto libre
- * (3000 ocupado por otro proyecto, autoPort, etc.), así que se acepta
- * cualquier origen localhost/127.0.0.1 en vez de un puerto fijo. */
-function isAllowedOrigin(origin: string): boolean {
+/**
+ * Un origen es válido si es el dominio de producción configurado, o si
+ * coincide con el host real de esta misma petición — esto último es lo
+ * que hace que funcione en cualquier despliegue (dominio propio, preview
+ * de Vercel, etc.) sin tener que hardcodear cada URL posible. En
+ * desarrollo también se acepta cualquier localhost/127.0.0.1, porque
+ * Next puede levantar el server en un puerto distinto al 3000.
+ */
+function isAllowedOrigin(origin: string, request: NextRequest): boolean {
+  if (origin === request.nextUrl.origin) return true;
   if (ALLOWED_ORIGINS.has(origin)) return true;
   if (process.env.NODE_ENV === "production") return false;
   try {
@@ -36,12 +42,12 @@ function isSameOrigin(request: NextRequest): boolean {
   // Las solicitudes same-origin de navegadores modernos incluyen el header
   // Origin en peticiones mutantes (POST/PUT/PATCH/DELETE). Si no viene,
   // se valida contra el header Referer como respaldo.
-  if (origin) return isAllowedOrigin(origin);
+  if (origin) return isAllowedOrigin(origin, request);
 
   const referer = request.headers.get("referer");
   if (referer) {
     try {
-      return isAllowedOrigin(new URL(referer).origin);
+      return isAllowedOrigin(new URL(referer).origin, request);
     } catch {
       return false;
     }
