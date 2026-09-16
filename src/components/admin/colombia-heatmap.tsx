@@ -73,14 +73,11 @@ export function ColombiaHeatmap({
               strokeWidth={isSelected ? 2 : isHovered ? 1.5 : 0.6}
               className="cursor-pointer transition-[stroke,filter] duration-150"
               style={isHovered || isSelected ? { filter: "brightness(1.15)" } : undefined}
+              aria-label={`${dept.name}: ${value.toLocaleString("es-CO")} menciones`}
               onMouseEnter={() => setHovered(dept.name)}
               onMouseLeave={() => setHovered((h) => (h === dept.name ? null : h))}
               onClick={() => onSelect?.(dept.name)}
-            >
-              <title>
-                {dept.name}: {value.toLocaleString("es-CO")} menciones
-              </title>
-            </path>
+            />
           );
         })}
       </svg>

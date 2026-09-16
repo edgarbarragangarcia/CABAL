@@ -62,8 +62,14 @@ export function AdminShell({
 
   return (
     <div className="flex min-h-screen bg-surface-muted">
-      {/* Sidebar de escritorio */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface p-4 lg:flex">
+      {/* Reserva el ancho colapsado en el flujo; el <aside> real va fixed y
+          se expande por encima del contenido (no lo empuja) al pasar el
+          cursor. */}
+      <div className="hidden w-[76px] shrink-0 lg:block" aria-hidden="true" />
+
+      {/* Sidebar de escritorio: colapsado (solo íconos) por defecto, se
+          despliega al pasar el cursor. */}
+      <aside className="group/sidebar fixed inset-y-0 left-0 z-40 hidden w-[76px] flex-col overflow-hidden border-r border-border bg-surface p-4 transition-[width] duration-200 ease-out hover:w-64 lg:flex">
         <Link href="/admin" className="flex items-center gap-2 px-1 py-2">
           <Image
             src="/logo-mark.png"
@@ -72,16 +78,43 @@ export function AdminShell({
             height={32}
             className="size-8 shrink-0 object-contain"
           />
-          <div>
+          <div className="min-w-0 whitespace-nowrap opacity-0 transition-opacity duration-150 group-hover/sidebar:opacity-100">
             <p className="text-sm font-semibold leading-tight">Escuela Libertad</p>
             <p className="text-[11px] text-muted-foreground">Panel administrativo</p>
           </div>
         </Link>
 
-        <div className="mt-6">{Nav}</div>
+        <div className="mt-6">
+          <nav className="flex flex-1 flex-col gap-1">
+            {NAV.map((item) => {
+              const active =
+                item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-2.5 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-brand-soft text-brand"
+                      : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                  )}
+                >
+                  <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+                  <span className="opacity-0 transition-opacity duration-150 group-hover/sidebar:opacity-100">
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
 
-        <div className="mt-auto space-y-2 border-t border-border pt-4">
-          <p className="truncate px-1 text-xs text-muted-foreground">{email}</p>
+        <div className="mt-auto space-y-2 whitespace-nowrap border-t border-border pt-4">
+          <p className="truncate px-1 text-xs text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/sidebar:opacity-100">
+            {email}
+          </p>
           <Button
             variant="outline"
             size="sm"
@@ -89,8 +122,10 @@ export function AdminShell({
             disabled={loggingOut}
             className="w-full justify-start"
           >
-            <LogOut className="size-3.5" aria-hidden="true" />
-            Cerrar sesión
+            <LogOut className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="opacity-0 transition-opacity duration-150 group-hover/sidebar:opacity-100">
+              Cerrar sesión
+            </span>
           </Button>
         </div>
       </aside>
