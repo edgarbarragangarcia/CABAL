@@ -1,9 +1,106 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, ArrowRight, Gauge, Radio, Sparkles, ThumbsUp } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Bell,
+  Gauge,
+  Hash,
+  Minus,
+  Radio,
+  Sparkles,
+  ThumbsUp,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
-import { getEngagementSummary, getSentimentBreakdown, getWeeklyPostingTrend } from "@/lib/publications-analysis";
+import { trendingTopics } from "@/lib/social-trends-mock";
+import {
+  getEngagementSummary,
+  getMentionTrend,
+  getSentimentBreakdown,
+  getWeeklyPostingTrend,
+  POLITICIANS,
+} from "@/lib/publications-analysis";
+
+const TREND_ICON = { up: TrendingUp, down: TrendingDown, stable: Minus } as const;
+const TREND_COLOR = {
+  up: "text-brand bg-brand-soft",
+  down: "text-destructive bg-destructive/10",
+  stable: "text-muted-foreground bg-surface-muted",
+} as const;
+
+/**
+ * Alertas de tendencia: avisa cuándo un político o un tema está "en
+ * aumento" — el caso de uso es justamente "avísame si mencionan a Cabal y
+ * la tendencia va subiendo". Es un proxy simple (variación semana contra
+ * semana de las publicaciones simuladas / los temas en tendencia), no un
+ * sistema de social listening en tiempo real.
+ */
+function TrendAlerts() {
+  const politicianTrends = POLITICIANS.map((p) => getMentionTrend(p.id));
+  const topicAlerts = trendingTopics.filter((t) => t.deltaPct > 10);
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <Bell className="size-3.5 text-brand" aria-hidden="true" />
+        Alertas de tendencia
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Avisa cuando la actividad de un político o un tema está subiendo semana contra semana. Es un
+        indicador simulado (no social listening en tiempo real todavía).
+      </p>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {politicianTrends.map((t) => {
+          const Icon = TREND_ICON[t.direction];
+          return (
+            <div
+              key={t.label}
+              className="flex items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm"
+            >
+              <span className="min-w-0 truncate font-medium">{t.label}</span>
+              <span
+                className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${TREND_COLOR[t.direction]}`}
+              >
+                <Icon className="size-3.5" aria-hidden="true" />
+                {t.changePct >= 0 ? "+" : ""}
+                {t.changePct}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {topicAlerts.length > 0 && (
+        <div className="mt-4 space-y-2 border-t border-border pt-4">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Hash className="size-3.5" aria-hidden="true" />
+            Temas en fuerte aumento
+          </p>
+          {topicAlerts.map((t) => (
+            <div
+              key={t.tag}
+              className="flex items-center justify-between gap-2 rounded-xl border border-brand/30 bg-brand-soft p-3 text-sm"
+            >
+              <span className="font-medium text-brand">
+                {t.tag}
+                <span className="ml-1.5 font-normal text-muted-foreground">
+                  {t.mentions.toLocaleString("es-CO")} menciones
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-brand">
+                <TrendingUp className="size-3.5" aria-hidden="true" />+{t.deltaPct}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Slider({
   label,
@@ -122,7 +219,9 @@ export function PrediccionesTab() {
 
   return (
     <div>
-      <div className="flex items-start gap-2 rounded-2xl border border-accent/30 bg-accent/10 p-4 text-xs text-accent">
+      <TrendAlerts />
+
+      <div className="mt-6 flex items-start gap-2 rounded-2xl border border-accent/30 bg-accent/10 p-4 text-xs text-accent">
         <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <p>
           Esto es una <strong>simulación con una regla simple y visible</strong>, no un modelo predictivo

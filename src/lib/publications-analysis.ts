@@ -174,6 +174,32 @@ export function getWeeklyPostingTrend(
     .map(([label, value]) => ({ label, value }));
 }
 
+export type MentionTrend = {
+  label: string;
+  changePct: number;
+  direction: "up" | "down" | "stable";
+  currentWeekPosts: number;
+};
+
+/**
+ * Compara las dos últimas semanas de actividad de un político (proxy de
+ * "menciones" en este MVP: cuántas publicaciones propias hubo, no
+ * menciones de terceros — para eso haría falta social listening real) y
+ * dice si la tendencia va en aumento, baja o estable.
+ */
+export function getMentionTrend(politicianId: PoliticianId): MentionTrend {
+  const politician = POLITICIANS.find((p) => p.id === politicianId)!;
+  const weekly = getWeeklyPostingTrend(politicianId);
+  const last = weekly[weekly.length - 1]?.value ?? 0;
+  const prev = weekly[weekly.length - 2]?.value ?? 0;
+
+  const changePct = prev ? Math.round(((last - prev) / prev) * 100) : last > 0 ? 100 : 0;
+  const direction: MentionTrend["direction"] =
+    changePct > 5 ? "up" : changePct < -5 ? "down" : "stable";
+
+  return { label: politician.name, changePct, direction, currentWeekPosts: last };
+}
+
 const TOPIC_COLORS: Record<string, string> = {
   Seguridad: "#f97066",
   "Libertad económica": "#22c58a",
