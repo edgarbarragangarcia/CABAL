@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
@@ -210,6 +211,18 @@ export default function CentroDeControlPage() {
     [totalMentions]
   );
 
+  // Un mapa POR cada red social elegida — no un único mapa reescalado —
+  // para poder ver dónde le va mejor a cada plataforma, uno junto al otro.
+  // Solo aparecen mapas para las plataformas que se van seleccionando.
+  const perPlatformMaps = React.useMemo(() => {
+    if (platforms.length === 0) return [];
+    const combinedShare = multiPlatformShare(platforms);
+    return platforms.map((p) => {
+      const platformTotal = Math.round(totalMentions * (platformShare(p) / combinedShare));
+      return { platform: p, values: getDepartmentMentions(platformTotal, p) };
+    });
+  }, [platforms, totalMentions]);
+
   // Sin filtro de mensaje: muestra el tema con más tracción en general.
   // Con un mensaje elegido: en vez del tema, muestra en cuántas
   // plataformas se publicó ese mismo mensaje y cuánto sumó entre todas —
@@ -395,14 +408,49 @@ export default function CentroDeControlPage() {
       icon: MapPin,
       defaultWide: true,
       content: (
-        <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
-          <ColombiaHeatmap
-            values={departmentValues}
-            selected={selectedDept}
-            onSelect={(name) => setSelectedDept((prev) => (prev === name ? null : name))}
-          />
+        <>
+          {perPlatformMaps.length > 0 && (
+            <div className="mb-5">
+              <p className="mb-3 text-xs text-muted-foreground">
+                Un mapa por cada red social que elijas en los filtros — se va agregando o quitando
+                según lo que selecciones.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <AnimatePresence mode="popLayout">
+                  {perPlatformMaps.map(({ platform, values }) => (
+                    <motion.div
+                      key={platform}
+                      layout
+                      initial={{ opacity: 0, y: 16, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                      transition={{ duration: 0.3, ease: "easeOut" }}
+                      className="rounded-xl border border-border bg-surface-muted p-4"
+                    >
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {platform}
+                      </p>
+                      <ColombiaHeatmap values={values} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
 
-          <div className="flex flex-col gap-3">
+          <p className="mb-3 text-xs text-muted-foreground">
+            {perPlatformMaps.length > 0
+              ? "Mapa combinado de todas las plataformas elegidas:"
+              : "Mapa nacional (todas las plataformas):"}
+          </p>
+          <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
+            <ColombiaHeatmap
+              values={departmentValues}
+              selected={selectedDept}
+              onSelect={(name) => setSelectedDept((prev) => (prev === name ? null : name))}
+            />
+
+            <div className="flex flex-col gap-3">
             <div className="max-h-56 overflow-y-auto rounded-xl border border-border">
               {departmentsSorted.map(([name, value]) => (
                 <label
@@ -469,8 +517,9 @@ export default function CentroDeControlPage() {
                 Marca un departamento para ver su detalle.
               </p>
             )}
+            </div>
           </div>
-        </div>
+        </>
       ),
     },
     {

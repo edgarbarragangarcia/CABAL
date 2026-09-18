@@ -298,29 +298,34 @@ const DEPARTMENT_WEIGHT: Record<string, number> = {
   "San Andrés y Providencia": 3,
 };
 
-/** Menciones simuladas por departamento, escaladas por rango y plataforma. */
+/** Un hash determinístico simple para variar una serie por nombre/semilla. */
+function hashSeed(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 100000;
+  return h + 1;
+}
+
+/** Menciones simuladas por departamento, escaladas por rango y plataforma.
+ * `seedKey` (ej. el nombre de una plataforma) varía el "mapa de calor"
+ * para que cada red social muestre una distribución propia y no solo la
+ * misma forma reescalada — así los mapas por plataforma sí se ven
+ * distintos entre sí, no solo más chicos. */
 export function getDepartmentMentions(
-  totalMentions: number
+  totalMentions: number,
+  seedKey: string = "todas"
 ): Record<string, number> {
   const totalWeight = colombiaDepartments.reduce(
     (a, d) => a + (DEPARTMENT_WEIGHT[d.name] ?? 2),
     0
   );
-  const rand = seededRandom(7);
+  const rand = seededRandom(hashSeed(seedKey));
   const out: Record<string, number> = {};
   for (const dept of colombiaDepartments) {
     const weight = DEPARTMENT_WEIGHT[dept.name] ?? 2;
-    const jitter = 0.85 + rand() * 0.3;
+    const jitter = 0.7 + rand() * 0.6;
     out[dept.name] = Math.round((weight / totalWeight) * totalMentions * jitter);
   }
   return out;
-}
-
-/** Un hash determinístico simple para variar el sentimiento por nombre. */
-function hashSeed(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 100000;
-  return h + 1;
 }
 
 /**
