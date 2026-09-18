@@ -151,6 +151,17 @@ export const samplePosts: SamplePost[] = [
     topic: "#EducaciónColombia",
   },
   {
+    // Mismo mensaje que la publicación de Instagram de arriba, pero
+    // republicado en Facebook — para poder comparar el mismo contenido
+    // entre las dos plataformas con el filtro de mensaje.
+    platform: "Facebook",
+    excerpt: "Publicación de ejemplo sobre un evento comunitario de la fundación.",
+    mentions: 398,
+    sentiment: "positivo",
+    date: isoDaysAgo(1),
+    topic: "#EducaciónColombia",
+  },
+  {
     platform: "X",
     excerpt: "Publicación de ejemplo con reacciones divididas sobre una propuesta.",
     mentions: 503,

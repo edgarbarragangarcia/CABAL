@@ -151,7 +151,11 @@ export default function CentroDeControlPage() {
   const [platforms, setPlatforms] = React.useState<Platform[]>([]);
   const [sentimentFilter, setSentimentFilter] = React.useState<SentimentFilter>("todos");
   const [selectedDate, setSelectedDate] = React.useState<string>("");
-  const [topicFilter, setTopicFilter] = React.useState<string>("todos");
+  const [messageFilter, setMessageFilter] = React.useState<string>("todos");
+  const uniqueMessages = React.useMemo(
+    () => [...new Set(samplePosts.map((p) => p.excerpt))],
+    []
+  );
 
   const togglePlatform = (p: Platform) =>
     setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
@@ -206,15 +210,18 @@ export default function CentroDeControlPage() {
     [totalMentions]
   );
 
-  // El tema en tendencia no es siempre el mismo cuando hay un filtro de
-  // tema activo: se muestra ESE tema (y sus menciones, escaladas por la
-  // misma fracción de plataforma que el resto del panel), no el más
-  // popular en general.
-  const activeTopic =
-    topicFilter === "todos"
-      ? trendingTopics[0]
-      : (trendingTopics.find((t) => t.tag === topicFilter) ?? trendingTopics[0]);
+  // Sin filtro de mensaje: muestra el tema con más tracción en general.
+  // Con un mensaje elegido: en vez del tema, muestra en cuántas
+  // plataformas se publicó ese mismo mensaje y cuánto sumó entre todas —
+  // eso es lo que permite comparar Instagram vs. Facebook para un mismo
+  // contenido.
+  const activeTopic = trendingTopics[0];
   const activeTopicMentions = Math.round(activeTopic.mentions * share);
+
+  const messagePosts =
+    messageFilter === "todos" ? [] : samplePosts.filter((p) => p.excerpt === messageFilter);
+  const messagePlatforms = [...new Set(messagePosts.map((p) => p.platform))];
+  const messageTotalMentions = messagePosts.reduce((a, p) => a + p.mentions, 0);
 
   const departmentsSorted = React.useMemo(
     () => Object.entries(departmentValues).sort((a, b) => b[1] - a[1]),
@@ -235,7 +242,7 @@ export default function CentroDeControlPage() {
       (platforms.length === 0 || platforms.includes(p.platform)) &&
       (sentimentFilter === "todos" || p.sentiment === sentimentFilter) &&
       (!selectedDate || p.date === selectedDate) &&
-      (topicFilter === "todos" || p.topic === topicFilter)
+      (messageFilter === "todos" || p.excerpt === messageFilter)
   );
 
   const widgets: DashboardWidget[] = [
@@ -283,14 +290,14 @@ export default function CentroDeControlPage() {
               <option value="negativo">Negativo</option>
             </select>
             <select
-              value={topicFilter}
-              onChange={(e) => setTopicFilter(e.target.value)}
-              className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
+              value={messageFilter}
+              onChange={(e) => setMessageFilter(e.target.value)}
+              className="h-8 max-w-[220px] rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
             >
-              <option value="todos">Todos los temas</option>
-              {trendingTopics.map((t) => (
-                <option key={t.tag} value={t.tag}>
-                  {t.tag}
+              <option value="todos">Todos los mensajes</option>
+              {uniqueMessages.map((msg) => (
+                <option key={msg} value={msg}>
+                  {msg.length > 60 ? `${msg.slice(0, 60)}…` : msg}
                 </option>
               ))}
             </select>
@@ -319,16 +326,25 @@ export default function CentroDeControlPage() {
               hint={sentimentHint}
               tone="accent"
             />
-            <StatCard
-              icon={Hash}
-              label={topicFilter === "todos" ? "Iniciativa con más tracción" : "Tema filtrado"}
-              value={activeTopic.tag}
-              hint={`${activeTopicMentions.toLocaleString("es-CO")} menciones${
-                topicFilter === "todos"
-                  ? ""
-                  : ` · ${activeTopic.deltaPct >= 0 ? "+" : ""}${activeTopic.deltaPct}% vs. semana anterior`
-              }`}
-            />
+            {messageFilter === "todos" ? (
+              <StatCard
+                icon={Hash}
+                label="Iniciativa con más tracción"
+                value={activeTopic.tag}
+                hint={`${activeTopicMentions.toLocaleString("es-CO")} menciones`}
+              />
+            ) : (
+              <StatCard
+                icon={Hash}
+                label="Mensaje comparado"
+                value={
+                  messagePlatforms.length > 1
+                    ? `En ${messagePlatforms.length} plataformas`
+                    : (messagePlatforms[0] ?? "Sin datos")
+                }
+                hint={`${messageTotalMentions.toLocaleString("es-CO")} menciones en total · ${messagePlatforms.join(", ")}`}
+              />
+            )}
           </div>
         </>
       ),
