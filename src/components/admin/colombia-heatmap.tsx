@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { motion } from "framer-motion";
 
 import {
   COLOMBIA_MAP_HEIGHT,
@@ -61,7 +62,7 @@ export function ColombiaHeatmap({
         role="img"
         aria-label="Mapa de menciones por departamento (datos simulados)"
       >
-        {colombiaDepartments.map((dept) => {
+        {colombiaDepartments.map((dept, i) => {
           const value = values[dept.name] ?? 0;
           // Raíz cuadrada en vez de lineal: cuando un departamento concentra
           // la mayoría del total (p. ej. el bastión de un candidato), una
@@ -71,14 +72,22 @@ export function ColombiaHeatmap({
           const isHovered = hovered === dept.name;
           const isSelected = selected === dept.name;
           return (
-            <path
+            <motion.path
               key={dept.name}
               d={dept.path}
-              fill={heatColor(t)}
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1, fill: heatColor(t) }}
+              transition={{
+                fill: { duration: 0.5, ease: "easeOut" },
+                default: { duration: 0.35, delay: i * 0.008, ease: "easeOut" },
+              }}
+              style={{
+                transformOrigin: `${dept.cx}px ${dept.cy}px`,
+                filter: isHovered || isSelected ? "brightness(1.15)" : undefined,
+              }}
               stroke={isSelected ? "#0f6b4c" : isHovered ? "#0a0a0c" : "rgba(10,10,12,0.12)"}
               strokeWidth={isSelected ? 2 : isHovered ? 1.5 : 0.6}
               className="cursor-pointer transition-[stroke,filter] duration-150"
-              style={isHovered || isSelected ? { filter: "brightness(1.15)" } : undefined}
               aria-label={`${dept.name}: ${value.toLocaleString("es-CO")} menciones`}
               onMouseEnter={() => setHovered(dept.name)}
               onMouseLeave={() => setHovered((h) => (h === dept.name ? null : h))}
