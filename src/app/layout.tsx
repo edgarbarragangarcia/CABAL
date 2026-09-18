@@ -49,6 +49,13 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: siteConfig.shortName,
   },
+  other: {
+    // Next.js solo emite el `mobile-web-app-capable` moderno (iOS 17.4+).
+    // Este es el que reconocen las versiones de iOS anteriores — sin él,
+    // "Agregar a inicio" abre igual, pero con la barra de Safari visible
+    // en vez de verse como una app instalada.
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
