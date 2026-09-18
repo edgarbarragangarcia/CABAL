@@ -38,10 +38,16 @@ import {
   sentimentBreakdown,
   sentimentShare,
   trendingTopics,
-  type DateRange,
-  type PlatformFilter,
+  type Platform,
   type SentimentFilter,
 } from "@/lib/social-trends-mock";
+
+/** Fracción combinada de menciones cuando se eligen varias plataformas a
+ * la vez (para comparar, ej. Instagram + Facebook). Vacío = todas. */
+function multiPlatformShare(selected: Platform[]): number {
+  if (selected.length === 0) return 1;
+  return selected.reduce((sum, p) => sum + platformShare(p), 0);
+}
 
 function StatCard({
   label,
@@ -109,57 +115,55 @@ const PLATFORM_DOT: Record<string, string> = {
   YouTube: "bg-zinc-400",
 };
 
-const RANGE_OPTIONS: { value: DateRange; label: string }[] = [
-  { value: "7d", label: "7 días" },
-  { value: "30d", label: "30 días" },
-  { value: "90d", label: "90 días" },
-];
+const ALL_PLATFORMS: Platform[] = ["X", "Facebook", "Instagram", "YouTube"];
 
-function SegmentedControl<T extends string>({
-  value,
-  onChange,
-  options,
+function PlatformMultiSelect({
+  selected,
+  onToggle,
 }: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string }[];
+  selected: Platform[];
+  onToggle: (p: Platform) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-background p-0.5">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          className={
-            opt.value === value
-              ? "rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground"
-              : "rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          }
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-background p-1">
+      {ALL_PLATFORMS.map((p) => {
+        const active = selected.includes(p);
+        return (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onToggle(p)}
+            className={
+              active
+                ? "rounded-full bg-brand px-3 py-1 text-xs font-semibold text-brand-foreground"
+                : "rounded-full px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            }
+          >
+            {p}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 export default function CentroDeControlPage() {
-  const [range, setRange] = React.useState<DateRange>("30d");
-  const [platform, setPlatform] = React.useState<PlatformFilter>("todas");
+  const [platforms, setPlatforms] = React.useState<Platform[]>([]);
   const [sentimentFilter, setSentimentFilter] = React.useState<SentimentFilter>("todos");
   const [selectedDate, setSelectedDate] = React.useState<string>("");
   const [topicFilter, setTopicFilter] = React.useState<string>("todos");
 
-  // Combina las dos fracciones: filtrar por plataforma Y por sentimiento
-  // reduce las menciones simuladas por ambas a la vez, igual que pasaría
-  // con datos reales — antes solo la plataforma afectaba estas cifras y
-  // el filtro de sentimiento quedaba sin efecto en las tarjetas de arriba.
-  const share = platformShare(platform) * sentimentShare(sentimentFilter);
+  const togglePlatform = (p: Platform) =>
+    setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+
+  // Combina las dos fracciones: filtrar por plataforma(s) Y por
+  // sentimiento reduce las menciones simuladas por ambas a la vez, igual
+  // que pasaría con datos reales.
+  const share = multiPlatformShare(platforms) * sentimentShare(sentimentFilter);
   const dailyMentions = React.useMemo(() => {
-    const base = getDailyMentions(RANGE_DAYS[range]);
+    const base = getDailyMentions(RANGE_DAYS["30d"]);
     return base.map((d) => ({ ...d, mentions: Math.round(d.mentions * share) }));
-  }, [range, share]);
+  }, [share]);
 
   // "dd/mm" (mismo formato que dailyMentions) a partir de la fecha exacta
   // elegida en el filtro, para poder mostrar solo ese día en vez del rango.
@@ -228,7 +232,7 @@ export default function CentroDeControlPage() {
 
   const filteredPosts = samplePosts.filter(
     (p) =>
-      (platform === "todas" || p.platform === platform) &&
+      (platforms.length === 0 || platforms.includes(p.platform)) &&
       (sentimentFilter === "todos" || p.sentiment === sentimentFilter) &&
       (!selectedDate || p.date === selectedDate) &&
       (topicFilter === "todos" || p.topic === topicFilter)
@@ -247,19 +251,27 @@ export default function CentroDeControlPage() {
               <SlidersHorizontal className="size-3.5" aria-hidden="true" />
               Filtros
             </span>
-            <SegmentedControl value={range} onChange={setRange} options={RANGE_OPTIONS} />
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value as PlatformFilter)}
-              className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
-            >
-              <option value="todas">Todas las plataformas</option>
-              {platformBreakdown.map((p) => (
-                <option key={p.label} value={p.label}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+            <label className="flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium">
+              <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                aria-label="Filtrar publicaciones por fecha exacta"
+              />
+            </label>
+            {selectedDate && (
+              <button
+                type="button"
+                onClick={() => setSelectedDate("")}
+                className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="size-3" aria-hidden="true" />
+                Quitar fecha
+              </button>
+            )}
+            <PlatformMultiSelect selected={platforms} onToggle={togglePlatform} />
             <select
               value={sentimentFilter}
               onChange={(e) => setSentimentFilter(e.target.value as SentimentFilter)}
@@ -282,40 +294,21 @@ export default function CentroDeControlPage() {
                 </option>
               ))}
             </select>
-            <label className="flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium">
-              <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent outline-none [color-scheme:light] dark:[color-scheme:dark]"
-                aria-label="Filtrar publicaciones por fecha exacta"
-              />
-            </label>
-            {selectedDate && (
-              <button
-                type="button"
-                onClick={() => setSelectedDate("")}
-                className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <X className="size-3" aria-hidden="true" />
-                Quitar fecha
-              </button>
-            )}
             <span className="ml-auto flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
               <FlaskConical className="size-3" aria-hidden="true" />
               Datos simulados — vista previa
             </span>
           </div>
+          {platforms.length > 1 && (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Comparando {platforms.join(" + ")}: los números de abajo suman ambas plataformas.
+            </p>
+          )}
 
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <StatCard
               icon={MessagesSquare}
-              label={
-                selectedDayLabel
-                  ? `Menciones (${selectedDayLabel})`
-                  : `Menciones (${RANGE_OPTIONS.find((o) => o.value === range)?.label})`
-              }
+              label={selectedDayLabel ? `Menciones (${selectedDayLabel})` : "Menciones (30 días)"}
               value={totalMentions.toLocaleString("es-CO")}
               hint={selectedDayLabel ? "de ese día" : `${dayDeltaPct >= 0 ? "+" : ""}${dayDeltaPct}% vs. ayer`}
             />
@@ -478,35 +471,35 @@ export default function CentroDeControlPage() {
           )}
           <ul className="-my-1 divide-y divide-border">
             {filteredPosts.map((post, i) => (
-              <li key={i} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span
-                    className={`size-1.5 shrink-0 rounded-full ${PLATFORM_DOT[post.platform] ?? "bg-zinc-400"}`}
-                  />
-                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <li key={i} className="py-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span
+                      className={`size-1.5 shrink-0 rounded-full ${PLATFORM_DOT[post.platform] ?? "bg-zinc-400"}`}
+                    />
                     {post.platform} · {post.date}
                   </span>
-                  <span className="truncate text-muted-foreground">{post.excerpt}</span>
-                  <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-medium text-brand">
-                    {post.topic}
+                  <span
+                    className={
+                      post.sentiment === "positivo"
+                        ? "flex shrink-0 items-center gap-1 text-xs font-medium text-brand"
+                        : post.sentiment === "negativo"
+                          ? "flex shrink-0 items-center gap-1 text-xs font-medium text-destructive"
+                          : "flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground"
+                    }
+                  >
+                    {post.sentiment === "negativo" ? (
+                      <TrendingDown className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <TrendingUp className="size-3.5" aria-hidden="true" />
+                    )}
+                    {post.mentions.toLocaleString("es-CO")}
                   </span>
                 </div>
-                <span
-                  className={
-                    post.sentiment === "positivo"
-                      ? "flex shrink-0 items-center gap-1 text-xs font-medium text-brand"
-                      : post.sentiment === "negativo"
-                        ? "flex shrink-0 items-center gap-1 text-xs font-medium text-destructive"
-                        : "flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground"
-                  }
-                >
-                  {post.sentiment === "negativo" ? (
-                    <TrendingDown className="size-3.5" aria-hidden="true" />
-                  ) : (
-                    <TrendingUp className="size-3.5" aria-hidden="true" />
-                  )}
-                  {post.mentions.toLocaleString("es-CO")}
-                </span>
+                {/* El mensaje real es lo principal — el tema queda como
+                    referencia secundaria, no como lo más visible. */}
+                <p className="mt-1 text-foreground">{post.excerpt}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{post.topic}</p>
               </li>
             ))}
           </ul>
