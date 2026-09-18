@@ -42,6 +42,13 @@ export const metadata: Metadata = {
     images: [siteConfig.ogImage],
   },
   robots: { index: true, follow: true },
+  // PWA: permite "Agregar a pantalla de inicio" en iOS con barra de
+  // estado a juego con el tema, sin la barra de Safari.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: siteConfig.shortName,
+  },
 };
 
 export const viewport: Viewport = {

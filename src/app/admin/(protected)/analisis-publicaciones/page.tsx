@@ -71,7 +71,7 @@ export default function AnalisisPublicacionesPage() {
   const electoralDataPromise = loadElectoralData();
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="w-full">
       <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
         <Vote className="size-5 text-brand" aria-hidden="true" />
         Análisis
