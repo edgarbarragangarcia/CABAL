@@ -32,7 +32,9 @@ import {
   getDailyMentions,
   getDepartmentMentions,
   getDepartmentSentiment,
+  getDepartmentSentimentCounts,
   getDepartmentTopTopic,
+  getExamplePostForPlatform,
   platformBreakdown,
   platformShare,
   samplePosts,
@@ -48,6 +50,77 @@ import {
 function multiPlatformShare(selected: Platform[]): number {
   if (selected.length === 0) return 1;
   return selected.reduce((sum, p) => sum + platformShare(p), 0);
+}
+
+/** Mapa de una plataforma + selector de departamento a su lado, con el
+ * desglose de sentimiento en conteos y una publicación de ejemplo de esa
+ * plataforma para ese departamento. */
+function PlatformMapWithDetail({
+  platform,
+  values,
+}: {
+  platform: Platform;
+  values: Record<string, number>;
+}) {
+  const [selectedDept, setSelectedDept] = React.useState<string | null>(null);
+  const counts = selectedDept ? getDepartmentSentimentCounts(selectedDept, platform) : null;
+  const examplePost = selectedDept ? getExamplePostForPlatform(platform, selectedDept) : null;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
+      <ColombiaHeatmap
+        values={values}
+        selected={selectedDept}
+        onSelect={(name) => setSelectedDept((prev) => (prev === name ? null : name))}
+      />
+
+      <div className="flex flex-col gap-2">
+        <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-surface">
+          {Object.entries(values)
+            .sort((a, b) => b[1] - a[1])
+            .map(([name]) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setSelectedDept((prev) => (prev === name ? null : name))}
+                className={`block w-full truncate border-b border-border px-2 py-1.5 text-left text-[11px] last:border-b-0 ${
+                  selectedDept === name
+                    ? "bg-brand-soft font-medium text-brand"
+                    : "hover:bg-surface-muted"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+        </div>
+
+        {selectedDept && counts ? (
+          <div className="rounded-lg border border-border bg-surface p-2.5 text-[11px]">
+            <p className="mb-1.5 font-semibold text-foreground">{selectedDept}</p>
+            <p className="text-brand">{counts.positivo} positivas</p>
+            <p className="text-muted-foreground">{counts.neutral} neutrales</p>
+            <p className="text-destructive">{counts.negativo} negativas</p>
+            {examplePost && (
+              <div className="mt-2 border-t border-border pt-2">
+                <p className="font-semibold uppercase tracking-wide text-muted-foreground">
+                  Publicación de ejemplo
+                </p>
+                <p className="mt-1 text-foreground">{examplePost.excerpt}</p>
+                <p className="mt-1 text-muted-foreground">
+                  {examplePost.date} · {examplePost.sentiment} ·{" "}
+                  {examplePost.mentions.toLocaleString("es-CO")} menciones
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-border p-2.5 text-center text-[11px] text-muted-foreground">
+            Elige un departamento.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function StatCard({
@@ -430,7 +503,7 @@ export default function CentroDeControlPage() {
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {platform}
                       </p>
-                      <ColombiaHeatmap values={values} />
+                      <PlatformMapWithDetail platform={platform} values={values} />
                     </motion.div>
                   ))}
                 </AnimatePresence>

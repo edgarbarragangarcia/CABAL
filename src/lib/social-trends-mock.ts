@@ -355,3 +355,47 @@ export function getDepartmentTopTopic(name: string): TrendingTopic {
   const idx = hashSeed(name) % trendingTopics.length;
   return trendingTopics[idx];
 }
+
+export type DepartmentSentimentCounts = {
+  positivo: number;
+  neutral: number;
+  negativo: number;
+  total: number;
+};
+
+/**
+ * Desglose de sentimiento EN NÚMERO DE PUBLICACIONES (no en menciones ni
+ * en %) de un departamento para una plataforma específica — ej. "20
+ * positivas, 10 negativas". El total de publicaciones es simulado
+ * (determinístico por departamento+plataforma), no viene de las
+ * menciones reales del mapa.
+ */
+export function getDepartmentSentimentCounts(
+  deptName: string,
+  platform: Platform
+): DepartmentSentimentCounts {
+  const rand = seededRandom(hashSeed(`${deptName}-${platform}`));
+  const total = 8 + Math.round(rand() * 42); // 8-50 publicaciones simuladas
+  const pct = getDepartmentSentiment(deptName);
+  const pctOf = (label: SentimentSlice["label"]) => pct.find((p) => p.label === label)?.value ?? 0;
+  const positivo = Math.round((pctOf("Positivo") / 100) * total);
+  const negativo = Math.round((pctOf("Negativo") / 100) * total);
+  const neutral = Math.max(total - positivo - negativo, 0);
+  return { positivo, neutral, negativo, total };
+}
+
+/**
+ * Publicación de ejemplo "representativa" de una plataforma — si se pasa
+ * un departamento, varía determinísticamente cuál de las publicaciones de
+ * esa plataforma se muestra, para que no sea siempre la misma sin
+ * importar qué departamento se elija.
+ */
+export function getExamplePostForPlatform(
+  platform: Platform,
+  deptName?: string
+): SamplePost | null {
+  const candidates = samplePosts.filter((p) => p.platform === platform);
+  if (candidates.length === 0) return null;
+  if (!deptName) return candidates[0];
+  return candidates[hashSeed(deptName) % candidates.length];
+}
