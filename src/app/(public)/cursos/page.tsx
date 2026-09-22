@@ -38,7 +38,7 @@ export default function CursosPage() {
               <Reveal key={course.id} as="li" className="list-none">
                 <Link
                   href={`/cursos/${course.id}`}
-                  className="group flex h-full flex-col gap-3 rounded-2xl border border-border bg-surface p-8 transition-shadow hover:shadow-xl"
+                  className="group flex h-full flex-col gap-3 card-premium p-8"
                 >
                   <span className="flex size-11 items-center justify-center rounded-xl bg-brand-soft text-brand">
                     <GraduationCap className="size-5" aria-hidden="true" />

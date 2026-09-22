@@ -158,7 +158,7 @@ function StatCard({
             className={
               tone === "brand"
                 ? "flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"
-                : "flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"
+                : "flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-ink"
             }
           >
             <Icon className="size-4.5" aria-hidden="true" />
@@ -175,7 +175,7 @@ function StatusRow({ ok, label }: { ok: boolean; label: string }) {
       {ok ? (
         <CheckCircle2 className="size-4 shrink-0 text-brand" aria-hidden="true" />
       ) : (
-        <CircleAlert className="size-4 shrink-0 text-accent" aria-hidden="true" />
+        <CircleAlert className="size-4 shrink-0 text-accent-ink" aria-hidden="true" />
       )}
       <span className="text-foreground">{label}</span>
     </li>
@@ -387,7 +387,7 @@ export default function CentroDeControlPage() {
                 </option>
               ))}
             </select>
-            <span className="ml-auto flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
+            <span className="ml-auto flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent-ink">
               <FlaskConical className="size-3" aria-hidden="true" />
               Datos simulados — vista previa
             </span>

@@ -5,16 +5,19 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+  // `active:scale` con la curva premium: el hundimiento leve al pulsar es
+  // lo que da sensación de material, sin llegar a rebote de juguete.
+  "sheen inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium tracking-[-0.005em] transition-[transform,box-shadow,background-color,color,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:transition-transform focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
   {
     variants: {
       variant: {
         default:
-          "bg-brand text-brand-foreground shadow-sm hover:shadow-md hover:brightness-110 active:brightness-95",
+          "bg-brand text-brand-foreground shadow-elev-1 hover:-translate-y-px hover:shadow-elev-2 hover:brightness-[1.12]",
         accent:
-          "bg-accent text-accent-foreground shadow-sm hover:shadow-md hover:brightness-105 animate-pulse-glow",
+          "bg-accent text-accent-foreground shadow-elev-1 hover:-translate-y-px hover:shadow-elev-2 hover:brightness-[1.06]",
         outline:
-          "border border-border bg-transparent text-foreground hover:bg-surface-muted",
+          "border border-border bg-surface/60 text-foreground backdrop-blur-sm hover:border-foreground/25 hover:bg-surface",
+        glass: "glass-panel text-foreground hover:bg-foreground/[0.06]",
         ghost: "bg-transparent text-foreground hover:bg-surface-muted",
         link: "text-brand underline-offset-4 hover:underline",
       },

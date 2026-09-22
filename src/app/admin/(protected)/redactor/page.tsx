@@ -66,7 +66,7 @@ export default function RedactorPage() {
             Propone un borrador de artículo a partir de un tema en tendencia y una ciudad.
           </p>
         </div>
-        <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
+        <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent-ink">
           <FlaskConical className="size-3" aria-hidden="true" />
           Plantilla — sin IA conectada
         </span>

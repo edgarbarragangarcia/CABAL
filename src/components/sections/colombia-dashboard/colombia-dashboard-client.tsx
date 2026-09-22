@@ -90,7 +90,7 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-      <div className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+      <div className="card-premium p-4 sm:p-6">
         {/* Selector de tema */}
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {topics.map((topic) => {
@@ -237,7 +237,7 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              className="rounded-2xl border border-border bg-surface p-6"
+              className="card-premium p-6"
             >
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Departamento seleccionado
@@ -277,7 +277,7 @@ export function ColombiaDashboardClient({ shapes, topics }: ColombiaDashboardDat
           )}
         </AnimatePresence>
 
-        <div className="rounded-2xl border border-border bg-surface p-6">
+        <div className="card-premium p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {activeTopic.highLabel} · {activeTopic.label}
           </p>

@@ -62,9 +62,9 @@ export function Navbar() {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="overflow-hidden bg-foreground text-background"
+            className="overflow-hidden bg-ink text-ink-foreground"
           >
-            <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-2 text-xs font-medium lg:px-8">
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-2 text-xs font-medium tracking-wide lg:px-8">
               <a
                 href="#radio-en-vivo"
                 className="inline-flex items-center gap-2 hover:opacity-80"
@@ -75,7 +75,7 @@ export function Navbar() {
                 </span>
                 EN VIVO — Radio Escuela Libertad
               </a>
-              <a href={`mailto:${siteConfig.contact.email}`} className="hidden hover:opacity-80 sm:inline">
+              <a href={`mailto:${siteConfig.contact.email}`} className="hidden text-ink-foreground/65 transition-colors hover:text-ink-foreground sm:inline">
                 {siteConfig.contact.email}
               </a>
             </div>
@@ -96,8 +96,8 @@ export function Navbar() {
             className={cn(
               "flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm font-bold uppercase tracking-tight text-foreground transition-all duration-300",
               scrolled
-                ? "border-border bg-surface/70 shadow-lg shadow-black/[0.03] backdrop-blur-xl"
-                : "border-transparent bg-surface/30 backdrop-blur-md"
+                ? "hairline-gold border-border/70 bg-surface/75 shadow-elev-2 backdrop-blur-2xl backdrop-saturate-150"
+                : "border-transparent bg-surface/25 backdrop-blur-md"
             )}
           >
             <Image
@@ -116,8 +116,8 @@ export function Navbar() {
             className={cn(
               "relative hidden flex-1 items-center justify-between rounded-full border px-2 py-1.5 transition-all duration-300 md:flex",
               scrolled
-                ? "border-border bg-surface/70 shadow-lg shadow-black/[0.03] backdrop-blur-xl"
-                : "border-transparent bg-surface/30 backdrop-blur-md"
+                ? "hairline-gold border-border/70 bg-surface/75 shadow-elev-2 backdrop-blur-2xl backdrop-saturate-150"
+                : "border-transparent bg-surface/25 backdrop-blur-md"
             )}
           >
             <nav aria-label="Navegación principal" className="flex items-center">
@@ -159,7 +159,7 @@ export function Navbar() {
                       )}
                       <span
                         className={cn(
-                          "absolute inset-x-3 -bottom-0 h-[2px] origin-left scale-x-0 bg-brand transition-transform duration-200 group-hover:scale-x-100",
+                          "absolute inset-x-3 -bottom-0 h-[2px] origin-left scale-x-0 bg-gradient-to-r from-brand to-accent transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-x-100",
                           isActive && "scale-x-100"
                         )}
                         aria-hidden="true"
@@ -173,7 +173,7 @@ export function Navbar() {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.98 }}
                           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                          className="absolute left-1/2 top-full z-10 mt-3 w-[26rem] -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-surface p-2 shadow-2xl"
+                          className="glass-panel absolute left-1/2 top-full z-10 mt-3 w-[26rem] -translate-x-1/2 overflow-hidden rounded-2xl p-2"
                         >
                           <ul className="grid grid-cols-2 gap-1">
                             {item.children!.map((child) => {
@@ -183,7 +183,7 @@ export function Navbar() {
                                   <Link
                                     href={child.href}
                                     onClick={() => setOpenMenu(null)}
-                                    className="flex h-full flex-col gap-2 rounded-xl border border-transparent p-3 transition-colors hover:border-border hover:bg-surface-muted"
+                                    className="flex h-full flex-col gap-2 rounded-xl border border-transparent p-3 transition-colors duration-300 hover:border-border hover:bg-surface-muted/70"
                                   >
                                     <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
                                       <Icon className="size-4" aria-hidden="true" />

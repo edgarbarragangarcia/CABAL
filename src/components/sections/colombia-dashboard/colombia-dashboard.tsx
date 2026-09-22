@@ -325,7 +325,7 @@ export async function ColombiaDashboard() {
           {nationalStats.map((stat) => {
             const Icon = stat.icon;
             return (
-              <div key={stat.label} className="rounded-2xl border border-border bg-surface p-4">
+              <div key={stat.label} className="card-premium p-4">
                 <Icon className="size-4 text-brand" aria-hidden="true" />
                 <p className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
                   <AnimatedCounter value={stat.value} suffix={stat.suffix} />
@@ -340,7 +340,7 @@ export async function ColombiaDashboard() {
             Permiten superponer indicadores, comparar promedio por gobierno y ver una
             proyección estadística opcional (sin atribución causal ni política). */}
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <Reveal className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+          <Reveal className="card-premium p-4 sm:p-6">
             <p className="text-sm font-semibold">
               Seguridad, {homicideTrend[0]?.year}–{homicideTrend[homicideTrend.length - 1]?.year}
             </p>
@@ -352,7 +352,7 @@ export async function ColombiaDashboard() {
             </div>
           </Reveal>
 
-          <Reveal className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+          <Reveal className="card-premium p-4 sm:p-6">
             <p className="text-sm font-semibold">
               Economía, {gdpTrendNominal[0]?.year}–{gdpTrendNominal[gdpTrendNominal.length - 1]?.year}
             </p>
@@ -372,7 +372,7 @@ export async function ColombiaDashboard() {
         {/* Deflactor del PIB: la aproximación más honesta a "inflación
             general" que se puede calcular con los datos oficiales que ya
             tenemos, sin traer una fuente nueva sin verificar. */}
-        <Reveal className="mt-6 rounded-2xl border border-border bg-surface p-4 sm:p-6">
+        <Reveal className="mt-6 card-premium p-4 sm:p-6">
           <p className="text-sm font-semibold">
             Deflactor del PIB, {deflatorTrend[0]?.year}–{deflatorTrend[deflatorTrend.length - 1]?.year}
           </p>

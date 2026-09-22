@@ -20,7 +20,7 @@ export function LegislativeStats() {
         {legislativeStats.map((stat) => (
           <Reveal
             key={stat.id}
-            className="rounded-2xl border border-border bg-surface p-6"
+            className="card-premium p-6"
           >
             <p className="text-3xl font-semibold tracking-tight sm:text-4xl">
               <AnimatedCounter value={stat.value} suffix={stat.suffix} />

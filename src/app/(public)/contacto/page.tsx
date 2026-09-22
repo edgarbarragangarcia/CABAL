@@ -25,7 +25,7 @@ export default function ContactoPage() {
         <Reveal className="flex flex-col gap-6">
           <a
             href={`mailto:${siteConfig.contact.email}`}
-            className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-brand"
+            className="flex items-center gap-4 card-premium p-5"
           >
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
               <Mail className="size-5" aria-hidden="true" />
@@ -36,7 +36,7 @@ export default function ContactoPage() {
             </div>
           </a>
 
-          <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-5">
+          <div className="flex items-center gap-4 card-premium p-5">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
               <Phone className="size-5" aria-hidden="true" />
             </span>
@@ -46,7 +46,7 @@ export default function ContactoPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-5">
+          <div className="flex items-center gap-4 card-premium p-5">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
               <MapPin className="size-5" aria-hidden="true" />
             </span>
@@ -57,7 +57,7 @@ export default function ContactoPage() {
           </div>
         </Reveal>
 
-        <Reveal delay={0.1} className="rounded-2xl border border-border bg-surface p-8">
+        <Reveal delay={0.1} className="card-premium p-8">
           <ContactForm />
         </Reveal>
       </Container>

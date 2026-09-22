@@ -111,7 +111,7 @@ export function AnalisisPublicacionesClient() {
             Por político, con comparación entre ellos.
           </p>
         </div>
-        <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
+        <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent-ink">
           <FlaskConical className="size-3" aria-hidden="true" />
           Datos simulados — MVP
         </span>

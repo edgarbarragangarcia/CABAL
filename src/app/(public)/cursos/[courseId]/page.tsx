@@ -47,7 +47,7 @@ export default function CursoDetailPage() {
 
         <div className="space-y-4">
           {course.modules.map((module) => (
-            <Reveal key={module.id} className="rounded-2xl border border-border bg-surface p-6">
+            <Reveal key={module.id} className="card-premium p-6">
               <h2 className="font-semibold">{module.title}</h2>
               <ul className="mt-3 divide-y divide-border">
                 {module.lessons.map((lesson) => (

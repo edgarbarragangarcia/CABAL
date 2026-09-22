@@ -5,50 +5,91 @@
 :root {
   --radius: 1rem;
 
-  /* Superficies */
-  --background: #fbfbfc;
-  --foreground: #0a0a0c;
-  --surface: #ffffff;
-  --surface-muted: #f4f4f6;
-  --border: #e4e4e9;
+  /* Superficies — hueso cálido, y la superficie MÁS CLARA que el fondo.
+     Es al revés de lo habitual: sobre un crema, una tarjeta blanca se lee
+     como papel elevado; sobre blanco, no se lee como nada. */
+  --background: #ece4d3;
+  --foreground: #16170f;
+  --surface: #f7f3e9;
+  --surface-muted: #e4dac5;
+  --border: #cdbfa3;
 
-  /* Marca — verde libertad (educación / crecimiento) + acento cálido */
-  --brand: #0f6b4c;
-  --brand-foreground: #ffffff;
-  --brand-soft: #e4f5ee;
-  --accent: #ffb020;
-  --accent-foreground: #241a00;
+  /* Tinta: la franja superior y los pies de página oscuros. Un negro
+     cálido propio, no el `foreground` invertido — la inversión pura
+     produce un bloque duro que corta la página. */
+  --ink: #101310;
+  --ink-foreground: #e8e3d6;
+
+  /* Marca — verde bosque profundo (educación / crecimiento) con acento
+     champán. La saturación baja es lo que separa "premium" de "brillante". */
+  --brand: #0a4f37;
+  --brand-foreground: #f8fbf9;
+  --brand-soft: #e7f0ea;
+  --accent: #b3893c;
+  --accent-foreground: #1c1405;
+  --accent-soft: #f6efe1;
+  /* Oro de RELLENO y oro de TEXTO son dos colores distintos. Un fondo
+     dorado solo necesita 3:1 contra lo que lo rodea; el mismo oro puesto
+     en una versalita de 11px necesita 4.5:1 y no llega ni de lejos. */
+  --accent-ink: #71531a;
 
   /* Texto */
-  --muted-foreground: #52525b;
+  --muted-foreground: #5d5648;
 
   /* Estados */
-  --ring: #0f6b4c;
-  --success: #0f8a4f;
-  --destructive: #d92d20;
+  --ring: #0a4f37;
+  --success: #0f7a48;
+  --destructive: #b4231b;
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Sombras en capas: una difusa para la elevación, una corta para el
+     contacto. Una sola sombra siempre se ve plana. */
+  --shadow-1:
+    0 1px 2px -1px rgb(18 21 17 / 0.06), 0 2px 6px -2px rgb(18 21 17 / 0.05);
+  --shadow-2:
+    0 1px 2px -1px rgb(18 21 17 / 0.08), 0 8px 24px -8px rgb(18 21 17 / 0.12);
+  --shadow-3:
+    0 1px 3px -1px rgb(18 21 17 / 0.1), 0 24px 56px -20px rgb(18 21 17 / 0.22);
+
+  /* Curva de salida suave, la misma en todo el sitio */
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --font-sans: var(--font-sans-src);
+  --font-display: var(--font-display-src);
+  --font-mono: var(--font-mono-src);
 }
 
 .dark {
-  --background: #08090a;
-  --foreground: #f5f5f7;
-  --surface: #101113;
-  --surface-muted: #17181b;
-  --border: #232428;
+  /* Obsidiana con fondo verde: casi negro, pero nunca gris neutro. */
+  --background: #070908;
+  --foreground: #f2efe7;
+  --surface: #0e1211;
+  --surface-muted: #151a18;
+  --border: #242c29;
 
-  --brand: #22c58a;
-  --brand-foreground: #04140d;
-  --brand-soft: #0e2a1f;
-  --accent: #ffc94a;
-  --accent-foreground: #241a00;
+  --ink: #0b0e0c;
+  --ink-foreground: #e8e3d6;
 
-  --muted-foreground: #a1a1aa;
+  --brand: #3fcf97;
+  --brand-foreground: #04150e;
+  --brand-soft: #0d241a;
+  --accent: #e0bd7c;
+  --accent-foreground: #1c1405;
+  --accent-soft: #241d10;
+  /* Sobre obsidiana el oro claro ya da 11:1: aquí ambos coinciden. */
+  --accent-ink: #e0bd7c;
 
-  --ring: #22c58a;
-  --success: #22c58a;
-  --destructive: #f97066;
+  --muted-foreground: #9aa29d;
+
+  --ring: #3fcf97;
+  --success: #3fcf97;
+  --destructive: #f4796d;
+
+  --shadow-1:
+    0 1px 2px -1px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --shadow-2:
+    0 1px 2px -1px rgb(0 0 0 / 0.6), 0 8px 24px -8px rgb(0 0 0 / 0.6);
+  --shadow-3:
+    0 1px 3px -1px rgb(0 0 0 / 0.7), 0 24px 56px -20px rgb(0 0 0 / 0.8);
 }
 
 @theme inline {
@@ -57,12 +98,16 @@
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
   --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
 
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-soft: var(--brand-soft);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
 
   --color-muted-foreground: var(--muted-foreground);
   --color-ring: var(--ring);
@@ -74,9 +119,15 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 0.5rem);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans-src);
+  --font-display: var(--font-display-src);
+  --font-mono: var(--font-mono-src);
 
+  --shadow-elev-1: var(--shadow-1);
+  --shadow-elev-2: var(--shadow-2);
+  --shadow-elev-3: var(--shadow-3);
+
+  --animate-sheen: sheen 1.1s var(--ease-premium);
   --animate-gradient-x: gradient-x 8s ease infinite;
   --animate-pulse-glow: pulse-glow 2.4s ease-in-out infinite;
   --animate-fade-up: fade-up 0.6s ease forwards;
@@ -179,6 +230,15 @@
       background-position: 200% center;
     }
   }
+
+  @keyframes sheen {
+    from {
+      transform: translateX(-120%) skewX(-18deg);
+    }
+    to {
+      transform: translateX(220%) skewX(-18deg);
+    }
+  }
 }
 
 @layer utilities {
@@ -187,11 +247,146 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
   }
 
+  /* Vidrio: además del desenfoque lleva un filo superior claro — es ese
+     borde de luz lo que hace que se lea como cristal y no como un panel
+     translúcido cualquiera. */
   .glass-panel {
-    background: color-mix(in oklab, var(--surface) 70%, transparent);
-    backdrop-filter: blur(18px) saturate(1.4);
-    -webkit-backdrop-filter: blur(18px) saturate(1.4);
-    border: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
+    background: color-mix(in oklab, var(--surface) 68%, transparent);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in oklab, white 55%, transparent),
+      var(--shadow-2);
+  }
+
+  .dark .glass-panel {
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in oklab, white 10%, transparent),
+      var(--shadow-2);
+  }
+
+  /* Tarjeta base del sitio: filo de luz arriba + sombra en capas, y en
+     hover sube apenas 2px. La elevación sutil es lo que se percibe como
+     acabado caro; el salto grande se siente barato. */
+  .card-premium {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-1);
+    transition:
+      transform 0.4s var(--ease-premium),
+      box-shadow 0.4s var(--ease-premium),
+      border-color 0.4s var(--ease-premium);
+  }
+
+  .card-premium::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, white 60%, transparent),
+      transparent 40%
+    );
+    opacity: 0.6;
+  }
+
+  .dark .card-premium::before {
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, white 8%, transparent),
+      transparent 40%
+    );
+  }
+
+  .card-premium:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-3);
+    border-color: color-mix(in oklab, var(--brand) 28%, var(--border));
+  }
+
+  /* Barrido de luz al pasar por encima (botones, tarjetas destacadas) */
+  .sheen {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .sheen::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    width: 45%;
+    left: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, white 35%, transparent),
+      transparent
+    );
+    transform: translateX(-120%) skewX(-18deg);
+  }
+
+  .sheen:hover::after {
+    animation: sheen 1.1s var(--ease-premium);
+  }
+
+  /* Filete dorado que se apaga en los extremos: marca el borde de la
+     barra de navegación sin encerrarla en una línea completa. */
+  .hairline-gold {
+    position: relative;
+  }
+
+  .hairline-gold::after {
+    content: "";
+    position: absolute;
+    inset-inline: 12%;
+    bottom: -1px;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--accent) 55%, transparent),
+      transparent
+    );
+  }
+
+  /* Filete degradado: separa secciones sin la dureza de una línea sólida */
+  .hairline {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--foreground) 16%, transparent),
+      transparent
+    );
+  }
+
+  /* Versalitas con tracking abierto para los "eyebrow" de sección */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  .font-display {
+    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-variation-settings: "SOFT" 12, "WONK" 1;
+    letter-spacing: -0.015em;
+  }
+
+  /* Cifras alineadas en columnas de estadísticas */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 
   .ring-glow {
@@ -222,6 +417,7 @@
 
 @layer base {
   * {
+    -webkit-tap-highlight-color: transparent;
     border-color: var(--border);
     outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
   }
@@ -236,6 +432,10 @@
   }
 
   body {
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    /* Inter: alternativas de "a" y "g" de una sola planta y comillas
+       tipográficas — más sereno para texto largo. */
+    font-feature-settings: "cv11", "ss01";
     background: radial-gradient(
         120% 70% at 50% -10%,
         color-mix(in oklab, var(--brand) 7%, var(--background)) 0%,
@@ -243,6 +443,15 @@
       )
       var(--background);
     color: var(--foreground);
+  }
+
+  /* Titulares en serif por defecto: es lo que fija el tono editorial en
+     todo el sitio sin tocar cada página una por una. */
+  h1,
+  h2 {
+    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-variation-settings: "SOFT" 12, "WONK" 1;
+    letter-spacing: -0.02em;
   }
 
   /* Accesibilidad: foco visible de alto contraste para navegación por teclado (WCAG AAA). */

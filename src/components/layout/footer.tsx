@@ -6,10 +6,16 @@ import { footerNav, siteConfig } from "@/config/site";
 
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-surface-muted">
-      <Container className="grid gap-12 py-16 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
+    <footer className="relative isolate overflow-hidden border-t border-border bg-surface-muted">
+      {/* Resplandor bajo, anclado al pie: cierra la página en vez de
+          dejarla cortada en seco. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-64 [background:radial-gradient(60%_100%_at_50%_100%,color-mix(in_oklab,var(--brand)_10%,transparent)_0%,transparent_70%)]"
+      />
+      <Container className="relative grid gap-12 py-20 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
         <div>
-          <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <Link href="/" className="flex items-center gap-2.5 font-display text-base tracking-tight">
             <Image
               src="/logo-mark.png"
               alt=""
@@ -54,13 +60,13 @@ export function Footer() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Fundación</h3>
+          <h3 className="eyebrow">Fundación</h3>
           <ul className="mt-4 space-y-3">
             {footerNav.fundacion.map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-block text-sm text-muted-foreground transition-all duration-300 hover:translate-x-0.5 hover:text-foreground"
                 >
                   {item.label}
                 </Link>
@@ -70,13 +76,13 @@ export function Footer() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Apoya la causa</h3>
+          <h3 className="eyebrow">Apoya la causa</h3>
           <ul className="mt-4 space-y-3">
             {footerNav.ayuda.map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-block text-sm text-muted-foreground transition-all duration-300 hover:translate-x-0.5 hover:text-foreground"
                 >
                   {item.label}
                 </Link>
@@ -86,7 +92,7 @@ export function Footer() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Mantente informado</h3>
+          <h3 className="eyebrow">Mantente informado</h3>
           <p className="mt-4 text-sm text-muted-foreground">
             Recibe noticias sobre nuestros programas. Sin spam, cancela cuando quieras.
           </p>
@@ -110,7 +116,7 @@ export function Footer() {
             />
             <button
               type="submit"
-              className="h-11 shrink-0 rounded-full bg-brand px-5 text-sm font-medium text-brand-foreground transition hover:brightness-110"
+              className="sheen h-11 shrink-0 rounded-full bg-brand px-5 text-sm font-medium text-brand-foreground shadow-elev-1 transition-all duration-300 hover:-translate-y-px hover:shadow-elev-2 hover:brightness-110"
             >
               Unirme
             </button>
@@ -122,7 +128,7 @@ export function Footer() {
         </div>
       </Container>
 
-      <div className="border-t border-border">
+      <div className="relative border-t border-border">
         <Container className="flex flex-col items-center justify-between gap-4 py-6 text-xs text-muted-foreground sm:flex-row">
           <p>
             © {new Date().getFullYear()} {siteConfig.name}. Todos los derechos reservados.

@@ -23,7 +23,7 @@ export function TopCandidates({
   const max = candidates[0]?.votos ?? 1;
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+    <div className="card-premium p-4 sm:p-6">
       <p className="text-sm font-semibold">Candidatos más votados al Senado, {year}</p>
       <p className="mt-1 text-xs text-muted-foreground">
         Suma de votos por candidato a nivel de mesa. No incluye votos en blanco, nulos, ni los

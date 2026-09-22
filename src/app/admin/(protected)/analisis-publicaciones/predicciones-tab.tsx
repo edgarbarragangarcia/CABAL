@@ -221,7 +221,7 @@ export function PrediccionesTab() {
     <div>
       <TrendAlerts />
 
-      <div className="mt-6 flex items-start gap-2 rounded-2xl border border-accent/30 bg-accent/10 p-4 text-xs text-accent">
+      <div className="mt-6 flex items-start gap-2 rounded-2xl border border-accent/30 bg-accent/10 p-4 text-xs text-accent-ink">
         <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <p>
           Esto es una <strong>simulación con una regla simple y visible</strong>, no un modelo predictivo

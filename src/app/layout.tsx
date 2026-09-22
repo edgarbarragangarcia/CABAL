@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 
@@ -7,14 +7,26 @@ import { siteConfig } from "@/config/site";
 import { ThemeProvider } from "@/components/animations/theme-provider";
 import { SmoothScrollProvider } from "@/components/animations/smooth-scroll-provider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/* Inter para la interfaz: neutral, legible y con cifras tabulares para
+   las estadísticas. Fraunces para los titulares: serif variable con eje
+   óptico, da el aire editorial/premium sin perder personalidad. */
+const sans = Inter({
+  variable: "--font-sans-src",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const display = Fraunces({
+  variable: "--font-display-src",
   subsets: ["latin"],
+  display: "swap",
+  axes: ["SOFT", "WONK"],
+});
+
+const mono = JetBrains_Mono({
+  variable: "--font-mono-src",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -60,8 +72,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfbfc" },
-    { media: "(prefers-color-scheme: dark)", color: "#08090a" },
+    { media: "(prefers-color-scheme: light)", color: "#ece4d3" },
+    { media: "(prefers-color-scheme: dark)", color: "#070908" },
   ],
 };
 
@@ -74,7 +86,7 @@ export default function RootLayout({
     <html
       lang="es-CO"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${sans.variable} ${display.variable} ${mono.variable} h-full antialiased`}
     >
       <head>
         {/* Script anti-parpadeo como archivo estático con `src` (no inline

@@ -77,6 +77,9 @@ export function LiveRadioWidget({ className }: { className?: string }) {
 
   const isPlaying = state === "playing";
 
+  // Los grises internos se derivan de `currentColor` (no de `--background`),
+  // así el widget funciona igual invertido sobre fondo oscuro que integrado
+  // en un panel de cristal claro.
   return (
     <div className={cn("relative overflow-hidden rounded-2xl bg-foreground text-background shadow-xl", className)}>
       {/* Resplandor de marca sutil, coherente con el Hero */}
@@ -121,11 +124,11 @@ export function LiveRadioWidget({ className }: { className?: string }) {
               />
               <span className="relative inline-flex size-1.5 rounded-full bg-destructive" />
             </span>
-            <p className="truncate text-xs font-semibold uppercase tracking-wide text-background/60">
+            <p className="truncate text-xs font-semibold uppercase tracking-wide text-current/60">
               En vivo · {liveRadioName}
             </p>
           </div>
-          <p className="mt-0.5 truncate text-sm text-background/85">
+          <p className="mt-0.5 truncate text-sm text-current/85">
             {state === "error"
               ? "No fue posible conectar. Intenta de nuevo."
               : "Análisis, formación y opinión, 24 horas."}
@@ -138,7 +141,7 @@ export function LiveRadioWidget({ className }: { className?: string }) {
           type="button"
           onClick={toggleMute}
           aria-label={muted ? "Activar sonido" : "Silenciar"}
-          className="flex size-9 shrink-0 items-center justify-center rounded-full border border-background/20 text-background/70 transition-colors hover:border-accent hover:text-accent"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current/20 text-current/70 transition-colors hover:border-accent hover:text-accent-ink"
         >
           {muted ? (
             <VolumeX className="size-4" aria-hidden="true" />
