@@ -59,38 +59,6 @@ export function Navbar() {
 
   return (
     <div className="fixed inset-x-0 top-0 z-50">
-      {/* Franja utilitaria: se colapsa al hacer scroll para no competir con la navegación */}
-      <AnimatePresence initial={false}>
-        {!scrolled && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="overflow-hidden bg-ink text-ink-foreground"
-          >
-            <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-2 text-xs font-medium tracking-wide lg:px-8">
-              <a
-                href="#radio-en-vivo"
-                className="inline-flex items-center gap-2 hover:opacity-80"
-              >
-                <span className="relative flex size-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-destructive" />
-                </span>
-                EN VIVO — Radio Escuela Libertad
-              </a>
-              <a
-                href={`mailto:${siteConfig.contact.email}`}
-                className="hidden text-ink-foreground/65 transition-colors hover:text-ink-foreground sm:inline"
-              >
-                {siteConfig.contact.email}
-              </a>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <motion.header
         initial={{ y: -24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
