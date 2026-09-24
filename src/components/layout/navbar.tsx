@@ -4,7 +4,12 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValueEvent,
+  useScroll,
+} from "framer-motion";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Accordion from "@radix-ui/react-accordion";
 import {
@@ -75,7 +80,10 @@ export function Navbar() {
                 </span>
                 EN VIVO — Radio Escuela Libertad
               </a>
-              <a href={`mailto:${siteConfig.contact.email}`} className="hidden text-ink-foreground/65 transition-colors hover:text-ink-foreground sm:inline">
+              <a
+                href={`mailto:${siteConfig.contact.email}`}
+                className="hidden text-ink-foreground/65 transition-colors hover:text-ink-foreground sm:inline"
+              >
                 {siteConfig.contact.email}
               </a>
             </div>
@@ -90,25 +98,25 @@ export function Navbar() {
         className="px-4 pt-3 transition-colors duration-300 sm:pt-4"
       >
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
-          {/* Marca: cápsula independiente, separada del bloque de navegación */}
+          {/* Marca en móvil: solo el emblema. En escritorio va al centro de la barra. */}
           <Link
             href="/"
+            aria-label={`${siteConfig.shortName} — Inicio`}
             className={cn(
-              "flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm font-bold uppercase tracking-tight text-foreground transition-all duration-300",
+              "flex shrink-0 items-center rounded-full border p-1.5 transition-all duration-300 md:hidden",
               scrolled
                 ? "hairline-gold border-border/70 bg-surface/75 shadow-elev-2 backdrop-blur-2xl backdrop-saturate-150"
-                : "border-transparent bg-surface/25 backdrop-blur-md"
+                : "border-transparent bg-surface/25 backdrop-blur-md",
             )}
           >
             <Image
               src="/logo-mark.png"
               alt=""
-              width={32}
-              height={32}
+              width={96}
+              height={96}
               priority
-              className="size-8 shrink-0 object-contain"
+              className="size-11 shrink-0 object-contain"
             />
-            <span className="hidden sm:inline">Escuela Libertad</span>
           </Link>
 
           {/* Bloque de navegación: separado visualmente de la marca */}
@@ -117,92 +125,126 @@ export function Navbar() {
               "relative hidden flex-1 items-center justify-between rounded-full border px-2 py-1.5 transition-all duration-300 md:flex",
               scrolled
                 ? "hairline-gold border-border/70 bg-surface/75 shadow-elev-2 backdrop-blur-2xl backdrop-saturate-150"
-                : "border-transparent bg-surface/25 backdrop-blur-md"
+                : "border-transparent bg-surface/25 backdrop-blur-md",
             )}
           >
-            <nav aria-label="Navegación principal" className="flex items-center">
-              {mainNav.map((item) => {
+            <nav
+              aria-label="Navegación principal"
+              className="flex flex-1 items-center justify-center"
+            >
+              {mainNav.map((item, index) => {
                 const isActive = pathname === item.href;
                 const hasChildren = !!item.children?.length;
 
                 return (
-                  <div
-                    key={item.href}
-                    className="relative"
-                    onMouseEnter={() => hasChildren && openWithIntent(item.label)}
-                    onMouseLeave={() => hasChildren && closeWithIntent()}
-                  >
-                    <Link
-                      href={item.href}
-                      aria-current={isActive ? "page" : undefined}
-                      aria-expanded={hasChildren ? openMenu === item.label : undefined}
-                      onClick={(e) => {
-                        if (hasChildren) {
-                          e.preventDefault();
-                          setOpenMenu((prev) => (prev === item.label ? null : item.label));
-                        }
-                      }}
-                      className={cn(
-                        "group relative flex items-center gap-1 px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
-                        isActive && "text-foreground"
-                      )}
+                  <React.Fragment key={item.href}>
+                    {/* Escudo: el emblema en un círculo que parte la barra en dos. */}
+                    {index === Math.ceil(mainNav.length / 2) && (
+                      <Link
+                        href="/"
+                        aria-label={`${siteConfig.shortName} — Inicio`}
+                        className="relative z-10 -my-7 mx-3 flex size-[5.5rem] shrink-0 items-center justify-center rounded-full border-2 border-accent/70 bg-surface shadow-elev-2 ring-4 ring-surface/80 transition-transform duration-300 hover:scale-105"
+                      >
+                        <Image
+                          src="/logo-mark.png"
+                          alt=""
+                          width={128}
+                          height={128}
+                          priority
+                          className="size-16 object-contain"
+                        />
+                      </Link>
+                    )}
+                    <div
+                      className="relative"
+                      onMouseEnter={() =>
+                        hasChildren && openWithIntent(item.label)
+                      }
+                      onMouseLeave={() => hasChildren && closeWithIntent()}
                     >
-                      {item.label}
-                      {hasChildren && (
-                        <ChevronDown
+                      <Link
+                        href={item.href}
+                        aria-current={isActive ? "page" : undefined}
+                        aria-expanded={
+                          hasChildren ? openMenu === item.label : undefined
+                        }
+                        onClick={(e) => {
+                          if (hasChildren) {
+                            e.preventDefault();
+                            setOpenMenu((prev) =>
+                              prev === item.label ? null : item.label,
+                            );
+                          }
+                        }}
+                        className={cn(
+                          "group relative flex items-center gap-1 px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+                          isActive && "text-foreground",
+                        )}
+                      >
+                        {item.label}
+                        {hasChildren && (
+                          <ChevronDown
+                            className={cn(
+                              "size-3.5 transition-transform duration-200",
+                              openMenu === item.label && "rotate-180",
+                            )}
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span
                           className={cn(
-                            "size-3.5 transition-transform duration-200",
-                            openMenu === item.label && "rotate-180"
+                            "absolute inset-x-3 -bottom-0 h-[2px] origin-left scale-x-0 bg-gradient-to-r from-brand to-accent transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-x-100",
+                            isActive && "scale-x-100",
                           )}
                           aria-hidden="true"
                         />
-                      )}
-                      <span
-                        className={cn(
-                          "absolute inset-x-3 -bottom-0 h-[2px] origin-left scale-x-0 bg-gradient-to-r from-brand to-accent transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-x-100",
-                          isActive && "scale-x-100"
-                        )}
-                        aria-hidden="true"
-                      />
-                    </Link>
+                      </Link>
 
-                    <AnimatePresence>
-                      {hasChildren && openMenu === item.label && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                          className="glass-panel absolute left-1/2 top-full z-10 mt-3 w-[26rem] -translate-x-1/2 overflow-hidden rounded-2xl p-2"
-                        >
-                          <ul className="grid grid-cols-2 gap-1">
-                            {item.children!.map((child) => {
-                              const Icon = CHILD_ICONS[child.href] ?? FileText;
-                              return (
-                                <li key={child.href}>
-                                  <Link
-                                    href={child.href}
-                                    onClick={() => setOpenMenu(null)}
-                                    className="flex h-full flex-col gap-2 rounded-xl border border-transparent p-3 transition-colors duration-300 hover:border-border hover:bg-surface-muted/70"
-                                  >
-                                    <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
-                                      <Icon className="size-4" aria-hidden="true" />
-                                    </span>
-                                    <span className="text-sm font-semibold leading-tight text-foreground">
-                                      {child.label}
-                                    </span>
-                                    <span className="text-xs leading-snug text-muted-foreground">
-                                      {child.description}
-                                    </span>
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                      <AnimatePresence>
+                        {hasChildren && openMenu === item.label && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                            transition={{
+                              duration: 0.18,
+                              ease: [0.16, 1, 0.3, 1],
+                            }}
+                            className="glass-panel absolute left-1/2 top-full z-10 mt-3 w-[26rem] -translate-x-1/2 overflow-hidden rounded-2xl p-2"
+                          >
+                            <ul className="grid grid-cols-2 gap-1">
+                              {item.children!.map((child) => {
+                                const Icon =
+                                  CHILD_ICONS[child.href] ?? FileText;
+                                return (
+                                  <li key={child.href}>
+                                    <Link
+                                      href={child.href}
+                                      onClick={() => setOpenMenu(null)}
+                                      className="flex h-full flex-col gap-2 rounded-xl border border-transparent p-3 transition-colors duration-300 hover:border-border hover:bg-surface-muted/70"
+                                    >
+                                      <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                                        <Icon
+                                          className="size-4"
+                                          aria-hidden="true"
+                                        />
+                                      </span>
+                                      <span className="text-sm font-semibold leading-tight text-foreground">
+                                        {child.label}
+                                      </span>
+                                      <span className="text-xs leading-snug text-muted-foreground">
+                                        {child.description}
+                                      </span>
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </React.Fragment>
                 );
               })}
             </nav>
@@ -221,14 +263,6 @@ export function Navbar() {
           </div>
 
           <div className="ml-auto flex items-center gap-2 md:ml-0">
-            <Button
-              asChild
-              size="sm"
-              variant="accent"
-              className="hidden [clip-path:polygon(10px_0,100%_0,calc(100%-10px)_100%,0_100%)] rounded-none px-6 sm:inline-flex"
-            >
-              <Link href="/donar">Donar</Link>
-            </Button>
 
             <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
               <Dialog.Trigger asChild>
@@ -238,7 +272,9 @@ export function Navbar() {
                   size="icon"
                   className={cn(
                     "border transition-all duration-300 md:hidden",
-                    scrolled ? "bg-surface/70 backdrop-blur-xl" : "bg-surface/30 backdrop-blur-md"
+                    scrolled
+                      ? "bg-surface/70 backdrop-blur-xl"
+                      : "bg-surface/30 backdrop-blur-md",
                   )}
                   aria-label="Abrir menú de navegación"
                 >
@@ -266,18 +302,32 @@ export function Navbar() {
                         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                       >
                         <div className="flex items-center justify-between">
-                          <Dialog.Title className="text-sm font-semibold">Menú</Dialog.Title>
+                          <Dialog.Title className="text-sm font-semibold">
+                            Menú
+                          </Dialog.Title>
                           <Dialog.Close asChild>
-                            <Button variant="ghost" size="icon" aria-label="Cerrar menú">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Cerrar menú"
+                            >
                               <X aria-hidden="true" />
                             </Button>
                           </Dialog.Close>
                         </div>
 
-                        <Accordion.Root type="single" collapsible className="mt-6 flex flex-col gap-1">
+                        <Accordion.Root
+                          type="single"
+                          collapsible
+                          className="mt-6 flex flex-col gap-1"
+                        >
                           {mainNav.map((item) =>
                             item.children ? (
-                              <Accordion.Item key={item.href} value={item.href} className="rounded-xl">
+                              <Accordion.Item
+                                key={item.href}
+                                value={item.href}
+                                className="rounded-xl"
+                              >
                                 <Accordion.Header>
                                   <Accordion.Trigger className="group flex w-full items-center justify-between rounded-xl px-4 py-3 text-base font-medium text-foreground transition-colors hover:bg-surface-muted">
                                     {item.label}
@@ -307,12 +357,12 @@ export function Navbar() {
                                 onClick={() => setMobileOpen(false)}
                                 className={cn(
                                   "rounded-xl px-4 py-3 text-base font-medium text-foreground transition-colors hover:bg-surface-muted",
-                                  pathname === item.href && "bg-surface-muted"
+                                  pathname === item.href && "bg-surface-muted",
                                 )}
                               >
                                 {item.label}
                               </Link>
-                            )
+                            ),
                           )}
                         </Accordion.Root>
 
@@ -339,7 +389,10 @@ export function Navbar() {
                           onClick={() => setMobileOpen(false)}
                           className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-muted-foreground"
                         >
-                          <Radio className="size-3.5 text-destructive" aria-hidden="true" />
+                          <Radio
+                            className="size-3.5 text-destructive"
+                            aria-hidden="true"
+                          />
                           Escuchar radio en vivo
                         </a>
                       </motion.div>
