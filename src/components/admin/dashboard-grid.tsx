@@ -18,7 +18,14 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { EyeOff, GripVertical, Maximize2, Minimize2, Plus, RotateCcw } from "lucide-react";
+import {
+  EyeOff,
+  GripVertical,
+  Maximize2,
+  Minimize2,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 
 import { useDashboardLayout } from "@/lib/dashboard-layout";
 
@@ -42,7 +49,14 @@ function SortableWidgetCard({
   onToggleWide: () => void;
   onHide: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: widget.id,
   });
   const Icon = widget.icon;
@@ -52,7 +66,7 @@ function SortableWidgetCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={
-        "rounded-2xl border border-border bg-surface p-5 shadow-sm " +
+        "cabal-rise relative overflow-hidden rounded-3xl border border-border bg-surface p-5 shadow-lg shadow-emerald-900/5 transition-shadow duration-300 hover:shadow-xl hover:shadow-emerald-500/10 before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-emerald-500 before:via-sky-500 before:to-amber-400 " +
         (wide ? "lg:col-span-2 " : "") +
         (isDragging ? "opacity-50" : "")
       }
@@ -68,7 +82,9 @@ function SortableWidgetCard({
           >
             <GripVertical className="size-3.5" aria-hidden="true" />
           </button>
-          <Icon className="size-3.5 shrink-0 text-brand" aria-hidden="true" />
+          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-emerald-500 to-sky-600 text-white shadow-sm">
+            <Icon className="size-3.5" aria-hidden="true" />
+          </span>
           <span className="truncate">{widget.title}</span>
         </p>
         <div className="flex shrink-0 items-center gap-1">
@@ -115,17 +131,32 @@ export function DashboardGrid({
   storageKey: string;
 }) {
   const defaultOrder = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
-  const { order, hidden, wide, mounted, reorder, toggleHidden, toggleWide, reset } =
-    useDashboardLayout(defaultOrder, storageKey);
+  const {
+    order,
+    hidden,
+    wide,
+    mounted,
+    reorder,
+    toggleHidden,
+    toggleWide,
+    reset,
+  } = useDashboardLayout(defaultOrder, storageKey);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
-  const byId = React.useMemo(() => new Map(widgets.map((w) => [w.id, w])), [widgets]);
+  const byId = React.useMemo(
+    () => new Map(widgets.map((w) => [w.id, w])),
+    [widgets],
+  );
   const visibleIds = order.filter((id) => byId.has(id) && !hidden.includes(id));
-  const hiddenWidgets = order.filter((id) => byId.has(id) && hidden.includes(id)).map((id) => byId.get(id)!);
+  const hiddenWidgets = order
+    .filter((id) => byId.has(id) && hidden.includes(id))
+    .map((id) => byId.get(id)!);
 
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -142,7 +173,7 @@ export function DashboardGrid({
         {widgets.map((w) => (
           <div
             key={w.id}
-            className={`rounded-2xl border border-border bg-surface p-5 shadow-sm ${
+            className={`relative overflow-hidden rounded-3xl border border-border bg-surface p-5 shadow-lg shadow-emerald-900/5 before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-emerald-500 before:via-sky-500 before:to-amber-400 ${
               w.defaultWide ? "lg:col-span-2" : ""
             }`}
           >
@@ -161,8 +192,13 @@ export function DashboardGrid({
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-muted-foreground">
-          Arrastra el ícono <GripVertical className="inline size-3 align-text-bottom" aria-hidden="true" />{" "}
-          para reordenar, o usa los botones de cada widget para ampliarlo o quitarlo.
+          Arrastra el ícono{" "}
+          <GripVertical
+            className="inline size-3 align-text-bottom"
+            aria-hidden="true"
+          />{" "}
+          para reordenar, o usa los botones de cada widget para ampliarlo o
+          quitarlo.
         </p>
         <div className="flex items-center gap-2">
           {hiddenWidgets.length > 0 && (
@@ -182,7 +218,10 @@ export function DashboardGrid({
                     onClick={() => toggleHidden(w.id)}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors hover:bg-surface-muted"
                   >
-                    <w.icon className="size-3.5 text-brand" aria-hidden="true" />
+                    <w.icon
+                      className="size-3.5 text-brand"
+                      aria-hidden="true"
+                    />
                     {w.title}
                   </button>
                 ))}
@@ -200,7 +239,11 @@ export function DashboardGrid({
         </div>
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={onDragEnd}
+      >
         <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
           <div className="grid gap-4 lg:grid-cols-2">
             {visibleIds.map((id) => {
@@ -221,7 +264,8 @@ export function DashboardGrid({
 
       {visibleIds.length === 0 && (
         <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          Quitaste todos los widgets. Usa "Agregar widget" para volver a mostrarlos.
+          Quitaste todos los widgets. Usa "Agregar widget" para volver a
+          mostrarlos.
         </p>
       )}
     </div>

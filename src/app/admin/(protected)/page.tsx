@@ -26,7 +26,10 @@ import {
 
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
 import { ColombiaHeatmap } from "@/components/admin/colombia-heatmap";
-import { DashboardGrid, type DashboardWidget } from "@/components/admin/dashboard-grid";
+import {
+  DashboardGrid,
+  type DashboardWidget,
+} from "@/components/admin/dashboard-grid";
 import {
   RANGE_DAYS,
   getDailyMentions,
@@ -63,15 +66,21 @@ function PlatformMapWithDetail({
   values: Record<string, number>;
 }) {
   const [selectedDept, setSelectedDept] = React.useState<string | null>(null);
-  const counts = selectedDept ? getDepartmentSentimentCounts(selectedDept, platform) : null;
-  const examplePost = selectedDept ? getExamplePostForPlatform(platform, selectedDept) : null;
+  const counts = selectedDept
+    ? getDepartmentSentimentCounts(selectedDept, platform)
+    : null;
+  const examplePost = selectedDept
+    ? getExamplePostForPlatform(platform, selectedDept)
+    : null;
 
   return (
     <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
       <ColombiaHeatmap
         values={values}
         selected={selectedDept}
-        onSelect={(name) => setSelectedDept((prev) => (prev === name ? null : name))}
+        onSelect={(name) =>
+          setSelectedDept((prev) => (prev === name ? null : name))
+        }
       />
 
       <div className="flex flex-col gap-2">
@@ -82,7 +91,9 @@ function PlatformMapWithDetail({
               <button
                 key={name}
                 type="button"
-                onClick={() => setSelectedDept((prev) => (prev === name ? null : name))}
+                onClick={() =>
+                  setSelectedDept((prev) => (prev === name ? null : name))
+                }
                 className={`block w-full truncate border-b border-border px-2 py-1.5 text-left text-[11px] last:border-b-0 ${
                   selectedDept === name
                     ? "bg-brand-soft font-medium text-brand"
@@ -96,7 +107,9 @@ function PlatformMapWithDetail({
 
         {selectedDept && counts ? (
           <div className="rounded-lg border border-border bg-surface p-2.5 text-[11px]">
-            <p className="mb-1.5 font-semibold text-foreground">{selectedDept}</p>
+            <p className="mb-1.5 font-semibold text-foreground">
+              {selectedDept}
+            </p>
             <p className="text-brand">{counts.positivo} positivas</p>
             <p className="text-muted-foreground">{counts.neutral} neutrales</p>
             <p className="text-destructive">{counts.negativo} negativas</p>
@@ -123,44 +136,45 @@ function PlatformMapWithDetail({
   );
 }
 
+/** Colores de las tarjetas, los mismos de Análisis → Votaciones. */
+const STAT_PALETTE = {
+  emerald: "from-emerald-500 to-teal-600 shadow-emerald-500/30",
+  sky: "from-sky-500 to-indigo-600 shadow-sky-500/30",
+  amber: "from-amber-400 to-orange-600 shadow-orange-500/30",
+  rose: "from-fuchsia-500 to-rose-600 shadow-rose-500/30",
+};
+
 function StatCard({
   label,
   value,
   hint,
   icon: Icon,
-  tone = "brand",
+  tone = "emerald",
 }: {
   label: string;
   value: string | number;
   hint?: string;
   icon?: LucideIcon;
-  tone?: "brand" | "accent";
+  tone?: keyof typeof STAT_PALETTE;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border bg-surface p-5 shadow-sm transition-shadow hover:shadow-md">
+    <div
+      className={`cabal-rise group relative overflow-hidden rounded-2xl bg-gradient-to-br ${STAT_PALETTE[tone]} p-5 text-white shadow-lg transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]`}
+    >
       <div
-        className={
-          tone === "brand"
-            ? "pointer-events-none absolute -right-6 -top-6 size-24 rounded-full bg-brand/10 blur-2xl transition-transform group-hover:scale-125"
-            : "pointer-events-none absolute -right-6 -top-6 size-24 rounded-full bg-accent/15 blur-2xl transition-transform group-hover:scale-125"
-        }
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-6 -bottom-8 size-24 rounded-full bg-white/15 transition-transform duration-500 group-hover:scale-125"
       />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
-          <p className="mt-1.5 truncate text-2xl font-semibold tracking-tight tabular-nums">
+          <p className="text-xs font-medium text-white/85">{label}</p>
+          <p className="mt-1.5 truncate text-2xl font-bold tracking-tight tabular-nums">
             {value}
           </p>
-          {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+          {hint && <p className="mt-1 text-[11px] text-white/80">{hint}</p>}
         </div>
         {Icon && (
-          <span
-            className={
-              tone === "brand"
-                ? "flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"
-                : "flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-ink"
-            }
-          >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur">
             <Icon className="size-4.5" aria-hidden="true" />
           </span>
         )}
@@ -173,9 +187,15 @@ function StatusRow({ ok, label }: { ok: boolean; label: string }) {
   return (
     <li className="flex items-center gap-2 py-2 text-sm">
       {ok ? (
-        <CheckCircle2 className="size-4 shrink-0 text-brand" aria-hidden="true" />
+        <CheckCircle2
+          className="size-4 shrink-0 text-brand"
+          aria-hidden="true"
+        />
       ) : (
-        <CircleAlert className="size-4 shrink-0 text-accent-ink" aria-hidden="true" />
+        <CircleAlert
+          className="size-4 shrink-0 text-accent-ink"
+          aria-hidden="true"
+        />
       )}
       <span className="text-foreground">{label}</span>
     </li>
@@ -223,16 +243,19 @@ function PlatformMultiSelect({
 
 export default function CentroDeControlPage() {
   const [platforms, setPlatforms] = React.useState<Platform[]>([]);
-  const [sentimentFilter, setSentimentFilter] = React.useState<SentimentFilter>("todos");
+  const [sentimentFilter, setSentimentFilter] =
+    React.useState<SentimentFilter>("todos");
   const [selectedDate, setSelectedDate] = React.useState<string>("");
   const [messageFilter, setMessageFilter] = React.useState<string>("todos");
   const uniqueMessages = React.useMemo(
     () => [...new Set(samplePosts.map((p) => p.excerpt))],
-    []
+    [],
   );
 
   const togglePlatform = (p: Platform) =>
-    setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    setPlatforms((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+    );
 
   // Combina las dos fracciones: filtrar por plataforma(s) Y por
   // sentimiento reduce las menciones simuladas por ambas a la vez, igual
@@ -240,7 +263,10 @@ export default function CentroDeControlPage() {
   const share = multiPlatformShare(platforms) * sentimentShare(sentimentFilter);
   const dailyMentions = React.useMemo(() => {
     const base = getDailyMentions(RANGE_DAYS["30d"]);
-    return base.map((d) => ({ ...d, mentions: Math.round(d.mentions * share) }));
+    return base.map((d) => ({
+      ...d,
+      mentions: Math.round(d.mentions * share),
+    }));
   }, [share]);
 
   // "dd/mm" (mismo formato que dailyMentions) a partir de la fecha exacta
@@ -281,7 +307,7 @@ export default function CentroDeControlPage() {
 
   const departmentValues = React.useMemo(
     () => getDepartmentMentions(totalMentions),
-    [totalMentions]
+    [totalMentions],
   );
 
   // Un mapa POR cada red social elegida — no un único mapa reescalado —
@@ -291,7 +317,9 @@ export default function CentroDeControlPage() {
     if (platforms.length === 0) return [];
     const combinedShare = multiPlatformShare(platforms);
     return platforms.map((p) => {
-      const platformTotal = Math.round(totalMentions * (platformShare(p) / combinedShare));
+      const platformTotal = Math.round(
+        totalMentions * (platformShare(p) / combinedShare),
+      );
       return { platform: p, values: getDepartmentMentions(platformTotal, p) };
     });
   }, [platforms, totalMentions]);
@@ -305,20 +333,24 @@ export default function CentroDeControlPage() {
   const activeTopicMentions = Math.round(activeTopic.mentions * share);
 
   const messagePosts =
-    messageFilter === "todos" ? [] : samplePosts.filter((p) => p.excerpt === messageFilter);
+    messageFilter === "todos"
+      ? []
+      : samplePosts.filter((p) => p.excerpt === messageFilter);
   const messagePlatforms = [...new Set(messagePosts.map((p) => p.platform))];
   const messageTotalMentions = messagePosts.reduce((a, p) => a + p.mentions, 0);
 
   const departmentsSorted = React.useMemo(
     () => Object.entries(departmentValues).sort((a, b) => b[1] - a[1]),
-    [departmentValues]
+    [departmentValues],
   );
 
   const [selectedDept, setSelectedDept] = React.useState<string | null>(null);
   const selectedRank = selectedDept
     ? departmentsSorted.findIndex(([name]) => name === selectedDept) + 1
     : 0;
-  const selectedMentions = selectedDept ? departmentValues[selectedDept] ?? 0 : 0;
+  const selectedMentions = selectedDept
+    ? (departmentValues[selectedDept] ?? 0)
+    : 0;
   const selectedShareOfTotal = totalMentions
     ? Math.round((selectedMentions / totalMentions) * 100)
     : 0;
@@ -328,7 +360,7 @@ export default function CentroDeControlPage() {
       (platforms.length === 0 || platforms.includes(p.platform)) &&
       (sentimentFilter === "todos" || p.sentiment === sentimentFilter) &&
       (!selectedDate || p.date === selectedDate) &&
-      (messageFilter === "todos" || p.excerpt === messageFilter)
+      (messageFilter === "todos" || p.excerpt === messageFilter),
   );
 
   const widgets: DashboardWidget[] = [
@@ -345,7 +377,10 @@ export default function CentroDeControlPage() {
               Filtros
             </span>
             <label className="flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium">
-              <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <CalendarDays
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
               <input
                 type="date"
                 value={selectedDate}
@@ -364,10 +399,15 @@ export default function CentroDeControlPage() {
                 Quitar fecha
               </button>
             )}
-            <PlatformMultiSelect selected={platforms} onToggle={togglePlatform} />
+            <PlatformMultiSelect
+              selected={platforms}
+              onToggle={togglePlatform}
+            />
             <select
               value={sentimentFilter}
-              onChange={(e) => setSentimentFilter(e.target.value as SentimentFilter)}
+              onChange={(e) =>
+                setSentimentFilter(e.target.value as SentimentFilter)
+              }
               className="h-8 rounded-full border border-border bg-background px-3 text-xs font-medium outline-none focus:border-brand"
             >
               <option value="todos">Todo el sentimiento</option>
@@ -394,26 +434,36 @@ export default function CentroDeControlPage() {
           </div>
           {platforms.length > 1 && (
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Comparando {platforms.join(" + ")}: los números de abajo suman ambas plataformas.
+              Comparando {platforms.join(" + ")}: los números de abajo suman
+              ambas plataformas.
             </p>
           )}
 
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <StatCard
               icon={MessagesSquare}
-              label={selectedDayLabel ? `Menciones (${selectedDayLabel})` : "Menciones (30 días)"}
+              label={
+                selectedDayLabel
+                  ? `Menciones (${selectedDayLabel})`
+                  : "Menciones (30 días)"
+              }
               value={totalMentions.toLocaleString("es-CO")}
-              hint={selectedDayLabel ? "de ese día" : `${dayDeltaPct >= 0 ? "+" : ""}${dayDeltaPct}% vs. ayer`}
+              hint={
+                selectedDayLabel
+                  ? "de ese día"
+                  : `${dayDeltaPct >= 0 ? "+" : ""}${dayDeltaPct}% vs. ayer`
+              }
             />
             <StatCard
               icon={Gauge}
               label="Sentimiento promedio"
               value={sentimentLabel}
               hint={sentimentHint}
-              tone="accent"
+              tone="sky"
             />
             {messageFilter === "todos" ? (
               <StatCard
+                tone="amber"
                 icon={Hash}
                 label="Iniciativa con más tracción"
                 value={activeTopic.tag}
@@ -421,6 +471,7 @@ export default function CentroDeControlPage() {
               />
             ) : (
               <StatCard
+                tone="amber"
                 icon={Hash}
                 label="Mensaje comparado"
                 value={
@@ -441,7 +492,12 @@ export default function CentroDeControlPage() {
       icon: TrendingUp,
       content: (
         <>
-          <TrendArea data={dailyMentions.map((d) => ({ label: d.date, value: d.mentions }))} />
+          <TrendArea
+            data={dailyMentions.map((d) => ({
+              label: d.date,
+              value: d.mentions,
+            }))}
+          />
           <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
             <span>{dailyMentions[0].date}</span>
             <span>{dailyMentions[dailyMentions.length - 1].date}</span>
@@ -485,8 +541,8 @@ export default function CentroDeControlPage() {
           {perPlatformMaps.length > 0 && (
             <div className="mb-5">
               <p className="mb-3 text-xs text-muted-foreground">
-                Un mapa por cada red social que elijas en los filtros — se va agregando o quitando
-                según lo que selecciones.
+                Un mapa por cada red social que elijas en los filtros — se va
+                agregando o quitando según lo que selecciones.
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <AnimatePresence mode="popLayout">
@@ -503,7 +559,10 @@ export default function CentroDeControlPage() {
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {platform}
                       </p>
-                      <PlatformMapWithDetail platform={platform} values={values} />
+                      <PlatformMapWithDetail
+                        platform={platform}
+                        values={values}
+                      />
                     </motion.div>
                   ))}
                 </AnimatePresence>
@@ -520,76 +579,85 @@ export default function CentroDeControlPage() {
             <ColombiaHeatmap
               values={departmentValues}
               selected={selectedDept}
-              onSelect={(name) => setSelectedDept((prev) => (prev === name ? null : name))}
+              onSelect={(name) =>
+                setSelectedDept((prev) => (prev === name ? null : name))
+              }
             />
 
             <div className="flex flex-col gap-3">
-            <div className="max-h-56 overflow-y-auto rounded-xl border border-border">
-              {departmentsSorted.map(([name, value]) => (
-                <label
-                  key={name}
-                  className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0 hover:bg-surface-muted"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedDept === name}
-                    onChange={() => setSelectedDept((prev) => (prev === name ? null : name))}
-                    className="size-3.5 shrink-0 accent-brand"
-                  />
-                  <span className="min-w-0 flex-1 truncate">{name}</span>
-                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {value.toLocaleString("es-CO")}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            {selectedDept ? (
-              <div className="rounded-xl border border-border bg-surface-muted p-3">
-                <p className="text-sm font-semibold">{selectedDept}</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  #{selectedRank} de {departmentsSorted.length} · {selectedShareOfTotal}% del
-                  total nacional
-                </p>
-
-                <p className="mt-3 text-2xl font-semibold tabular-nums">
-                  {selectedMentions.toLocaleString("es-CO")}
-                </p>
-                <p className="text-[11px] text-muted-foreground">menciones en el periodo</p>
-
-                <div className="mt-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Sentimiento estimado
-                  </p>
-                  <div className="mt-1.5 flex h-2 overflow-hidden rounded-full">
-                    {getDepartmentSentiment(selectedDept).map((s) => (
-                      <span
-                        key={s.label}
-                        style={{ width: `${s.value}%`, backgroundColor: s.color }}
-                      />
-                    ))}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
-                    {getDepartmentSentiment(selectedDept).map((s) => (
-                      <span key={s.label}>
-                        {s.label} {s.value}%
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Tema con más tracción aquí
-                </p>
-                <p className="text-xs font-medium text-brand">
-                  {getDepartmentTopTopic(selectedDept).tag}
-                </p>
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-border">
+                {departmentsSorted.map(([name, value]) => (
+                  <label
+                    key={name}
+                    className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0 hover:bg-surface-muted"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDept === name}
+                      onChange={() =>
+                        setSelectedDept((prev) => (prev === name ? null : name))
+                      }
+                      className="size-3.5 shrink-0 accent-brand"
+                    />
+                    <span className="min-w-0 flex-1 truncate">{name}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {value.toLocaleString("es-CO")}
+                    </span>
+                  </label>
+                ))}
               </div>
-            ) : (
-              <p className="rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
-                Marca un departamento para ver su detalle.
-              </p>
-            )}
+
+              {selectedDept ? (
+                <div className="rounded-xl border border-border bg-surface-muted p-3">
+                  <p className="text-sm font-semibold">{selectedDept}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    #{selectedRank} de {departmentsSorted.length} ·{" "}
+                    {selectedShareOfTotal}% del total nacional
+                  </p>
+
+                  <p className="mt-3 text-2xl font-semibold tabular-nums">
+                    {selectedMentions.toLocaleString("es-CO")}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    menciones en el periodo
+                  </p>
+
+                  <div className="mt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Sentimiento estimado
+                    </p>
+                    <div className="mt-1.5 flex h-2 overflow-hidden rounded-full">
+                      {getDepartmentSentiment(selectedDept).map((s) => (
+                        <span
+                          key={s.label}
+                          style={{
+                            width: `${s.value}%`,
+                            backgroundColor: s.color,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+                      {getDepartmentSentiment(selectedDept).map((s) => (
+                        <span key={s.label}>
+                          {s.label} {s.value}%
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Tema con más tracción aquí
+                  </p>
+                  <p className="text-xs font-medium text-brand">
+                    {getDepartmentTopTopic(selectedDept).tag}
+                  </p>
+                </div>
+              ) : (
+                <p className="rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+                  Marca un departamento para ver su detalle.
+                </p>
+              )}
             </div>
           </div>
         </>
@@ -637,7 +705,9 @@ export default function CentroDeControlPage() {
                 {/* El mensaje real es lo principal — el tema queda como
                     referencia secundaria, no como lo más visible. */}
                 <p className="mt-1 text-foreground">{post.excerpt}</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">{post.topic}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {post.topic}
+                </p>
               </li>
             ))}
           </ul>
@@ -677,12 +747,15 @@ export default function CentroDeControlPage() {
             <StatusRow ok label="Acceso: usuario fijo, sin base de datos" />
             <StatusRow ok={false} label="Base de datos: no configurada" />
             <StatusRow ok label="LMS: guardado local en este navegador" />
-            <StatusRow ok={false} label="Tendencias de redes: datos simulados" />
+            <StatusRow
+              ok={false}
+              label="Tendencias de redes: datos simulados"
+            />
           </ul>
           <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
             Los cursos que crees aquí solo se guardan en este navegador. Para
-            compartirlos entre dispositivos o usuarios, hace falta conectar
-            una base de datos real.
+            compartirlos entre dispositivos o usuarios, hace falta conectar una
+            base de datos real.
           </p>
         </>
       ),
@@ -691,17 +764,26 @@ export default function CentroDeControlPage() {
 
   return (
     <div className="w-full">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Escudo Cabal</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tu tablero de decisiones — arrastra, achica/amplía o quita los widgets a tu gusto.
+      <div className="relative flex flex-wrap items-start justify-between gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-600 to-sky-600 p-6 text-white shadow-xl shadow-emerald-700/25">
+        <div
+          aria-hidden="true"
+          className="absolute -right-10 -bottom-20 size-56 rounded-full bg-white/10"
+        />
+        <div
+          aria-hidden="true"
+          className="cabal-blob absolute right-40 -top-16 size-40 rounded-full bg-amber-300/25 blur-2xl"
+        />
+        <div className="relative">
+          <h1 className="text-3xl font-bold tracking-tight">Escudo Cabal</h1>
+          <p className="mt-1 text-sm text-white/85">
+            Tu tablero de decisiones — arrastra, achica/amplía o quita los
+            widgets a tu gusto.
           </p>
         </div>
         <Link
           href="/"
           target="_blank"
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-surface-muted"
+          className="relative inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-800 shadow-md transition-transform hover:scale-105"
         >
           Ver el sitio
           <ExternalLink className="size-3.5" aria-hidden="true" />
@@ -709,7 +791,10 @@ export default function CentroDeControlPage() {
       </div>
 
       <div className="mt-6">
-        <DashboardGrid widgets={widgets} storageKey="centro-control-layout-v1" />
+        <DashboardGrid
+          widgets={widgets}
+          storageKey="centro-control-layout-v1"
+        />
       </div>
     </div>
   );
