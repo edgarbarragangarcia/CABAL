@@ -5,14 +5,13 @@
 :root {
   --radius: 1rem;
 
-  /* Superficies — hueso cálido, y la superficie MÁS CLARA que el fondo.
-     Es al revés de lo habitual: sobre un crema, una tarjeta blanca se lee
-     como papel elevado; sobre blanco, no se lee como nada. */
-  --background: #ece4d3;
+  /* Superficies — blanco como color predominante; las tarjetas se separan
+     con borde y sombra, y `surface-muted` da un gris verdoso muy tenue. */
+  --background: #ffffff;
   --foreground: #16170f;
-  --surface: #f7f3e9;
-  --surface-muted: #e4dac5;
-  --border: #cdbfa3;
+  --surface: #ffffff;
+  --surface-muted: #f3f5f4;
+  --border: #e2e6e4;
 
   /* Tinta: la franja superior y los pies de página oscuros. Un negro
      cálido propio, no el `foreground` invertido — la inversión pura
@@ -511,6 +510,45 @@
 @media (prefers-reduced-motion: reduce) {
   .mafe-avatar__eyes,
   .mafe-avatar--talking .mafe-avatar__mouth {
+    animation: none;
+  }
+}
+
+/* Resultados electorales (Análisis → Votaciones): entrada escalonada, barras que crecen y fondo vivo. */
+@keyframes cabal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes cabal-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes cabal-float {
+  50% {
+    transform: translate(24px, -18px) scale(1.08);
+  }
+}
+.cabal-rise {
+  animation: cabal-rise 0.45s ease-out both;
+}
+.cabal-bar {
+  transform-origin: left;
+  animation: cabal-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cabal-blob {
+  animation: cabal-float 12s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cabal-rise,
+  .cabal-bar,
+  .cabal-blob {
     animation: none;
   }
 }
