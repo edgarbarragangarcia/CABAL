@@ -37,7 +37,7 @@ export function AdminShell({
   }
 
   const Nav = (
-    <nav className="flex flex-1 flex-col gap-1">
+    <nav className="flex flex-1 flex-col gap-2">
       {NAV.map((item) => {
         const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
         const Icon = item.icon;
@@ -47,10 +47,10 @@ export function AdminShell({
             href={item.href}
             onClick={() => setMobileOpen(false)}
             className={cn(
-              "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+              "flex items-center gap-2.5 rounded-full border-2 px-3 py-2.5 text-sm font-medium transition-all duration-200",
               active
-                ? "bg-brand-soft text-brand"
-                : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                ? "border-brand bg-brand-soft text-brand shadow-sm"
+                : "border-brand/25 bg-brand-soft/50 text-brand/80 hover:border-brand hover:bg-brand-soft hover:text-brand"
             )}
           >
             <Icon className="size-4.5 shrink-0" aria-hidden="true" />
@@ -92,7 +92,7 @@ export function AdminShell({
         </div>
 
         <div className="mt-4">
-          <nav className="flex flex-1 flex-col gap-1">
+          <nav className="flex flex-1 flex-col gap-2">
             {NAV.map((item) => {
               const active =
                 item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
@@ -102,10 +102,10 @@ export function AdminShell({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-2.5 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                    "flex items-center gap-2.5 whitespace-nowrap rounded-full border-2 px-3 py-2.5 text-sm font-medium transition-all duration-200",
                     active
-                      ? "bg-brand-soft text-brand"
-                      : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                      ? "border-brand bg-brand-soft text-brand shadow-sm"
+                      : "border-brand/25 bg-brand-soft/50 text-brand/80 hover:border-brand hover:bg-brand-soft hover:text-brand"
                   )}
                 >
                   <Icon className="size-4.5 shrink-0" aria-hidden="true" />
