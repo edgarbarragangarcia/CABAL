@@ -59,11 +59,13 @@ export function Navbar() {
 
   return (
     <div className="fixed inset-x-0 top-0 z-50">
+      {/* En escritorio el escudo sobresale ~17px por encima de la barra:
+          `md:pt-9` le deja aire arriba para que no quede pegado al borde. */}
       <motion.header
         initial={{ y: -24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="px-4 pt-3 transition-colors duration-300 sm:pt-4"
+        className="px-4 pt-3 transition-colors duration-300 sm:pt-4 md:pt-9"
       >
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
           {/* Marca en móvil: solo el emblema. En escritorio va al centro de la barra. */}
