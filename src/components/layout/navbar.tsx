@@ -180,7 +180,7 @@ export function Navbar() {
                               duration: 0.18,
                               ease: [0.16, 1, 0.3, 1],
                             }}
-                            className="glass-panel absolute left-1/2 top-full z-10 mt-3 w-[26rem] -translate-x-1/2 overflow-hidden rounded-2xl p-2"
+                            className="absolute left-1/2 top-full z-10 mt-3 w-[26rem] -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-surface p-2 shadow-elev-2"
                           >
                             <ul className="grid grid-cols-2 gap-1">
                               {item.children!.map((child) => {
