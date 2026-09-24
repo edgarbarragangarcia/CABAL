@@ -693,7 +693,7 @@ export default function CentroDeControlPage() {
     <div className="w-full">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Centro de control</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Escudo Cabal</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu tablero de decisiones — arrastra, achica/amplía o quita los widgets a tu gusto.
           </p>

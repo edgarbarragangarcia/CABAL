@@ -6,6 +6,7 @@ import "./globals.css";
 import { siteConfig } from "@/config/site";
 import { ThemeProvider } from "@/components/animations/theme-provider";
 import { SmoothScrollProvider } from "@/components/animations/smooth-scroll-provider";
+import { MafeChat } from "@/components/mafe/mafe-chat";
 
 /* Inter para la interfaz: neutral, legible y con cifras tabulares para
    las estadísticas. Fraunces para los titulares: serif variable con eje
@@ -99,6 +100,8 @@ export default function RootLayout({
       <body className="h-full antialiased">
         <ThemeProvider>
           <SmoothScrollProvider>{children}</SmoothScrollProvider>
+          {/* MaFe en todas las páginas: sitio público y panel administrativo. */}
+          <MafeChat />
         </ThemeProvider>
       </body>
     </html>

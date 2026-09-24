@@ -1,3 +1,4 @@
+import { ELECTORAL_DEPARTMENTS } from "@/lib/electoral-places";
 import { normalizeDeptCode, querySocrataDataset } from "./socrata";
 
 export type DepartmentDatum = {
@@ -52,48 +53,6 @@ export const GOV_DATASETS = {
   },
 } as const;
 
-/**
- * El dataset de la Registraduría trae el nombre del departamento como
- * texto libre (a veces truncado, ej. "NORTE DE SAN"), no como código
- * DIVIPOLA. No incluye CESAR (ausente en la fuente oficial, no es un
- * error de esta app) ni "CONSULADOS" (votos en el exterior, sin
- * departamento). Mapea a los mismos códigos que usa el GeoJSON del mapa.
- */
-const ELECTION_DEPT_NAME_TO_CODE: Record<string, string> = {
-  AMAZONAS: "91",
-  ANTIOQUIA: "05",
-  ARAUCA: "81",
-  ATLANTICO: "08",
-  "BOGOTA D.C.": "11",
-  BOLIVAR: "13",
-  BOYACA: "15",
-  CALDAS: "17",
-  CAQUETA: "18",
-  CASANARE: "85",
-  CAUCA: "19",
-  CHOCO: "27",
-  CORDOBA: "23",
-  CUNDINAMARCA: "25",
-  GUAINIA: "94",
-  GUAVIARE: "95",
-  HUILA: "41",
-  "LA GUAJIRA": "44",
-  MAGDALENA: "47",
-  META: "50",
-  "NARIÑO": "52",
-  "NORTE DE SAN": "54",
-  PUTUMAYO: "86",
-  QUINDIO: "63",
-  RISARALDA: "66",
-  "SAN ANDRES": "88",
-  SANTANDER: "68",
-  SUCRE: "70",
-  TOLIMA: "73",
-  VALLE: "76",
-  VAUPES: "97",
-  VICHADA: "99",
-};
-
 /** Total de votos válidos + blanco/nulo por departamento (Senado 2018). */
 export async function getSenateVotesByDepartment(): Promise<{
   data: DepartmentDatum[];
@@ -112,7 +71,9 @@ export async function getSenateVotesByDepartment(): Promise<{
     year: 2018,
     data: rows
       .map((r) => ({
-        code: ELECTION_DEPT_NAME_TO_CODE[r.ndepto],
+        // Nombres de la Registraduría (a veces truncados, ej. "NORTE DE SAN");
+        // "CONSULADOS" (voto en el exterior) no tiene departamento y se descarta.
+        code: ELECTORAL_DEPARTMENTS[r.ndepto]?.dane,
         name: r.ndepto,
         value: Number(r.total),
       }))
@@ -407,69 +368,4 @@ export async function getTopSenateCandidates(
       votos: Number(r.total),
     })),
   };
-}
-
-/**
- * Igual que ELECTION_DEPT_NAME_TO_CODE pero hacia el nombre "bonito" que
- * usa el mapa de calor del admin (`src/lib/colombia-departments.ts`), que
- * no tiene códigos DIVIPOLA, solo nombres. Mismo hueco de Cesar (ausente
- * en el dataset de la Registraduría) y de Consulados (voto exterior, sin
- * departamento).
- */
-const ELECTION_DEPT_NAME_TO_DISPLAY: Record<string, string> = {
-  AMAZONAS: "Amazonas",
-  ANTIOQUIA: "Antioquia",
-  ARAUCA: "Arauca",
-  ATLANTICO: "Atlántico",
-  "BOGOTA D.C.": "Bogotá D.C.",
-  BOLIVAR: "Bolívar",
-  BOYACA: "Boyacá",
-  CALDAS: "Caldas",
-  CAQUETA: "Caquetá",
-  CASANARE: "Casanare",
-  CAUCA: "Cauca",
-  CHOCO: "Chocó",
-  CORDOBA: "Córdoba",
-  CUNDINAMARCA: "Cundinamarca",
-  GUAINIA: "Guainía",
-  GUAVIARE: "Guaviare",
-  HUILA: "Huila",
-  "LA GUAJIRA": "La Guajira",
-  MAGDALENA: "Magdalena",
-  META: "Meta",
-  "NARIÑO": "Nariño",
-  "NORTE DE SAN": "Norte de Santander",
-  PUTUMAYO: "Putumayo",
-  QUINDIO: "Quindío",
-  RISARALDA: "Risaralda",
-  "SAN ANDRES": "San Andrés y Providencia",
-  SANTANDER: "Santander",
-  SUCRE: "Sucre",
-  TOLIMA: "Tolima",
-  VALLE: "Valle del Cauca",
-  VAUPES: "Vaupés",
-  VICHADA: "Vichada",
-};
-
-/** Votos de un candidato específico por departamento (Senado 2018), listo
- * para el mapa de calor del admin (claves = nombres de colombia-departments.ts). */
-export async function getCandidateVotesByDepartment(
-  candidato: string
-): Promise<Record<string, number>> {
-  const rows = await querySocrataDataset<{ ndepto: string; total: string }>(
-    GOV_DATASETS.senado2018.id,
-    {
-      $select: "ndepto, sum(votos) as total",
-      $where: `candidato='${candidato.replace(/'/g, "''")}'`,
-      $group: "ndepto",
-      $limit: 40,
-    }
-  );
-
-  const out: Record<string, number> = {};
-  for (const r of rows) {
-    const display = ELECTION_DEPT_NAME_TO_DISPLAY[r.ndepto];
-    if (display) out[display] = Number(r.total);
-  }
-  return out;
 }

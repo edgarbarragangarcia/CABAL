@@ -471,3 +471,46 @@
     text-wrap: balance;
   }
 }
+
+/* MaFe (src/components/mafe/mafe-avatar.tsx): parpadeo y boca al "hablar". */
+.mafe-avatar__eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mafe-blink 5s infinite;
+}
+
+.mafe-avatar__mouth {
+  transform-box: fill-box;
+  transform-origin: center top;
+}
+
+.mafe-avatar--talking .mafe-avatar__mouth {
+  animation: mafe-talk 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes mafe-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes mafe-talk {
+  from {
+    transform: scaleY(0.55);
+  }
+  to {
+    transform: scaleY(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mafe-avatar__eyes,
+  .mafe-avatar--talking .mafe-avatar__mouth {
+    animation: none;
+  }
+}

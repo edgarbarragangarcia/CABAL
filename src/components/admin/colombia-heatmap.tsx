@@ -10,7 +10,7 @@ import {
 } from "@/lib/colombia-departments";
 
 /** Interpola de una superficie clara (bajo) a verde de marca y ámbar (alto). */
-function heatColor(t: number) {
+export function heatColor(t: number) {
   const clamped = Math.max(0, Math.min(1, t));
   // 0 -> gris muy claro (casi sin dato), 0.7 -> verde marca, 1 -> ámbar intenso.
   // Pensado para tarjetas claras: el extremo bajo no puede ser oscuro o el
