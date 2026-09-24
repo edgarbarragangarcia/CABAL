@@ -6,6 +6,7 @@ import { Bot, Vote, Wand2 } from "lucide-react";
 
 import { AsistenteTab } from "./asistente-tab";
 import { CabalResultados } from "./cabal-resultados";
+import { ExploradorElectoral } from "./explorador-electoral";
 import { PrediccionesTab } from "./predicciones-tab";
 
 type TabId = "votaciones" | "predicciones" | "asistente";
@@ -15,6 +16,36 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "predicciones", label: "Predicciones", icon: Wand2 },
   { id: "asistente", label: "Asistente", icon: Bot },
 ];
+
+/** Votaciones: todas las elecciones y candidatos, o el seguimiento de Cabal. */
+function Votaciones() {
+  const [vista, setVista] = React.useState<"todas" | "cabal">("todas");
+  const opciones = [
+    { id: "todas", label: "Todas las elecciones y candidatos" },
+    { id: "cabal", label: "María Fernanda Cabal" },
+  ] as const;
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex flex-wrap gap-1 rounded-full bg-surface p-1 text-sm shadow-sm ring-1 ring-border">
+        {opciones.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => setVista(o.id)}
+            className={
+              vista === o.id
+                ? "rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-1.5 font-semibold text-white shadow"
+                : "rounded-full px-4 py-1.5 text-muted-foreground transition hover:text-foreground"
+            }
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {vista === "todas" ? <ExploradorElectoral /> : <CabalResultados />}
+    </div>
+  );
+}
 
 export function AnalisisTabs({ header }: { header: React.ReactNode }) {
   const [tab, setTab] = React.useState<TabId>("votaciones");
@@ -53,7 +84,7 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
       </div>
 
       <div className="mt-6">
-        {tab === "votaciones" && <CabalResultados />}
+        {tab === "votaciones" && <Votaciones />}
         {tab === "predicciones" && <PrediccionesTab />}
         {tab === "asistente" && <AsistenteTab />}
       </div>
