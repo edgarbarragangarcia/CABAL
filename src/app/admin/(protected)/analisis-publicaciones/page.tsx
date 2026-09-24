@@ -21,8 +21,8 @@ export default function AnalisisPublicacionesPage() {
               Análisis
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Tendencias en redes, datos electorales oficiales y simulación de escenarios, en un
-              solo lugar para cruzar información y decidir.
+              Datos electorales oficiales y simulación de escenarios, en un solo lugar para cruzar
+              información y decidir.
             </p>
           </>
         }

@@ -2,24 +2,22 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Bot, LineChart, Vote, Wand2 } from "lucide-react";
+import { Bot, Vote, Wand2 } from "lucide-react";
 
-import { AnalisisPublicacionesClient } from "./analisis-publicaciones-client";
 import { AsistenteTab } from "./asistente-tab";
 import { CabalResultados } from "./cabal-resultados";
 import { PrediccionesTab } from "./predicciones-tab";
 
-type TabId = "tendencias" | "votaciones" | "predicciones" | "asistente";
+type TabId = "votaciones" | "predicciones" | "asistente";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: "tendencias", label: "Tendencias", icon: LineChart },
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Predicciones", icon: Wand2 },
   { id: "asistente", label: "Asistente", icon: Bot },
 ];
 
 export function AnalisisTabs({ header }: { header: React.ReactNode }) {
-  const [tab, setTab] = React.useState<TabId>("tendencias");
+  const [tab, setTab] = React.useState<TabId>("votaciones");
 
   return (
     <div>
@@ -55,7 +53,6 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
       </div>
 
       <div className="mt-6">
-        {tab === "tendencias" && <AnalisisPublicacionesClient />}
         {tab === "votaciones" && <CabalResultados />}
         {tab === "predicciones" && <PrediccionesTab />}
         {tab === "asistente" && <AsistenteTab />}
