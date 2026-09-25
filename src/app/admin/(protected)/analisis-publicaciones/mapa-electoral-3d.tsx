@@ -45,6 +45,15 @@ const ANCHO = 100;
 
 type Caja = { ancho: number; fondo: number; aspectScale: number };
 
+/**
+ * echarts-gl llama `preventDefault()` en cada giro de rueda sobre el mapa
+ * (aunque su zoom esté apagado), y eso frena el scroll de la página con el
+ * puntero encima. Se quitan sus manejadores de rueda; el zoom va en botones.
+ */
+function soltarRueda(chart: ECharts) {
+  chart.getZr().off("mousewheel");
+}
+
 /** Proporciones del mapa: longitud corregida por la latitud media, para que no salga aplastado. */
 function cajaDe(geo: GeoCollection, quitar: Set<string>): Caja {
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -232,6 +241,7 @@ export function MapaElectoral3D({
           },
           true
         );
+        soltarRueda(chart);
         setStatusSel({ key: `${geoUrl}|${excluirKey}`, s: "ready" });
       } catch {
         if (!disposed) setStatusSel({ key: `${geoUrl}|${excluirKey}`, s: "error" });

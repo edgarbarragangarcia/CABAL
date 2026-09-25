@@ -8,9 +8,13 @@ import { usePathname } from "next/navigation";
  * Inicializa Lenis (smooth scroll de alto rendimiento) en el cliente y
  * conduce el loop de animación con requestAnimationFrame. Respeta
  * `prefers-reduced-motion` desactivándose para usuarios que lo soliciten.
+ *
+ * En el panel (/admin) no se usa: listas con scroll propio, mapas y tablas
+ * piden el scroll nativo del navegador, que es el que no falla.
  */
 export function SmoothScrollProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const enPanel = pathname.startsWith("/admin");
   const lenisRef = React.useRef<Lenis | null>(null);
 
   React.useEffect(() => {
@@ -18,12 +22,14 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    if (prefersReducedMotion) return;
+    if (prefersReducedMotion || enPanel) return;
 
     const lenis = new Lenis({
       duration: 1.1,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
+      // Una caja con scroll propio (lista, chat) se desplaza ella, no la página.
+      allowNestedScroll: true,
     });
     lenisRef.current = lenis;
 
@@ -47,7 +53,7 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
       lenis.destroy();
       lenisRef.current = null;
     };
-  }, []);
+  }, [enPanel]);
 
   React.useEffect(() => {
     lenisRef.current?.resize();
