@@ -4,11 +4,11 @@ import { AnalisisTabs } from "./analisis-tabs";
 
 /**
  * Página de análisis del admin: combina datos ELECTORALES reales
- * (Registraduría) con el análisis de publicaciones en redes (MVP, datos
- * simulados) y un simulador de escenarios.
+ * (Registraduría) con la red de relaciones de los contactos del CRM
+ * (Bitrix24) y un asistente.
  *
- * Los datos electorales (solo María Fernanda Cabal) los pide el cliente
- * bajo demanda al abrir la pestaña Votaciones.
+ * Los datos electorales (solo María Fernanda Cabal) y los contactos del
+ * CRM los pide el cliente bajo demanda al abrir cada pestaña.
  */
 export default function AnalisisPublicacionesPage() {
   return (
@@ -21,8 +21,8 @@ export default function AnalisisPublicacionesPage() {
               Análisis
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Datos electorales oficiales y simulación de escenarios, en un solo lugar para cruzar
-              información y decidir.
+              Datos electorales oficiales y la red de relaciones de tus contactos del CRM, en un solo
+              lugar para cruzar información y decidir.
             </p>
           </>
         }

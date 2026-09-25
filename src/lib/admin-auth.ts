@@ -9,8 +9,10 @@
  * u otro proveedor) con contraseñas con hash y usuarios en base de datos.
  */
 
-export const ADMIN_EMAIL = "admin@escuela.com";
-export const ADMIN_PASSWORD = "12345";
+// En producción, define ADMIN_EMAIL y ADMIN_PASSWORD como variables de
+// entorno: los valores por defecto están a la vista en el repositorio.
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "admin@escuela.com").trim().toLowerCase();
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "12345";
 
 export const SESSION_COOKIE = "el_admin_session";
 export const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 horas
@@ -21,6 +23,14 @@ export const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 horas
 const SECRET =
   process.env.ADMIN_SESSION_SECRET ??
   "escuela-libertad-admin-dev-secret-cambiar-en-produccion";
+
+/**
+ * `true` mientras el panel use la contraseña o el secreto de sesión por
+ * defecto: cualquiera que lea el repositorio podría entrar (o firmar su
+ * propia cookie). Con eso, el panel no entrega datos personales del CRM.
+ */
+export const ADMIN_USES_PUBLIC_DEFAULTS =
+  !process.env.ADMIN_PASSWORD || !process.env.ADMIN_SESSION_SECRET;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
