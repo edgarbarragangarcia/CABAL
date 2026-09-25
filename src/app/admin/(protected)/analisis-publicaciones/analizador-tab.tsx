@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CalendarDays, Flag, GripVertical, Landmark, Loader2, MapPin, MousePointerClick, X } from "lucide-react";
+import { CalendarDays, Flag, GripVertical, Landmark, Loader2, MapPin, MousePointerClick, Sparkles, X } from "lucide-react";
 
 import { ELECCIONES, NIVELES } from "@/lib/gov-data/elecciones/catalogo";
 import type { VistaElectoral } from "@/lib/gov-data/elecciones/resultados";
@@ -71,6 +71,66 @@ function Chip({ t, onAdd }: { t: Tarjeta; onAdd: (t: Tarjeta) => void }) {
   );
 }
 
+/** Markdown mínimo del análisis: títulos, viñetas y párrafos. */
+function Markdown({ texto }: { texto: string }) {
+  return (
+    <div className="space-y-2 text-sm leading-relaxed">
+      {texto.split("\n").map((l, i) => {
+        const t = l.trim();
+        if (!t) return null;
+        const limpio = t.replace(/\*\*(.+?)\*\*/g, "$1");
+        if (t.startsWith("#")) return <p key={i} className="pt-2 font-semibold text-foreground">{limpio.replace(/^#+\s*/, "")}</p>;
+        if (/^[-*•]\s/.test(t)) return <p key={i} className="pl-4 before:-ml-3 before:mr-1.5 before:content-['•']">{limpio.replace(/^[-*•]\s/, "")}</p>;
+        return <p key={i} className="text-muted-foreground">{limpio}</p>;
+      })}
+    </div>
+  );
+}
+
+function AnalisisIA({ params, nombre }: { params: Record<string, string>; nombre: string }) {
+  const [estado, setEstado] = React.useState<{ texto?: string; error?: string; cargando?: boolean }>({});
+  const analizar = () => {
+    setEstado({ cargando: true });
+    fetch("/api/admin/elecciones/analisis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    })
+      .then(async (res) => {
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
+        setEstado({ texto: body.analisis });
+      })
+      .catch((err: Error) => setEstado({ error: err.message }));
+  };
+  return (
+    <div className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-br from-fuchsia-500/5 via-surface to-sky-500/5 p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Análisis de {titulo(nombre)}</p>
+        <button
+          type="button"
+          onClick={analizar}
+          disabled={estado.cargando}
+          className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-600 to-sky-600 px-4 py-1.5 text-xs font-semibold text-white shadow disabled:opacity-60"
+        >
+          {estado.cargando ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Sparkles className="size-3.5" aria-hidden="true" />}
+          {estado.texto ? "Volver a analizar" : "Analizar con IA"}
+        </button>
+      </div>
+      {estado.cargando && (
+        <p className="mt-3 text-xs text-muted-foreground">Consultando sus votos en cada territorio y preparando el análisis (puede tardar hasta un minuto)…</p>
+      )}
+      {estado.error && <p className="mt-3 text-sm text-red-700 dark:text-red-300">{estado.error}</p>}
+      {estado.texto && (
+        <div className="mt-3">
+          <Markdown texto={estado.texto} />
+          <p className="mt-3 text-[11px] text-muted-foreground">Generado con IA a partir del preconteo oficial. Revisa las cifras antes de decidir.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AnalizadorTab() {
   const [anio, setAnio] = React.useState<string | null>(null);
   const [cargo, setCargo] = React.useState<{ eleccion: string; sigla: string; nombre: string } | null>(null);
@@ -78,6 +138,7 @@ export function AnalizadorTab() {
   const [partido, setPartido] = React.useState<{ codigo: string; nombre: string; color: string } | null>(null);
   const [sobre, setSobre] = React.useState(false);
   const [filtro, setFiltro] = React.useState("");
+  const [candSel, setCandSel] = React.useState<{ url: string; codigo: string; nombre: string } | null>(null);
 
   const ambito = ruta.at(-1)?.codigo;
   const url = cargo
@@ -146,6 +207,8 @@ export function AnalizadorTab() {
   const partidos = [...(circ?.partidos ?? [])].filter((x) => x.votos > 0).sort((a, b) => b.votos - a.votos);
   const max = Math.max(1, partidos[0]?.votos ?? 0);
   const lugar = ruta.length ? titulo(ruta.at(-1)!.nombre) : "todo el país";
+  // Candidato elegido para el análisis: vale para el territorio y partido en que se eligió.
+  const elegido = candSel && candSel.url === url && p?.candidatos.some((x) => x.codigo === candSel.codigo) ? candSel : null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -244,6 +307,18 @@ export function AnalizadorTab() {
               ))}
             </div>
 
+            {p && elegido && cargo && circ && (
+              <AnalisisIA
+                key={`${url}-${elegido.codigo}`}
+                nombre={elegido.nombre}
+                params={{ e: cargo.eleccion, c: cargo.sigla, a: ambito ?? "", circ: circ.codigo, p: p.codigo, k: elegido.codigo }}
+              />
+            )}
+            {p && !elegido && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Sparkles className="size-3.5 text-fuchsia-600" aria-hidden="true" /> Toca un candidato para analizar sus votos en {lugar} con IA.
+              </p>
+            )}
             {p ? (
               <div className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-border">
                 <p className="flex items-center gap-2 text-sm font-semibold">
@@ -256,8 +331,24 @@ export function AnalizadorTab() {
                     .sort((a, b) => b.votos - a.votos)
                     .slice(0, 40)
                     .map((x) => (
-                      <li key={x.codigo} className="flex items-center gap-3 text-sm">
-                        <span className="min-w-0 flex-1 truncate">{x.soloLista ? "Solo por la lista" : titulo(x.nombre)}</span>
+                      <li
+                        key={x.codigo}
+                        className={`flex items-center gap-3 rounded-lg px-2 py-1 text-sm ${
+                          elegido?.codigo === x.codigo ? "bg-fuchsia-500/10 ring-1 ring-fuchsia-400/50" : ""
+                        }`}
+                      >
+                        {x.soloLista ? (
+                          <span className="min-w-0 flex-1 truncate italic text-muted-foreground">Solo por la lista</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setCandSel({ url: url ?? "", codigo: x.codigo, nombre: x.nombre })}
+                            className="min-w-0 flex-1 truncate text-left hover:text-fuchsia-700 dark:hover:text-fuchsia-300"
+                            title="Elegir para analizar con IA"
+                          >
+                            {titulo(x.nombre)}
+                          </button>
+                        )}
                         <span className="h-3 w-40 overflow-hidden rounded-full bg-border/60">
                           <span
                             className="block h-full rounded-full"
