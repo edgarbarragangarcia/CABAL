@@ -26,12 +26,18 @@ export type Candidato = {
   electo: boolean;
   /** Votos marcados solo por el logo del partido, sin candidato. */
   soloLista: boolean;
+  /** Cédula (pública en el preconteo): nombra su foto y ubica su hoja de vida. */
+  cedula?: string;
+  /** Posición en el tarjetón, en las presidenciales. */
+  sorteo?: string;
 };
 
 export type PartidoResultado = {
   codigo: string;
   nombre: string;
   color: string;
+  /** Código del nomenclátor que nombra el archivo del logo. */
+  logo?: string;
   votos: number;
   pct: string;
   curules: number;
@@ -109,7 +115,7 @@ type Geografia = {
 
 type EleccionData = {
   corporaciones: { sigla: string; nombre: string; geo: string }[];
-  partidos: Record<string, [string, string | null]>;
+  partidos: Record<string, [string, string | null, string?]>;
 };
 
 const geoCache = new Map<string, Promise<Geografia>>();
@@ -164,6 +170,8 @@ const ref = (geo: Geografia, i: number): AmbitoRef => {
 
 type RawCand = {
   codcan: string;
+  cedula?: string;
+  sorteo?: string;
   nomcan: string;
   apecan: string;
   nomcan2?: string;
@@ -212,8 +220,8 @@ function fallbackColor(codigo: string) {
 function normalizar(raw: Raw, partidos: EleccionData["partidos"], geo: Geografia): Resultado {
   const t = raw.totales.act;
   const partido = (codigo: string) => {
-    const [nombre, color] = partidos[codigo] ?? [`Partido ${codigo}`, null];
-    return { nombre: clean(nombre), color: color ?? fallbackColor(codigo) };
+    const [nombre, color, logo] = partidos[codigo] ?? [`Partido ${codigo}`, null];
+    return { nombre: clean(nombre), color: color ?? fallbackColor(codigo), ...(logo ? { logo } : {}) };
   };
   const mdhm = raw.mdhm ?? "";
   return {
@@ -250,6 +258,8 @@ function normalizar(raw: Raw, partidos: EleccionData["partidos"], geo: Geografia
               pct: x.pvot,
               electo: x.carg === "1",
               soloLista: x.codcan === "0",
+              ...(x.cedula && x.cedula !== "0" ? { cedula: x.cedula } : {}),
+              ...(x.sorteo ? { sorteo: x.sorteo } : {}),
             };
           }),
         })),

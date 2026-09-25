@@ -34,8 +34,8 @@ const ELECCIONES = [
     // de la segunda vuelta (json/ACT/PR/00.json): 2 = Rodolfo Hernández,
     // 3 = Gustavo Petro.
     partidos: {
-      2: ["LIGA DE GOBERNANTES ANTICORRUPCIÓN", "#F5DE09"],
-      3: ["COALICIÓN PACTO HISTÓRICO", "#F49609"],
+      2: ["LIGA DE GOBERNANTES ANTICORRUPCIÓN", "#F5DE09", "1076"],
+      3: ["COALICIÓN PACTO HISTÓRICO", "#F49609", "1235"],
     },
   },
   { id: "presidencia-2022-1v", host: "resultadosprecpresidente1v", ruta: "assets/nomenclator.json" },
@@ -224,9 +224,9 @@ for (const e of ELECCIONES) {
     sinDane.push(...rows.filter((r) => (r[2] === 2 || r[2] === 3) && r[4] >= 0 && !r[5] && rows[r[4]][5] !== undefined));
   }
   // En los archivos de resultados, `codpar` es la posición `i` del partido en
-  // el nomenclátor (no su campo `codpar`).
+  // el nomenclátor; su campo `codpar` es el que nombra el archivo del logo.
   const partidos = {
-    ...Object.fromEntries((nom.partidos ?? []).map((p) => [p.i, [p.nombre, p.color ?? null]])),
+    ...Object.fromEntries((nom.partidos ?? []).map((p) => [p.i, [p.nombre, p.color ?? null, p.codpar]])),
     ...(e.partidos ?? {}),
   };
   await fs.writeFile(path.join(OUT_DIR, `${e.id}.json`), JSON.stringify({ corporaciones: corps, partidos }));

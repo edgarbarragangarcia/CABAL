@@ -30,28 +30,13 @@ import type {
   PartidoResultado,
   VistaElectoral,
 } from "@/lib/gov-data/elecciones/resultados";
+import { FotoCandidato, HojaDeVidaPanel, LogoPartido } from "./candidato-ui";
 import { FiltroEleccion } from "./filtro-eleccion";
+import { titulo } from "./nombres";
 import { MapaElectoral3D, type RegionMapa } from "./mapa-electoral-3d";
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
-/** Palabras que van en minúscula dentro de un nombre propio. */
-const MINUSCULAS = new Set(["de", "del", "la", "las", "los", "el", "y", "e", "por", "en", "con", "para", "a", "al"]);
-const SIGLAS = new Set(["MIRA", "AICO", "MAIS", "ASI", "PIC", "ADA", "GSC", "CITREP", "ONIC", "MOIR", "UP", "II", "III"]);
-
-/** "IVÁN CEPEDA CASTRO" → "Iván Cepeda Castro"; siglas ("MIRA", "P.I.C", "D.C.") se conservan. */
-function titulo(s: string) {
-  return s
-    .split(" ")
-    .map((token, i) => {
-      const [, pre, core, post] = token.match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u) ?? ["", "", token, ""];
-      if (!core || core.includes(".") || SIGLAS.has(core.toUpperCase())) return token;
-      const w = core.toLowerCase();
-      const out = i > 0 && MINUSCULAS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1);
-      return pre + out + post;
-    })
-    .join(" ");
-}
 
 // ---------------------------------------------------------------- mapa ---
 
@@ -182,7 +167,8 @@ function Barra({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-function RankingCandidatos({ c, filtro }: { c: Circunscripcion; filtro: string }) {
+function RankingCandidatos({ c, filtro, eleccionId }: { c: Circunscripcion; filtro: string; eleccionId: string }) {
+  const [abierto, setAbierto] = React.useState<string | null>(null);
   const lista = c.partidos
     .flatMap((p) =>
       p.candidatos.filter((x) => !x.soloLista).map((x) => ({ ...x, partido: p }))
@@ -196,42 +182,63 @@ function RankingCandidatos({ c, filtro }: { c: Circunscripcion; filtro: string }
       {visibles.map((x, i) => {
         const pos = lista.indexOf(x) + 1;
         const ganador = pos === 1;
+        const key = `${x.partido.codigo}-${x.codigo}`;
+        const open = abierto === key;
         return (
           <li
-            key={`${x.partido.codigo}-${x.codigo}`}
-            className={`cabal-rise rounded-2xl border p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+            key={key}
+            className={`cabal-rise rounded-2xl border p-3 transition-all duration-200 hover:shadow-lg ${
               ganador
                 ? "border-amber-300/70 bg-gradient-to-r from-amber-300/20 via-amber-200/10 to-transparent shadow-md shadow-amber-500/10"
                 : "border-border bg-surface"
-            }`}
+            } ${open ? "ring-2 ring-emerald-500/40" : "hover:-translate-y-0.5"}`}
             style={{ animationDelay: `${Math.min(i, 15) * 40}ms` }}
           >
-            <div className="flex items-start gap-3">
-              <span
-                className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white shadow-sm ${
-                  ganador ? "bg-gradient-to-br from-amber-400 to-orange-500" : ""
-                }`}
-                style={ganador ? undefined : { backgroundColor: x.partido.color }}
-              >
-                {ganador ? <Trophy className="size-4" aria-hidden="true" /> : pos}
+            <button
+              type="button"
+              onClick={() => setAbierto(open ? null : key)}
+              aria-expanded={open}
+              className="flex w-full items-start gap-3 text-left"
+            >
+              <span className="relative shrink-0">
+                <FotoCandidato
+                  eleccionId={eleccionId}
+                  candidato={x}
+                  logo={x.partido.logo}
+                  color={x.partido.color}
+                  className={`size-14 ${ganador ? "ring-2 ring-amber-400" : ""}`}
+                />
+                <span
+                  className={`absolute -bottom-1 -right-1 grid size-6 place-items-center rounded-full text-[11px] font-bold text-white shadow ring-2 ring-surface ${
+                    ganador ? "bg-gradient-to-br from-amber-400 to-orange-500" : ""
+                  }`}
+                  style={ganador ? undefined : { backgroundColor: x.partido.color }}
+                >
+                  {ganador ? <Trophy className="size-3.5" aria-hidden="true" /> : pos}
+                </span>
               </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate font-semibold">{titulo(x.nombre)}</p>
-                  <p className="shrink-0 tabular-nums">
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="truncate font-semibold">{titulo(x.nombre)}</span>
+                  <span className="shrink-0 tabular-nums">
                     <span className="font-bold">{fmt(x.votos)}</span>{" "}
                     <span className="text-xs text-muted-foreground">{x.pct}</span>
-                  </p>
-                </div>
-                <p className="truncate text-xs text-muted-foreground">
-                  <span
-                    className="mr-1.5 inline-block size-2 rounded-full align-middle"
-                    style={{ backgroundColor: x.partido.color }}
+                  </span>
+                </span>
+                <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <LogoPartido
+                    eleccionId={eleccionId}
+                    logo={x.partido.logo}
+                    nombre={x.partido.nombre}
+                    color={x.partido.color}
+                    className="size-6"
                   />
-                  {titulo(x.partido.nombre)}
-                  {x.formula && <> · Fórmula: {titulo(x.formula)}</>}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
+                  <span className="truncate">
+                    {titulo(x.partido.nombre)}
+                    {x.formula && <> · Fórmula: {titulo(x.formula)}</>}
+                  </span>
+                </span>
+                <span className="mt-2 flex items-center gap-2">
                   <Barra pct={(x.votos / max) * 100} color={x.partido.color} />
                   {x.electo ? (
                     <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
@@ -242,9 +249,14 @@ function RankingCandidatos({ c, filtro }: { c: Circunscripcion; filtro: string }
                       Más votado
                     </span>
                   ) : null}
-                </div>
-              </div>
-            </div>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    Hoja de vida
+                    <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+                  </span>
+                </span>
+              </span>
+            </button>
+            {open && <HojaDeVidaPanel cedula={x.cedula} nombre={x.nombre} />}
           </li>
         );
       })}
@@ -253,33 +265,61 @@ function RankingCandidatos({ c, filtro }: { c: Circunscripcion; filtro: string }
   );
 }
 
-function CandidatosDeLista({ candidatos, filtro }: { candidatos: Candidato[]; filtro: string }) {
+function CandidatosDeLista({
+  candidatos,
+  filtro,
+  eleccionId,
+  partido,
+}: {
+  candidatos: Candidato[];
+  filtro: string;
+  eleccionId: string;
+  partido: PartidoResultado;
+}) {
+  const [abierto, setAbierto] = React.useState<string | null>(null);
   const lista = [...candidatos]
     .sort((a, b) => Number(b.electo) - Number(a.electo) || b.votos - a.votos)
     .filter((x) => x.nombre.toLowerCase().includes(filtro.toLowerCase()));
   return (
     <ul className="mt-2 divide-y divide-border rounded-xl border border-border bg-surface-muted/40">
-      {lista.map((x) => (
-        <li key={x.codigo} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-          <span className="w-8 shrink-0 text-[11px] tabular-nums text-muted-foreground">
-            {x.soloLista ? "—" : x.codigo}
-          </span>
-          <span className={`min-w-0 flex-1 truncate ${x.soloLista ? "italic text-muted-foreground" : ""}`}>
-            {x.soloLista ? "Solo por la lista (logo)" : titulo(x.nombre)}
-          </span>
-          {x.electo && (
-            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-              Curul
-            </span>
-          )}
-          <span className="w-20 shrink-0 text-right font-semibold tabular-nums">{fmt(x.votos)}</span>
-        </li>
-      ))}
+      {lista.map((x) =>
+        x.soloLista ? (
+          <li key={x.codigo} className="flex items-center gap-2 px-3 py-2 text-sm">
+            <LogoPartido eleccionId={eleccionId} logo={partido.logo} nombre={partido.nombre} color={partido.color} className="size-8" />
+            <span className="min-w-0 flex-1 truncate italic text-muted-foreground">Solo por la lista (logo)</span>
+            <span className="w-20 shrink-0 text-right font-semibold tabular-nums">{fmt(x.votos)}</span>
+          </li>
+        ) : (
+          <li key={x.codigo} className="px-3 py-2 text-sm">
+            <button
+              type="button"
+              onClick={() => setAbierto(abierto === x.codigo ? null : x.codigo)}
+              aria-expanded={abierto === x.codigo}
+              className="flex w-full items-center gap-2 text-left"
+            >
+              <FotoCandidato eleccionId={eleccionId} candidato={x} logo={partido.logo} color={partido.color} className="size-8" />
+              <span className="w-7 shrink-0 text-[11px] tabular-nums text-muted-foreground">{x.codigo}</span>
+              <span className="min-w-0 flex-1 truncate">{titulo(x.nombre)}</span>
+              {x.electo && (
+                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                  Curul
+                </span>
+              )}
+              <span className="w-20 shrink-0 text-right font-semibold tabular-nums">{fmt(x.votos)}</span>
+              <ChevronDown
+                className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${abierto === x.codigo ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
+            {abierto === x.codigo && <HojaDeVidaPanel cedula={x.cedula} nombre={x.nombre} />}
+          </li>
+        )
+      )}
     </ul>
   );
 }
 
-function TablaPartidos({ c, filtro }: { c: Circunscripcion; filtro: string }) {
+function TablaPartidos({ c, filtro, eleccionId }: { c: Circunscripcion; filtro: string; eleccionId: string }) {
   const [abierto, setAbierto] = React.useState<string | null>(null);
   const partidos = [...c.partidos].sort((a, b) => b.curules - a.curules || b.votos - a.votos);
   const q = filtro.trim().toLowerCase();
@@ -309,7 +349,7 @@ function TablaPartidos({ c, filtro }: { c: Circunscripcion; filtro: string }) {
               className="w-full text-left"
             >
               <div className="flex items-center gap-2">
-                <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
+                <LogoPartido eleccionId={eleccionId} logo={p.logo} nombre={p.nombre} color={p.color} className="size-10" />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">{titulo(p.nombre)}</span>
                 {p.curules > 0 && (
                   <span className="shrink-0 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
@@ -336,7 +376,7 @@ function TablaPartidos({ c, filtro }: { c: Circunscripcion; filtro: string }) {
                 )}
               </div>
             </button>
-            {open && <CandidatosDeLista candidatos={p.candidatos} filtro={q} />}
+            {open && <CandidatosDeLista candidatos={p.candidatos} filtro={q} eleccionId={eleccionId} partido={p} />}
           </li>
         );
       })}
@@ -689,9 +729,9 @@ export function ExploradorElectoral() {
 
             {c ? (
               comoRanking ? (
-                <RankingCandidatos c={c} filtro={filtro} />
+                <RankingCandidatos key={url} c={c} filtro={filtro} eleccionId={vista?.eleccion.id ?? eleccionId} />
               ) : (
-                <TablaPartidos key={`${url}-${circ}`} c={c} filtro={filtro} />
+                <TablaPartidos key={`${url}-${circ}`} c={c} filtro={filtro} eleccionId={vista?.eleccion.id ?? eleccionId} />
               )
             ) : loading ? (
               <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
