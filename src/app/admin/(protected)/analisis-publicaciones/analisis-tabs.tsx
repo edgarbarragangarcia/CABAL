@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Bot, Network, Vote } from "lucide-react";
+import { LayoutDashboard, Network, Vote } from "lucide-react";
 
-import { AsistenteTab } from "./asistente-tab";
+import { AnalizadorTab } from "./analizador-tab";
 import { CabalResultados } from "./cabal-resultados";
 import { ExploradorElectoral } from "./explorador-electoral";
 import { PrediccionesTab } from "./predicciones-tab";
@@ -14,7 +14,7 @@ type TabId = "votaciones" | "predicciones" | "asistente";
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Red Cabal", icon: Network },
-  { id: "asistente", label: "Asistente", icon: Bot },
+  { id: "asistente", label: "Analizador", icon: LayoutDashboard },
 ];
 
 /** Votaciones: todas las elecciones y candidatos, o el seguimiento de Cabal. */
@@ -86,7 +86,7 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
       <div className="mt-6">
         {tab === "votaciones" && <Votaciones />}
         {tab === "predicciones" && <PrediccionesTab />}
-        {tab === "asistente" && <AsistenteTab />}
+        {tab === "asistente" && <AnalizadorTab />}
       </div>
     </div>
   );
