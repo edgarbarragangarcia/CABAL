@@ -13,8 +13,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  // Con la contraseña por defecto, cualquiera que lea el repositorio podría leer o cambiar las claves.
-  if (process.env.NODE_ENV === "production" && ADMIN_USES_PUBLIC_DEFAULTS) {
+  // En Redis la clave es compartida: con la contraseña por defecto, cualquiera que lea el
+  // repositorio podría usarla o cambiarla. En la cookie solo vive en este navegador.
+  const compartida = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  if (compartida && process.env.NODE_ENV === "production" && ADMIN_USES_PUBLIC_DEFAULTS) {
     return NextResponse.json(
       { error: "Primero cambia la contraseña del panel (ADMIN_PASSWORD y ADMIN_SESSION_SECRET en Vercel)." },
       { status: 403 }

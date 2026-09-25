@@ -2,12 +2,14 @@ import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
 import { Redis } from "@upstash/redis";
+import { cookies } from "next/headers";
 
 /**
  * Proveedor de IA del panel (Claude, Gemini u OpenAI), elegido en
  * /admin/configuracion. Las claves se guardan cifradas (AES-GCM, con una
- * llave derivada de ADMIN_SESSION_SECRET) en Upstash Redis y nunca vuelven
- * al navegador. Sin configuración guardada, se usa ANTHROPIC_API_KEY.
+ * llave derivada de ADMIN_SESSION_SECRET) en Upstash Redis o, si no está
+ * configurado, en una cookie httpOnly cifrada de este navegador. Nunca vuelven
+ * en claro al navegador. Sin configuración guardada, se usa ANTHROPIC_API_KEY.
  */
 
 export type Proveedor = "anthropic" | "gemini" | "openai";
@@ -28,7 +30,7 @@ function redis() {
   return url && token ? new Redis({ url, token }) : null;
 }
 
-export const almacenDisponible = () => redis() !== null;
+const COOKIE = "el_admin_ia";
 
 async function llave() {
   const secreto = process.env.ADMIN_SESSION_SECRET ?? "escuela-libertad-admin-dev-secret-cambiar-en-produccion";
@@ -50,7 +52,14 @@ async function descifrar(valor: string) {
 
 async function leer(): Promise<Guardada | null> {
   const r = redis();
-  return r ? ((await r.get<Guardada>(CLAVE_REDIS)) ?? null) : null;
+  if (r) return (await r.get<Guardada>(CLAVE_REDIS)) ?? null;
+  const valor = (await cookies()).get(COOKIE)?.value;
+  if (!valor) return null;
+  try {
+    return JSON.parse(await descifrar(valor)) as Guardada;
+  } catch {
+    return null;
+  }
 }
 
 /** Lo que ve la página: nunca la clave, solo sus últimos 4 caracteres. */
@@ -65,7 +74,8 @@ export async function resumenConfig() {
     }
   }
   return {
-    almacen: almacenDisponible(),
+    /** "redis" (compartida) o "cookie" (solo este navegador). */
+    almacen: redis() ? "redis" : "cookie",
     proveedor: g?.proveedor ?? "anthropic",
     modelo: g?.modelo ?? PROVEEDORES.anthropic.modelo,
     claves,
@@ -75,12 +85,20 @@ export async function resumenConfig() {
 
 export async function guardarConfig(proveedor: Proveedor, modelo: string, clave?: string) {
   const r = redis();
-  if (!r) throw new Error("Falta configurar Upstash Redis (UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN) en Vercel.");
   const g: Guardada = (await leer()) ?? { proveedor, modelo, claves: {} };
   g.proveedor = proveedor;
   g.modelo = modelo.trim() || PROVEEDORES[proveedor].modelo;
   if (clave?.trim()) g.claves[proveedor] = await cifrar(clave.trim());
-  await r.set(CLAVE_REDIS, g);
+  if (r) await r.set(CLAVE_REDIS, g);
+  else {
+    (await cookies()).set(COOKIE, await cifrar(JSON.stringify(g)), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/api/admin",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
 }
 
 /** Genera texto con el proveedor configurado. */

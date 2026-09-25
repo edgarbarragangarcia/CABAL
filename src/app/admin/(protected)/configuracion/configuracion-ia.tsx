@@ -5,7 +5,7 @@ import { Check, KeyRound, Loader2, TriangleAlert } from "lucide-react";
 
 type Proveedor = "anthropic" | "gemini" | "openai";
 type Resumen = {
-  almacen: boolean;
+  almacen: "redis" | "cookie";
   proveedor: Proveedor;
   modelo: string;
   claves: Partial<Record<Proveedor, string>>;
@@ -63,11 +63,11 @@ export function ConfiguracionIA() {
 
   return (
     <form onSubmit={guardar} className="mt-6 space-y-5 rounded-2xl border border-border bg-surface p-5 shadow-sm">
-      {resumen && !resumen.almacen && (
-        <p className="flex items-start gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+      {resumen?.almacen === "cookie" && (
+        <p className="flex items-start gap-2 rounded-xl border border-sky-400/40 bg-sky-500/5 p-3 text-xs text-sky-800 dark:text-sky-300">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          Para guardar claves desde aquí, configura Upstash Redis en Vercel (UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN).
-          Mientras tanto se usa ANTHROPIC_API_KEY{resumen.anthropicEnv ? ", que ya está configurada." : ", que tampoco está configurada."}
+          La clave se guarda cifrada solo en este navegador. Para compartirla con otros equipos, configura Upstash Redis en
+          Vercel.
         </p>
       )}
 
@@ -125,7 +125,7 @@ export function ConfiguracionIA() {
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          disabled={estado.guardando || !resumen?.almacen}
+          disabled={estado.guardando || (!clave.trim() && !guardada)}
           className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground disabled:opacity-50"
         >
           {estado.guardando && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
