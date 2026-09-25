@@ -384,12 +384,15 @@ const MAX_HIJOS_CONSULTADOS = 40;
 
 // -------------------------------------------------------------- vista ---
 
-export async function getVistaElectoral(params: {
+type ParamsAmbito = {
   eleccion: string;
   corporacion: string;
   ambito?: string | null;
   dane?: string | null;
-}): Promise<VistaElectoral> {
+};
+
+/** Elección, corporación y ámbito pedidos, con su ruta y sus hijos (las mesas, si es un puesto). */
+async function contexto(params: ParamsAmbito) {
   const eleccion = findEleccion(params.eleccion);
   if (!eleccion) throw new Error("Elección no válida.");
   const corporacion =
@@ -435,7 +438,11 @@ export async function getVistaElectoral(params: {
   } else {
     hijos = (geo.children.get(idx) ?? []).map((i) => ref(geo, i));
   }
+  return { eleccion, corporacion, data, geo, codigo, ambito, ruta, hijos };
+}
 
+export async function getVistaElectoral(params: ParamsAmbito): Promise<VistaElectoral> {
+  const { eleccion, corporacion, data, geo, codigo, ambito, ruta, hijos } = await contexto(params);
   const resultado = await resultadoDe(eleccion, corporacion.sigla, codigo, data.partidos, geo);
 
   // Del país y los departamentos, `mapagan` ya trae el ganador de cada hijo.
@@ -463,5 +470,69 @@ export async function getVistaElectoral(params: {
     ganadoresHijos,
     resultado,
     fuente: `Preconteo oficial de la Registraduría Nacional del Estado Civil (${eleccion.host}.registraduria.gov.co)`,
+  };
+}
+
+// -------------------------------------------------------- un candidato ---
+
+export type VotosHijo = {
+  codigo: string;
+  nombre: string;
+  nivel: number;
+  dane?: string;
+  /** null: aún no se consultó (ver `pendientes`). */
+  votos: number | null;
+  /** % de los votos válidos del territorio. */
+  pct: string;
+};
+
+export type VotosCandidato = {
+  ambito: AmbitoRef;
+  votos: number;
+  pct: string;
+  hijos: VotosHijo[];
+  /** Hijos que no alcanzaron a consultarse: la siguiente llamada los completa (los demás ya están en caché). */
+  pendientes: number;
+};
+
+/** Tiempo de consulta por llamada: Vercel corta la función a los 60 s. */
+const PRESUPUESTO_MS = 40_000;
+
+/**
+ * Votos de un candidato en un ámbito y en cada uno de sus hijos, hasta las
+ * mesas. Cada hijo es un archivo del preconteo con todos los candidatos, así
+ * que se consulta uno por uno (y queda en caché, como en la vista general).
+ */
+export async function getVotosCandidato(
+  params: ParamsAmbito & { circunscripcion: string; partido: string; candidato: string }
+): Promise<VotosCandidato> {
+  const { eleccion, corporacion, data, geo, codigo, ambito, hijos } = await contexto(params);
+  const delCandidato = (r: Resultado | null) => {
+    const circ =
+      r?.circunscripciones.find((c) => c.codigo === params.circunscripcion) ??
+      (r?.circunscripciones.length === 1 ? r.circunscripciones[0] : undefined);
+    const x = circ?.partidos
+      .find((p) => p.codigo === params.partido)
+      ?.candidatos.find((k) => k.codigo === params.candidato);
+    return { votos: x?.votos ?? 0, pct: x?.pct ?? "" };
+  };
+
+  const propio = delCandidato(await resultadoDe(eleccion, corporacion.sigla, codigo, data.partidos, geo));
+  const limite = Date.now() + PRESUPUESTO_MS;
+  const votosHijos = await mapLimit(hijos, 6, async (h): Promise<VotosHijo> => {
+    const base = { codigo: h.codigo, nombre: h.nombre, nivel: h.nivel, ...(h.dane ? { dane: h.dane } : {}) };
+    if (Date.now() > limite) return { ...base, votos: null, pct: "" };
+    try {
+      return { ...base, ...delCandidato(await resultadoDe(eleccion, corporacion.sigla, h.codigo, data.partidos, geo)) };
+    } catch {
+      return { ...base, votos: null, pct: "" };
+    }
+  });
+
+  return {
+    ambito,
+    ...propio,
+    hijos: votosHijos,
+    pendientes: votosHijos.filter((h) => h.votos === null).length,
   };
 }

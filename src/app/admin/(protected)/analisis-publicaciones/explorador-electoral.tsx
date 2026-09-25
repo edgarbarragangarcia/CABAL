@@ -8,11 +8,13 @@ import {
   Landmark,
   Loader2,
   MapPin,
+  MapPinned,
   Percent,
   Search,
   Trophy,
   TriangleAlert,
   Vote,
+  X,
 } from "lucide-react";
 
 import {
@@ -29,7 +31,10 @@ import type {
   Ganador,
   PartidoResultado,
   VistaElectoral,
+  VotosCandidato,
+  VotosHijo,
 } from "@/lib/gov-data/elecciones/resultados";
+import { heatColor } from "@/components/admin/colombia-heatmap";
 import { FotoCandidato, HojaDeVidaPanel, LogoPartido } from "./candidato-ui";
 import { FiltroEleccion } from "./filtro-eleccion";
 import { titulo } from "./nombres";
@@ -151,6 +156,111 @@ function useVista(url: string) {
   };
 }
 
+// ------------------------------------------------- candidato seguido ---
+
+/** Candidato cuyos votos se siguen por el territorio; vale para la elección y el cargo en que se eligió. */
+type Seguido = {
+  clave: string;
+  circ: string;
+  candidato: Candidato;
+  partido: Pick<PartidoResultado, "codigo" | "nombre" | "color" | "logo">;
+};
+
+const claveCandidato = (partido: string, candidato: string) => `${partido}-${candidato}`;
+
+const RONDAS = 8;
+
+/** Votos del candidato seguido. Si quedaron territorios sin consultar, se vuelven a pedir por tandas. */
+function useVotosCandidato(url: string | null) {
+  const [state, setState] = React.useState<{ url: string; data?: VotosCandidato; error?: string; agotado?: boolean } | null>(
+    null
+  );
+  const [intento, setIntento] = React.useState(0);
+  React.useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const pedir = (ronda: number) => {
+      fetch(url)
+        .then(async (res) => {
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
+          return body as VotosCandidato;
+        })
+        .then(
+          (data) => {
+            if (cancelled) return;
+            const agotado = data.pendientes > 0 && ronda >= RONDAS;
+            setState({ url, data, agotado });
+            if (data.pendientes > 0 && !agotado) timer = setTimeout(() => pedir(ronda + 1), 400);
+          },
+          (err: Error) => {
+            if (!cancelled) setState((prev) => ({ url, data: prev?.url === url ? prev.data : undefined, error: err.message }));
+          }
+        );
+    };
+    pedir(0);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [url, intento]);
+  const actual = url && state?.url === url ? state : null;
+  return {
+    data: actual?.data,
+    error: actual?.error,
+    /** Tras todas las tandas, la Registraduría no respondió por algunos territorios. */
+    faltantes: actual?.agotado ? (actual.data?.pendientes ?? 0) : 0,
+    loading: !!url && !actual?.error && !actual?.agotado && (!actual?.data || actual.data.pendientes > 0),
+    retry: () => setIntento((n) => n + 1),
+  };
+}
+
+/** Mapa de calor de los votos del candidato: país, departamento o Bogotá por localidades. */
+function mapaSeguido(v: VistaElectoral, votos: VotosCandidato | undefined): { dept: string | null; areas: MapArea[] } | null {
+  if (!votos || votos.ambito.codigo !== v.ambito.codigo) return null;
+  const area = (h: VotosHijo, geo: string): MapArea => ({
+    id: h.codigo,
+    name: titulo(h.nombre),
+    votos: h.votos ?? 0,
+    geo,
+    detalle: h.votos === null ? "consultando…" : `${fmt(h.votos)} votos${h.pct ? ` · ${h.pct}` : ""}`,
+  });
+  const { nivel, dane } = v.ambito;
+  if (nivel === 1) return { dept: null, areas: votos.hijos.filter((h) => h.dane).map((h) => area(h, h.dane!)) };
+  if (nivel === 2 && dane) return { dept: dane, areas: votos.hijos.filter((h) => h.dane).map((h) => area(h, h.dane!)) };
+  if (nivel === 3 && dane === "11001") {
+    return {
+      dept: "11",
+      areas: votos.hijos
+        .map((h) => ({ h, loc: h.codigo.slice(-2) }))
+        .filter(({ loc }) => Number(loc) >= 1 && Number(loc) <= 20)
+        .map(({ h, loc }) => area(h, loc)),
+    };
+  }
+  return null;
+}
+
+/** Texto oscuro o claro según el fondo del mapa de calor. */
+function textoSobre(rgb: string) {
+  const [r, g, b] = rgb.match(/\d+/g)!.map(Number);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#0a0a0c" : "#ffffff";
+}
+
+function BotonSeguir({ activo, onClick }: { activo: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={activo}
+      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-600 to-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-default disabled:opacity-70"
+    >
+      <MapPinned className="size-3.5" aria-hidden="true" />
+      {activo ? "Siguiendo sus votos por territorio" : "Ver sus votos por territorio, hasta la mesa"}
+    </button>
+  );
+}
+
 // --------------------------------------------------------- resultados ---
 
 function Barra({ pct, color }: { pct: number; color: string }) {
@@ -164,7 +274,15 @@ function Barra({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-function RankingCandidatos({ c, filtro, eleccionId }: { c: Circunscripcion; filtro: string; eleccionId: string }) {
+type AlSeguir = { onSeguir: (x: Candidato, p: PartidoResultado) => void; seguido: string | null };
+
+function RankingCandidatos({
+  c,
+  filtro,
+  eleccionId,
+  onSeguir,
+  seguido,
+}: { c: Circunscripcion; filtro: string; eleccionId: string } & AlSeguir) {
   const [abierto, setAbierto] = React.useState<string | null>(null);
   const lista = c.partidos
     .flatMap((p) =>
@@ -247,13 +365,21 @@ function RankingCandidatos({ c, filtro, eleccionId }: { c: Circunscripcion; filt
                     </span>
                   ) : null}
                   <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                    Hoja de vida
+                    {seguido === claveCandidato(x.partido.codigo, x.codigo) ? "Siguiendo · hoja de vida" : "Votos y hoja de vida"}
                     <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
                   </span>
                 </span>
               </span>
             </button>
-            {open && <HojaDeVidaPanel cedula={x.cedula} nombre={x.nombre} />}
+            {open && (
+              <>
+                <BotonSeguir
+                  activo={seguido === claveCandidato(x.partido.codigo, x.codigo)}
+                  onClick={() => onSeguir(x, x.partido)}
+                />
+                <HojaDeVidaPanel cedula={x.cedula} nombre={x.nombre} />
+              </>
+            )}
           </li>
         );
       })}
@@ -267,12 +393,14 @@ function CandidatosDeLista({
   filtro,
   eleccionId,
   partido,
+  onSeguir,
+  seguido,
 }: {
   candidatos: Candidato[];
   filtro: string;
   eleccionId: string;
   partido: PartidoResultado;
-}) {
+} & AlSeguir) {
   const [abierto, setAbierto] = React.useState<string | null>(null);
   const lista = [...candidatos]
     .sort((a, b) => Number(b.electo) - Number(a.electo) || b.votos - a.votos)
@@ -297,6 +425,9 @@ function CandidatosDeLista({
               <FotoCandidato eleccionId={eleccionId} candidato={x} logo={partido.logo} color={partido.color} className="size-8" />
               <span className="w-7 shrink-0 text-[11px] tabular-nums text-muted-foreground">{x.codigo}</span>
               <span className="min-w-0 flex-1 truncate">{titulo(x.nombre)}</span>
+              {seguido === claveCandidato(partido.codigo, x.codigo) && (
+                <MapPinned className="size-3.5 shrink-0 text-sky-600" aria-label="Siguiendo sus votos" />
+              )}
               {x.electo && (
                 <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                   Curul
@@ -308,7 +439,15 @@ function CandidatosDeLista({
                 aria-hidden="true"
               />
             </button>
-            {abierto === x.codigo && <HojaDeVidaPanel cedula={x.cedula} nombre={x.nombre} />}
+            {abierto === x.codigo && (
+              <>
+                <BotonSeguir
+                  activo={seguido === claveCandidato(partido.codigo, x.codigo)}
+                  onClick={() => onSeguir(x, partido)}
+                />
+                <HojaDeVidaPanel cedula={x.cedula} nombre={x.nombre} />
+              </>
+            )}
           </li>
         )
       )}
@@ -316,8 +455,21 @@ function CandidatosDeLista({
   );
 }
 
-function TablaPartidos({ c, filtro, eleccionId }: { c: Circunscripcion; filtro: string; eleccionId: string }) {
-  const [abierto, setAbierto] = React.useState<string | null>(null);
+function TablaPartidos({
+  c,
+  filtro,
+  eleccionId,
+  onSeguir,
+  seguido,
+  abrir,
+}: {
+  c: Circunscripcion;
+  filtro: string;
+  eleccionId: string;
+  /** Partido que empieza abierto: el del candidato seguido. */
+  abrir?: string;
+} & AlSeguir) {
+  const [abierto, setAbierto] = React.useState<string | null>(abrir ?? null);
   const partidos = [...c.partidos].sort((a, b) => b.curules - a.curules || b.votos - a.votos);
   const q = filtro.trim().toLowerCase();
   const visibles = q
@@ -373,7 +525,16 @@ function TablaPartidos({ c, filtro, eleccionId }: { c: Circunscripcion; filtro: 
                 )}
               </div>
             </button>
-            {open && <CandidatosDeLista candidatos={p.candidatos} filtro={q} eleccionId={eleccionId} partido={p} />}
+            {open && (
+              <CandidatosDeLista
+                candidatos={p.candidatos}
+                filtro={q}
+                eleccionId={eleccionId}
+                partido={p}
+                onSeguir={onSeguir}
+                seguido={seguido}
+              />
+            )}
           </li>
         );
       })}
@@ -404,6 +565,8 @@ export function ExploradorElectoral() {
   const [circSel, setCircSel] = React.useState({ url: "", i: 0 });
   const [filtro, setFiltro] = React.useState("");
   const [filtroHijosSel, setFiltroHijosSel] = React.useState({ url: "", q: "" });
+  const [seguidoSel, setSeguidoSel] = React.useState<Seguido | null>(null);
+  const navRef = React.useRef<HTMLElement>(null);
 
   const eleccion = findEleccion(eleccionId) ?? ELECCIONES[0];
   const url = `/api/admin/elecciones?${new URLSearchParams({
@@ -415,6 +578,21 @@ export function ExploradorElectoral() {
     ...(destino.dane ? { dane: destino.dane } : {}),
   })}`;
   const { vista, vistaUrl, mapaCtx, error, loading, retry } = useVista(url);
+  const clave = `${eleccionId}|${sigla}`;
+  const seguido = seguidoSel?.clave === clave ? seguidoSel : null;
+  const votosUrl =
+    seguido && vista && vista.eleccion.id === eleccionId && vista.corporacion.sigla === sigla
+      ? `/api/admin/elecciones/candidato?${new URLSearchParams({
+          v: DATOS_VERSION,
+          e: eleccionId,
+          c: sigla,
+          a: vista.ambito.codigo,
+          circ: seguido.circ,
+          p: seguido.partido.codigo,
+          k: seguido.candidato.codigo,
+        })}`
+      : null;
+  const votos = useVotosCandidato(votosUrl);
   const circ = circSel.url === vistaUrl ? circSel.i : 0;
   const setCirc = (i: number) => setCircSel({ url: vistaUrl, i });
   const filtroHijos = filtroHijosSel.url === vistaUrl ? filtroHijosSel.q : "";
@@ -441,6 +619,16 @@ export function ExploradorElectoral() {
   const uninominal = vista?.corporacion.tipo === "uninominal";
   const hayCandidatos = !!c?.partidos.some((p) => p.candidatos.some((x) => !x.soloLista));
   const blancos = circs.reduce((acc, x) => acc + x.blancos, 0);
+  const seguidoKey = seguido ? claveCandidato(seguido.partido.codigo, seguido.candidato.codigo) : null;
+  const seguir = (x: Candidato, p: PartidoResultado) => {
+    setSeguidoSel({
+      clave,
+      circ: c?.codigo ?? "",
+      candidato: x,
+      partido: { codigo: p.codigo, nombre: p.nombre, color: p.color, logo: p.logo },
+    });
+    requestAnimationFrame(() => navRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
 
   const kpis = r
     ? [
@@ -461,6 +649,16 @@ export function ExploradorElectoral() {
     .map((h) => ({ h, g: ganadores.get(h.codigo) }))
     .filter(({ h }) => h.nombre.toLowerCase().includes(filtroHijos.toLowerCase()))
     .sort((a, b) => (a.h.nivel === 7 ? 0 : (b.g?.votantes ?? -1) - (a.g?.votantes ?? -1)));
+  const votosHijo = new Map((votos.data?.hijos ?? []).map((h) => [h.codigo, h]));
+  const maxHijo = Math.max(1, ...(votos.data?.hijos ?? []).map((h) => h.votos ?? 0));
+  const minMesa = Math.min(maxHijo, ...(votos.data?.hijos ?? []).flatMap((h) => (h.votos ? [h.votos] : [])));
+  if (seguido && votos.data) {
+    hijos.sort((a, b) =>
+      a.h.nivel === 7 ? 0 : (votosHijo.get(b.h.codigo)?.votos ?? -1) - (votosHijo.get(a.h.codigo)?.votos ?? -1)
+    );
+  }
+  const mapaCand = seguido && vista ? mapaSeguido(vista, votos.data) : null;
+  const lugar = vista?.ambito.nivel === 1 ? "todo el país" : titulo(vista?.ambito.nombre ?? "");
 
   // Leyenda: territorios ganados por partido en el mapa.
   const leyenda = new Map<string, { nombre: string; color: string; n: number }>();
@@ -515,7 +713,7 @@ export function ExploradorElectoral() {
         </div>
 
         {/* Migas */}
-        <nav aria-label="Territorio" className="mt-4 flex flex-wrap items-center gap-1 text-sm">
+        <nav ref={navRef} aria-label="Territorio" className="mt-4 flex scroll-mt-4 flex-wrap items-center gap-1 text-sm">
           {(vista?.ruta ?? []).map((a: AmbitoRef, i, all) => {
             const last = i === all.length - 1;
             return (
@@ -550,6 +748,66 @@ export function ExploradorElectoral() {
             >
               Reintentar
             </button>
+          </div>
+        )}
+
+        {seguido && (
+          <div className="cabal-rise mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-500/10 via-surface to-emerald-500/10 p-3 shadow-sm">
+            <FotoCandidato
+              eleccionId={eleccionId}
+              candidato={seguido.candidato}
+              logo={seguido.partido.logo}
+              color={seguido.partido.color}
+              className="size-12"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                <MapPinned className="size-3.5" aria-hidden="true" />
+                Siguiendo sus votos hasta la mesa
+              </p>
+              <p className="truncate font-semibold">{titulo(seguido.candidato.nombre)}</p>
+              <p className="truncate text-xs text-muted-foreground">{titulo(seguido.partido.nombre)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold tabular-nums">{votos.data ? fmt(votos.data.votos) : "…"}</p>
+              <p className="text-[11px] text-muted-foreground">
+                votos en {lugar}
+                {votos.data?.pct ? ` · ${votos.data.pct} de los válidos` : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSeguidoSel(null)}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium transition hover:bg-surface-muted"
+            >
+              <X className="size-3.5" aria-hidden="true" />
+              Dejar de seguir
+            </button>
+            {(votos.loading || votos.error || votos.faltantes > 0) && (
+              <p className="flex w-full flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                {votos.error || votos.faltantes > 0 ? (
+                  <>
+                    <span className="text-red-700 dark:text-red-300">
+                      {votos.error ??
+                        `La Registraduría no respondió por ${fmt(votos.faltantes)} de ${fmt(votos.data?.hijos.length ?? 0)}; puede estar limitando las consultas.`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={votos.retry}
+                      className="rounded-full border border-border bg-surface px-2.5 py-0.5 font-medium text-foreground"
+                    >
+                      Reintentar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                    Consultando sus votos en cada {NIVELES[nivelHijos ?? 2]?.toLowerCase() ?? "territorio"}
+                    {votos.data?.pendientes ? ` (faltan ${fmt(votos.data.pendientes)} de ${fmt(votos.data.hijos.length)})` : "…"}
+                  </>
+                )}
+              </p>
+            )}
           </div>
         )}
 
@@ -592,7 +850,23 @@ export function ExploradorElectoral() {
         <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
           {/* Mapa 3D + territorios */}
           <div className="min-w-0 space-y-4">
-            {mapaCtx && (mapaCtx.areas.length > 0 || mapaCtx.dept) ? (
+            {seguido ? (
+              mapaCand && (
+                <div className="overflow-hidden rounded-2xl bg-gradient-to-b from-sky-500/10 via-emerald-500/5 to-amber-400/10 ring-1 ring-border/60">
+                  <div className="mx-auto w-full max-w-[520px] p-3">
+                    <CabalMap
+                      dept={mapaCand.dept}
+                      areas={mapaCand.areas}
+                      loading={loading || votos.loading}
+                      onSelect={(a) => irA(a.id)}
+                      onBack={() => vista && irA(vista.ruta[0].codigo)}
+                      onOpenBogota={() => setDestino({ dane: "11001" })}
+                      ariaLabel={`Mapa de calor de los votos de ${titulo(seguido.candidato.nombre)}`}
+                    />
+                  </div>
+                </div>
+              )
+            ) : mapaCtx && (mapaCtx.areas.length > 0 || mapaCtx.dept) ? (
               <div className="overflow-hidden rounded-2xl bg-gradient-to-b from-sky-500/10 via-emerald-500/5 to-amber-400/10 ring-1 ring-border/60">
                 <div className="mx-auto w-full max-w-[520px] p-3">
                   <CabalMap
@@ -644,43 +918,93 @@ export function ExploradorElectoral() {
                 </div>
                 {nivelHijos === 7 ? (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-1.5">
-                    {hijos.map(({ h, g }) => (
-                      <button
-                        key={h.codigo}
-                        type="button"
-                        onClick={() => irA(h.codigo)}
-                        className="rounded-lg px-1 py-1.5 text-center text-white shadow-sm transition-transform hover:scale-105"
-                        style={{ backgroundColor: g?.color ?? "#94a3b8" }}
-                        title={g ? `${h.nombre}: ${titulo(g.candidato ?? g.partidoNombre)} (${g.pct})` : h.nombre}
-                      >
-                        <div className="text-[10px] opacity-85">{h.nombre}</div>
-                        <div className="text-xs font-semibold tabular-nums">{g ? fmt(g.votantes) : "—"}</div>
-                      </button>
-                    ))}
+                    {hijos.map(({ h, g }) => {
+                      if (seguido) {
+                        const v = votosHijo.get(h.codigo);
+                        // Entre mesas de un puesto los votos se parecen: la escala va del mínimo al
+                        // máximo del puesto, para que se vea cuáles pesan más. Sin votos, gris.
+                        const bg = heatColor(v?.votos ? 0.2 + 0.8 * ((v.votos - minMesa) / Math.max(1, maxHijo - minMesa)) : 0);
+                        return (
+                          <button
+                            key={h.codigo}
+                            type="button"
+                            onClick={() => irA(h.codigo)}
+                            className="rounded-lg px-1 py-1.5 text-center shadow-sm transition-transform hover:scale-105"
+                            style={{ backgroundColor: bg, color: textoSobre(bg) }}
+                            title={`${h.nombre}: ${v?.votos == null ? "consultando" : `${fmt(v.votos)} votos`} de ${titulo(seguido.candidato.nombre)}`}
+                          >
+                            <div className="text-[10px] opacity-85">{h.nombre}</div>
+                            <div className="text-xs font-semibold tabular-nums">{v?.votos == null ? "…" : fmt(v.votos)}</div>
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          key={h.codigo}
+                          type="button"
+                          onClick={() => irA(h.codigo)}
+                          className="rounded-lg px-1 py-1.5 text-center text-white shadow-sm transition-transform hover:scale-105"
+                          style={{ backgroundColor: g?.color ?? "#94a3b8" }}
+                          title={g ? `${h.nombre}: ${titulo(g.candidato ?? g.partidoNombre)} (${g.pct})` : h.nombre}
+                        >
+                          <div className="text-[10px] opacity-85">{h.nombre}</div>
+                          <div className="text-xs font-semibold tabular-nums">{g ? fmt(g.votantes) : "—"}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : (
                   <ul className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1">
                     {hijos.map(({ h, g }, i) => (
                       <li key={h.codigo} className="cabal-rise" style={{ animationDelay: `${Math.min(i, 20) * 25}ms` }}>
-                        <button
-                          type="button"
-                          onClick={() => irA(h.codigo)}
-                          className="group flex w-full items-center gap-2 rounded-xl border border-transparent bg-surface px-3 py-2 text-left text-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400/40 hover:shadow-md"
-                        >
-                          <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: g?.color ?? "#cbd5e1" }} />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-medium group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
-                              {titulo(h.nombre)}
-                            </span>
-                            {g && (
-                              <span className="block truncate text-[11px] text-muted-foreground">
-                                {titulo(uninominal && g.candidato ? g.candidato : g.partidoNombre)} · {g.pct}
+                        {seguido ? (
+                          <button
+                            type="button"
+                            onClick={() => irA(h.codigo)}
+                            className="group flex w-full items-center gap-3 rounded-xl border border-transparent bg-surface px-3 py-2 text-left text-sm transition-all hover:-translate-y-0.5 hover:border-sky-400/40 hover:shadow-md"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-medium group-hover:text-sky-700 dark:group-hover:text-sky-300">
+                                {titulo(h.nombre)}
                               </span>
-                            )}
-                          </span>
-                          {g && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{fmt(g.votantes)} votantes</span>}
-                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        </button>
+                              <span className="mt-1.5 flex items-center">
+                                <Barra
+                                  pct={((votosHijo.get(h.codigo)?.votos ?? 0) / maxHijo) * 100}
+                                  color={seguido.partido.color}
+                                />
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-right tabular-nums">
+                              <span className="block text-sm font-semibold">
+                                {votosHijo.get(h.codigo)?.votos == null ? "…" : fmt(votosHijo.get(h.codigo)!.votos!)}
+                              </span>
+                              <span className="block text-[11px] text-muted-foreground">
+                                {votosHijo.get(h.codigo)?.pct || "votos"}
+                              </span>
+                            </span>
+                            <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => irA(h.codigo)}
+                            className="group flex w-full items-center gap-2 rounded-xl border border-transparent bg-surface px-3 py-2 text-left text-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400/40 hover:shadow-md"
+                          >
+                            <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: g?.color ?? "#cbd5e1" }} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-medium group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                                {titulo(h.nombre)}
+                              </span>
+                              {g && (
+                                <span className="block truncate text-[11px] text-muted-foreground">
+                                  {titulo(uninominal && g.candidato ? g.candidato : g.partidoNombre)} · {g.pct}
+                                </span>
+                              )}
+                            </span>
+                            {g && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{fmt(g.votantes)} votantes</span>}
+                            <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -734,9 +1058,24 @@ export function ExploradorElectoral() {
 
             {c ? (
               comoRanking ? (
-                <RankingCandidatos key={url} c={c} filtro={filtro} eleccionId={vista?.eleccion.id ?? eleccionId} />
+                <RankingCandidatos
+                  key={url}
+                  c={c}
+                  filtro={filtro}
+                  eleccionId={vista?.eleccion.id ?? eleccionId}
+                  onSeguir={seguir}
+                  seguido={seguidoKey}
+                />
               ) : (
-                <TablaPartidos key={`${url}-${circ}`} c={c} filtro={filtro} eleccionId={vista?.eleccion.id ?? eleccionId} />
+                <TablaPartidos
+                  key={`${url}-${circ}`}
+                  c={c}
+                  filtro={filtro}
+                  eleccionId={vista?.eleccion.id ?? eleccionId}
+                  onSeguir={seguir}
+                  seguido={seguidoKey}
+                  abrir={seguido?.partido.codigo}
+                />
               )
             ) : loading ? (
               <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
