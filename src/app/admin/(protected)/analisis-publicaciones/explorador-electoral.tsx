@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  ArrowUpDown,
   Building2,
   ChevronDown,
   ChevronRight,
@@ -166,8 +167,6 @@ type Seguido = {
   partido: Pick<PartidoResultado, "codigo" | "nombre" | "color" | "logo">;
 };
 
-const claveCandidato = (partido: string, candidato: string) => `${partido}-${candidato}`;
-
 const RONDAS = 8;
 
 /** Votos del candidato seguido. Si quedaron territorios sin consultar, se vuelven a pedir por tandas. */
@@ -247,16 +246,15 @@ function textoSobre(rgb: string) {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#0a0a0c" : "#ffffff";
 }
 
-function BotonSeguir({ activo, onClick }: { activo: boolean; onClick: () => void }) {
+function BotonSeguir({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={activo}
-      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-600 to-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-default disabled:opacity-70"
+      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-600 to-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110"
     >
       <MapPinned className="size-3.5" aria-hidden="true" />
-      {activo ? "Siguiendo sus votos por territorio" : "Ver sus votos por territorio, hasta la mesa"}
+      Ver sus votos por territorio, hasta la mesa
     </button>
   );
 }
@@ -274,14 +272,14 @@ function Barra({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-type AlSeguir = { onSeguir: (x: Candidato, p: PartidoResultado) => void; seguido: string | null };
+/** Al elegir "ver sus votos", el tablero pasa a mostrar solo a ese candidato. */
+type AlSeguir = { onSeguir: (x: Candidato, p: PartidoResultado) => void };
 
 function RankingCandidatos({
   c,
   filtro,
   eleccionId,
   onSeguir,
-  seguido,
 }: { c: Circunscripcion; filtro: string; eleccionId: string } & AlSeguir) {
   const [abierto, setAbierto] = React.useState<string | null>(null);
   const lista = c.partidos
@@ -365,7 +363,7 @@ function RankingCandidatos({
                     </span>
                   ) : null}
                   <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                    {seguido === claveCandidato(x.partido.codigo, x.codigo) ? "Siguiendo · hoja de vida" : "Votos y hoja de vida"}
+                    Votos y hoja de vida
                     <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
                   </span>
                 </span>
@@ -373,10 +371,7 @@ function RankingCandidatos({
             </button>
             {open && (
               <>
-                <BotonSeguir
-                  activo={seguido === claveCandidato(x.partido.codigo, x.codigo)}
-                  onClick={() => onSeguir(x, x.partido)}
-                />
+                <BotonSeguir onClick={() => onSeguir(x, x.partido)} />
                 <HojaDeVidaPanel cedula={x.cedula} nombre={x.nombre} />
               </>
             )}
@@ -394,7 +389,6 @@ function CandidatosDeLista({
   eleccionId,
   partido,
   onSeguir,
-  seguido,
 }: {
   candidatos: Candidato[];
   filtro: string;
@@ -425,9 +419,6 @@ function CandidatosDeLista({
               <FotoCandidato eleccionId={eleccionId} candidato={x} logo={partido.logo} color={partido.color} className="size-8" />
               <span className="w-7 shrink-0 text-[11px] tabular-nums text-muted-foreground">{x.codigo}</span>
               <span className="min-w-0 flex-1 truncate">{titulo(x.nombre)}</span>
-              {seguido === claveCandidato(partido.codigo, x.codigo) && (
-                <MapPinned className="size-3.5 shrink-0 text-sky-600" aria-label="Siguiendo sus votos" />
-              )}
               {x.electo && (
                 <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                   Curul
@@ -441,10 +432,7 @@ function CandidatosDeLista({
             </button>
             {abierto === x.codigo && (
               <>
-                <BotonSeguir
-                  activo={seguido === claveCandidato(partido.codigo, x.codigo)}
-                  onClick={() => onSeguir(x, partido)}
-                />
+                <BotonSeguir onClick={() => onSeguir(x, partido)} />
                 <HojaDeVidaPanel cedula={x.cedula} nombre={x.nombre} />
               </>
             )}
@@ -460,16 +448,8 @@ function TablaPartidos({
   filtro,
   eleccionId,
   onSeguir,
-  seguido,
-  abrir,
-}: {
-  c: Circunscripcion;
-  filtro: string;
-  eleccionId: string;
-  /** Partido que empieza abierto: el del candidato seguido. */
-  abrir?: string;
-} & AlSeguir) {
-  const [abierto, setAbierto] = React.useState<string | null>(abrir ?? null);
+}: { c: Circunscripcion; filtro: string; eleccionId: string } & AlSeguir) {
+  const [abierto, setAbierto] = React.useState<string | null>(null);
   const partidos = [...c.partidos].sort((a, b) => b.curules - a.curules || b.votos - a.votos);
   const q = filtro.trim().toLowerCase();
   const visibles = q
@@ -532,7 +512,6 @@ function TablaPartidos({
                 eleccionId={eleccionId}
                 partido={p}
                 onSeguir={onSeguir}
-                seguido={seguido}
               />
             )}
           </li>
@@ -549,6 +528,12 @@ function TablaPartidos({
 }
 
 // ------------------------------------------------------------ pantalla ---
+
+/** Tarjetas del candidato seguido: votos, puesto, peso en su lista (o distancia) y territorios con votos. */
+const KPI_ICONOS_SEGUIDO = [Vote, Trophy, Percent, MapPin];
+const KPI_ICONOS_SEGUIDO_UNINOMINAL = [Vote, Trophy, ArrowUpDown, MapPin];
+
+const pctTexto = (n: number) => `${(n * 100).toLocaleString("es-CO", { maximumFractionDigits: 1 })}%`;
 
 const KPI_STYLES = [
   { icon: Vote, card: "from-emerald-500 to-teal-600 shadow-emerald-500/30" },
@@ -619,7 +604,6 @@ export function ExploradorElectoral() {
   const uninominal = vista?.corporacion.tipo === "uninominal";
   const hayCandidatos = !!c?.partidos.some((p) => p.candidatos.some((x) => !x.soloLista));
   const blancos = circs.reduce((acc, x) => acc + x.blancos, 0);
-  const seguidoKey = seguido ? claveCandidato(seguido.partido.codigo, seguido.candidato.codigo) : null;
   const seguir = (x: Candidato, p: PartidoResultado) => {
     setSeguidoSel({
       clave,
@@ -672,6 +656,55 @@ export function ExploradorElectoral() {
   }
 
   const nivelHijos = vista?.hijos[0]?.nivel;
+
+  // El candidato seguido en el territorio visible: su puesto entre todos y dentro de su lista.
+  const cSeguido = seguido
+    ? (circs.find((x) => x.codigo === seguido.circ) ?? (circs.length === 1 ? circs[0] : undefined))
+    : undefined;
+  const ranking = (cSeguido?.partidos ?? [])
+    .flatMap((p) => p.candidatos.filter((x) => !x.soloLista).map((x) => ({ x, p })))
+    .sort((a, b) => b.x.votos - a.x.votos);
+  const puesto = seguido
+    ? ranking.findIndex(({ x, p }) => p.codigo === seguido.partido.codigo && x.codigo === seguido.candidato.codigo)
+    : -1;
+  const aqui = puesto >= 0 ? ranking[puesto] : null;
+  const rival = aqui && ranking.length > 1 ? ranking[puesto === 0 ? 1 : 0] : null;
+  const enLista = aqui ? aqui.p.candidatos.filter((x) => !x.soloLista).sort((a, b) => b.votos - a.votos) : [];
+  const puestoLista = aqui ? enLista.findIndex((x) => x.codigo === aqui.x.codigo) + 1 : 0;
+  const conVotos = (votos.data?.hijos ?? []).filter((h) => (h.votos ?? 0) > 0).length;
+  const pctAqui = votos.data?.pct || aqui?.x.pct;
+  const kpisSeguido = seguido
+    ? [
+        {
+          label: `Votos en ${lugar}`,
+          value: votos.data ? fmt(votos.data.votos) : aqui ? fmt(aqui.x.votos) : "…",
+          hint: pctAqui ? `${pctAqui} de los válidos` : "",
+        },
+        {
+          label: "Puesto aquí",
+          value: aqui ? `#${fmt(puesto + 1)}` : "—",
+          hint: aqui ? `entre ${fmt(ranking.length)} candidatos` : "no aparece en este territorio",
+        },
+        uninominal
+          ? {
+              label: puesto === 0 ? "Ventaja sobre el segundo" : "Distancia al primero",
+              value: aqui && rival ? fmt(Math.abs(aqui.x.votos - rival.x.votos)) : "—",
+              hint: rival ? (puesto === 0 ? "votos sobre el segundo" : "votos detrás del primero") : "",
+            }
+          : {
+              label: "Peso en su lista",
+              value: aqui && aqui.p.votos ? pctTexto(aqui.x.votos / aqui.p.votos) : "—",
+              hint: aqui ? `de los ${fmt(aqui.p.votos)} votos de su partido` : "",
+            },
+        vista && vista.hijos.length > 0
+          ? {
+              label: `${NIVELES[nivelHijos ?? 2]}s con votos`,
+              value: votos.data && !votos.loading ? `${fmt(conVotos)} de ${fmt(vista.hijos.length)}` : "…",
+              hint: "donde obtuvo al menos un voto",
+            }
+          : { label: "Votantes aquí", value: r ? fmt(r.votantes) : "—", hint: r ? `Participación ${r.participacion}` : "" },
+      ]
+    : null;
   const pideTerritorio = vista && !hayCandidatos && vista.ambito.nivel < vista.corporacion.nivelEleccion;
   // Consultas donde cada partido lleva un solo candidato (2022) se leen como ranking;
   // si cada consulta agrupa a varios (2026), por consulta.
@@ -700,7 +733,7 @@ export function ExploradorElectoral() {
           <div className="relative">
             <p className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide backdrop-blur">
               <Vote className="size-3.5" aria-hidden="true" />
-              Resultados oficiales · todos los candidatos
+              {seguido ? `Resultados oficiales · ${titulo(seguido.candidato.nombre)}` : "Resultados oficiales · todos los candidatos"}
             </p>
             <p className="mt-2 text-xl font-bold tracking-tight sm:text-2xl">{encabezado}</p>
             <p className="mt-1 text-xs text-white/80">
@@ -765,8 +798,18 @@ export function ExploradorElectoral() {
                 <MapPinned className="size-3.5" aria-hidden="true" />
                 Siguiendo sus votos hasta la mesa
               </p>
-              <p className="truncate font-semibold">{titulo(seguido.candidato.nombre)}</p>
-              <p className="truncate text-xs text-muted-foreground">{titulo(seguido.partido.nombre)}</p>
+              <p className="flex items-center gap-2 font-semibold">
+                <span className="truncate">{titulo(seguido.candidato.nombre)}</span>
+                {seguido.candidato.electo && (
+                  <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    {uninominal ? "Electo" : "Curul"}
+                  </span>
+                )}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {titulo(seguido.partido.nombre)}
+                {seguido.candidato.formula && <> · Fórmula: {titulo(seguido.candidato.formula)}</>}
+              </p>
             </div>
             <div className="text-right">
               <p className="text-2xl font-bold tabular-nums">{votos.data ? fmt(votos.data.votos) : "…"}</p>
@@ -820,12 +863,12 @@ export function ExploradorElectoral() {
           </p>
         )}
 
-        {/* KPIs */}
-        {r && (
+        {/* KPIs: del territorio, o del candidato seguido */}
+        {(seguido || r) && (
           <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {kpis.map((k, i) => {
+            {(kpisSeguido ?? kpis).map((k, i) => {
               const s = KPI_STYLES[i];
-              const Icon = s.icon;
+              const Icon = kpisSeguido ? (uninominal ? KPI_ICONOS_SEGUIDO_UNINOMINAL : KPI_ICONOS_SEGUIDO)[i] : s.icon;
               return (
                 <div
                   key={`${url}-${k.label}`}
@@ -1013,7 +1056,41 @@ export function ExploradorElectoral() {
             )}
           </div>
 
-          {/* Resultados */}
+          {/* Resultados: todos los partidos, o solo el candidato seguido */}
+          {seguido ? (
+            <div className="min-w-0 space-y-4">
+              {aqui && !uninominal && (
+                <div className="cabal-rise rounded-2xl border border-border bg-surface p-4 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Su lista en {lugar}
+                  </p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <LogoPartido
+                      eleccionId={eleccionId}
+                      logo={aqui.p.logo}
+                      nombre={aqui.p.nombre}
+                      color={aqui.p.color}
+                      className="size-10"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">{titulo(aqui.p.nombre)}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {fmt(aqui.p.votos)} votos · {aqui.p.pct}
+                        {aqui.p.curules > 0 && ` · ${aqui.p.curules} ${aqui.p.curules === 1 ? "curul" : "curules"}`}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Barra pct={aqui.p.votos ? (aqui.x.votos / aqui.p.votos) * 100 : 0} color={aqui.p.color} />
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      #{puestoLista} de {fmt(enLista.length)} en su lista
+                    </span>
+                  </div>
+                </div>
+              )}
+              <HojaDeVidaPanel cedula={seguido.candidato.cedula} nombre={seguido.candidato.nombre} />
+            </div>
+          ) : (
           <div className="min-w-0">
             {circs.length > 1 && (
               <div className="mb-3 flex flex-wrap gap-1.5">
@@ -1064,7 +1141,6 @@ export function ExploradorElectoral() {
                   filtro={filtro}
                   eleccionId={vista?.eleccion.id ?? eleccionId}
                   onSeguir={seguir}
-                  seguido={seguidoKey}
                 />
               ) : (
                 <TablaPartidos
@@ -1073,8 +1149,6 @@ export function ExploradorElectoral() {
                   filtro={filtro}
                   eleccionId={vista?.eleccion.id ?? eleccionId}
                   onSeguir={seguir}
-                  seguido={seguidoKey}
-                  abrir={seguido?.partido.codigo}
                 />
               )
             ) : loading ? (
@@ -1083,6 +1157,7 @@ export function ExploradorElectoral() {
               </p>
             ) : null}
           </div>
+          )}
         </div>
       </div>
     </div>
