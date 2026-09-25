@@ -1,11 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 
 import { getVistaElectoral, getVotosCandidato } from "@/lib/gov-data/elecciones/resultados";
+import { generarTexto } from "@/lib/ia-config";
 
 export const maxDuration = 60;
-
-const MODEL = "claude-opus-5-5";
 
 /**
  * Análisis con IA de los votos de un candidato en un territorio: dónde es
@@ -17,9 +15,6 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as Record<string, string> | null;
   if (!body?.e || !body.c || !body.p || !body.k) {
     return NextResponse.json({ error: "Faltan la elección, el cargo o el candidato." }, { status: 400 });
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "Falta configurar ANTHROPIC_API_KEY en Vercel." }, { status: 503 });
   }
   try {
     const params = { eleccion: body.e, corporacion: body.c, ambito: body.a || null };
@@ -55,15 +50,12 @@ export async function POST(req: Request) {
       ...hijos,
     ].join("\n");
 
-    const client = new Anthropic();
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2000,
+    const texto = await generarTexto({
+      maxTokens: 2000,
       system:
         "Eres analista electoral en Colombia. Analiza SOLO con los datos oficiales que te dan (preconteo de la Registraduría); no inventes cifras, encuestas ni datos demográficos. Escribe en español, claro y accionable, con estas secciones en markdown: '## Resumen', '## Dónde es fuerte', '## Dónde debe mejorar' (territorios con pocos votos o bajo porcentaje frente a su promedio, con cifras), '## Recomendaciones' (3 a 5, concretas y ligadas a los territorios). Si faltan datos, dilo.",
-      messages: [{ role: "user", content: datos }],
+      user: datos,
     });
-    const texto = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
     return NextResponse.json({ analisis: texto });
   } catch (err) {
     return NextResponse.json(
