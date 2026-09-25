@@ -16,7 +16,7 @@ export type Proveedor = "anthropic" | "gemini" | "openai";
 
 export const PROVEEDORES: Record<Proveedor, { nombre: string; modelo: string }> = {
   anthropic: { nombre: "Claude (Anthropic)", modelo: "claude-opus-5-5" },
-  gemini: { nombre: "Gemini (Google)", modelo: "gemini-2.5-pro" },
+  gemini: { nombre: "Gemini (Google)", modelo: "gemini-3.1-pro-preview" },
   openai: { nombre: "OpenAI", modelo: "gpt-5" },
 };
 
@@ -148,4 +148,43 @@ export async function generarTexto({ system, user, maxTokens }: { system: string
   const body = await res.json();
   if (!res.ok) throw new Error(`OpenAI respondió: ${body.error?.message ?? res.status}`);
   return body.choices?.[0]?.message?.content ?? "";
+}
+
+/** Clave del proveedor: la escrita ahora, la guardada o (Anthropic) la variable de entorno. */
+async function claveDe(proveedor: Proveedor, escrita?: string) {
+  if (escrita?.trim()) return escrita.trim();
+  const g = await leer();
+  if (g?.claves[proveedor]) return descifrar(g.claves[proveedor]!);
+  return proveedor === "anthropic" ? process.env.ANTHROPIC_API_KEY : undefined;
+}
+
+/** Modelos de texto que ofrece el proveedor a esta clave, consultados en su API. */
+export async function listarModelos(proveedor: Proveedor, escrita?: string): Promise<string[]> {
+  const clave = await claveDe(proveedor, escrita);
+  if (!clave) throw new Error("Escribe la clave API para ver los modelos.");
+  if (proveedor === "gemini") {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+      headers: { "x-goog-api-key": clave },
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(`Gemini respondió: ${body.error?.message ?? res.status}`);
+    return (body.models ?? [])
+      .filter((m: { supportedGenerationMethods?: string[] }) => m.supportedGenerationMethods?.includes("generateContent"))
+      .map((m: { name: string }) => m.name.replace(/^models\//, ""));
+  }
+  if (proveedor === "openai") {
+    const res = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${clave}` } });
+    const body = await res.json();
+    if (!res.ok) throw new Error(`OpenAI respondió: ${body.error?.message ?? res.status}`);
+    return (body.data ?? [])
+      .map((m: { id: string }) => m.id)
+      .filter((id: string) => /^(gpt|o\d)/.test(id))
+      .sort();
+  }
+  const res = await fetch("https://api.anthropic.com/v1/models?limit=100", {
+    headers: { "x-api-key": clave, "anthropic-version": "2023-06-01" },
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(`Anthropic respondió: ${body.error?.message ?? res.status}`);
+  return (body.data ?? []).map((m: { id: string }) => m.id);
 }

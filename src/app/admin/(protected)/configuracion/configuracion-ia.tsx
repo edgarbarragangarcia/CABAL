@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, KeyRound, Loader2, TriangleAlert } from "lucide-react";
+import { Check, KeyRound, ListRestart, Loader2, TriangleAlert } from "lucide-react";
 
 type Proveedor = "anthropic" | "gemini" | "openai";
 type Resumen = {
@@ -14,7 +14,7 @@ type Resumen = {
 
 const OPCIONES: { id: Proveedor; nombre: string; modelo: string; ayuda: string }[] = [
   { id: "anthropic", nombre: "Claude (Anthropic)", modelo: "claude-opus-5-5", ayuda: "console.anthropic.com → API keys" },
-  { id: "gemini", nombre: "Gemini (Google)", modelo: "gemini-2.5-pro", ayuda: "aistudio.google.com → Get API key" },
+  { id: "gemini", nombre: "Gemini (Google)", modelo: "gemini-3.1-pro-preview", ayuda: "aistudio.google.com → Get API key" },
   { id: "openai", nombre: "OpenAI", modelo: "gpt-5", ayuda: "platform.openai.com → API keys" },
 ];
 
@@ -24,6 +24,23 @@ export function ConfiguracionIA() {
   const [modelo, setModelo] = React.useState("");
   const [clave, setClave] = React.useState("");
   const [estado, setEstado] = React.useState<{ guardando?: boolean; ok?: boolean; error?: string }>({});
+  const [lista, setLista] = React.useState<{ proveedor: Proveedor; modelos?: string[]; error?: string; cargando?: boolean } | null>(null);
+  const modelos = lista?.proveedor === proveedor ? lista : null;
+
+  const cargarModelos = () => {
+    setLista({ proveedor, cargando: true });
+    fetch("/api/admin/configuracion/modelos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proveedor, clave }),
+    })
+      .then(async (r) => {
+        const body = await r.json();
+        if (!r.ok) throw new Error(body.error ?? "No se pudo consultar.");
+        setLista({ proveedor, modelos: body.modelos });
+      })
+      .catch((err: Error) => setLista({ proveedor, error: err.message }));
+  };
 
   React.useEffect(() => {
     fetch("/api/admin/configuracion")
@@ -95,15 +112,49 @@ export function ConfiguracionIA() {
         </div>
       </fieldset>
 
-      <label className="block text-sm">
-        <span className="font-semibold">Modelo</span>
-        <input
-          value={modelo}
-          onChange={(e) => setModelo(e.target.value)}
-          placeholder={opcion.modelo}
-          className="mt-1.5 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
-        />
-      </label>
+      <div className="text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-semibold">Modelo</span>
+          <button
+            type="button"
+            onClick={cargarModelos}
+            disabled={modelos?.cargando}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium hover:bg-surface-muted disabled:opacity-60"
+          >
+            {modelos?.cargando ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <ListRestart className="size-3.5" aria-hidden="true" />}
+            Ver modelos disponibles
+          </button>
+        </div>
+        {modelos?.modelos ? (
+          <select
+            value={modelo}
+            onChange={(e) => setModelo(e.target.value)}
+            aria-label="Modelo"
+            className="mt-1.5 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
+          >
+            {!modelos.modelos.includes(modelo) && <option value={modelo}>{modelo || "Elige un modelo"}</option>}
+            {modelos.modelos.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            value={modelo}
+            onChange={(e) => setModelo(e.target.value)}
+            placeholder={opcion.modelo}
+            aria-label="Modelo"
+            className="mt-1.5 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        )}
+        <span className="mt-1 block text-xs text-muted-foreground">
+          {modelos?.error ??
+            (modelos?.modelos
+              ? `${modelos.modelos.length} modelos que tu clave puede usar.`
+              : "Pega la clave abajo y toca «Ver modelos disponibles» para elegir de la lista del proveedor.")}
+        </span>
+      </div>
 
       <label className="block text-sm">
         <span className="flex items-center gap-1.5 font-semibold">
