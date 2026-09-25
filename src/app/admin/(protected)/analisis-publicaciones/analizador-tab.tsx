@@ -22,7 +22,7 @@ type Tarjeta =
   | { tipo: "anio"; anio: string }
   | { tipo: "cargo"; eleccion: string; sigla: string; nombre: string }
   | { tipo: "territorio"; codigo: string; nombre: string; nivel: number }
-  | { tipo: "partido"; codigo: string; nombre: string; color: string };
+  | { tipo: "partido"; codigo: string; nombre: string; color: string; logo?: string };
 
 const ESTILO: Record<Tarjeta["tipo"], { icono: React.ElementType; clase: string; etiqueta: string }> = {
   anio: { icono: CalendarDays, clase: "from-emerald-500 to-teal-600", etiqueta: "Año" },
@@ -51,8 +51,27 @@ function useVista(url: string | null) {
   return { vista: actual?.vista, error: actual?.error, loading: !!url && !actual };
 }
 
-function Chip({ t, onAdd }: { t: Tarjeta; onAdd: (t: Tarjeta) => void }) {
+function Chip({ t, onAdd, eleccionId }: { t: Tarjeta; onAdd: (t: Tarjeta) => void; eleccionId?: string }) {
   const e = ESTILO[t.tipo];
+  if (t.tipo === "partido") {
+    // Partidos: su color y su logo, para reconocerlos de un vistazo.
+    return (
+      <button
+        type="button"
+        draggable
+        onDragStart={(ev) => ev.dataTransfer.setData("application/json", JSON.stringify(t))}
+        onClick={() => onAdd(t)}
+        title="Arrástrala al lienzo o haz clic"
+        className="inline-flex max-w-full cursor-grab items-center gap-2 rounded-xl py-1.5 pr-3 pl-1.5 text-left text-xs font-semibold text-white shadow-md transition hover:-translate-y-0.5 active:cursor-grabbing"
+        style={{ background: `linear-gradient(135deg, ${t.color}, color-mix(in oklab, ${t.color} 70%, black))` }}
+      >
+        <span className="shrink-0 rounded-lg bg-white p-0.5">
+          <LogoPartido eleccionId={eleccionId ?? ""} logo={t.logo} nombre={t.nombre} color={t.color} className="size-7" />
+        </span>
+        <span className="truncate">{titulo(t.nombre)}</span>
+      </button>
+    );
+  }
   const Icon = e.icono;
   const texto = t.tipo === "anio" ? t.anio : titulo(t.nombre);
   return (
@@ -135,7 +154,7 @@ export function AnalizadorTab() {
   const [anio, setAnio] = React.useState<string | null>(null);
   const [cargo, setCargo] = React.useState<{ eleccion: string; sigla: string; nombre: string } | null>(null);
   const [ruta, setRuta] = React.useState<{ codigo: string; nombre: string; nivel: number }[]>([]);
-  const [partido, setPartido] = React.useState<{ codigo: string; nombre: string; color: string } | null>(null);
+  const [partido, setPartido] = React.useState<{ codigo: string; nombre: string; color: string; logo?: string } | null>(null);
   const [sobre, setSobre] = React.useState(false);
   const [filtro, setFiltro] = React.useState("");
   const [candSel, setCandSel] = React.useState<{ url: string; codigo: string; nombre: string } | null>(null);
@@ -193,7 +212,7 @@ export function AnalizadorTab() {
             .filter((p) => p.votos > 0 && p.nombre.toLowerCase().includes(q))
             .sort((a, b) => b.votos - a.votos)
             .slice(0, 30)
-            .map((p) => ({ tipo: "partido" as const, codigo: p.codigo, nombre: p.nombre, color: p.color })),
+            .map((p) => ({ tipo: "partido" as const, codigo: p.codigo, nombre: p.nombre, color: p.color, logo: p.logo })),
         ];
 
   const puestas: Tarjeta[] = [
@@ -237,7 +256,7 @@ export function AnalizadorTab() {
               <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Consultando la Registraduría...
             </p>
           )}
-          {!loading && disponibles.map((t, i) => <Chip key={i} t={t} onAdd={agregar} />)}
+          {!loading && disponibles.map((t, i) => <Chip key={i} t={t} onAdd={agregar} eleccionId={cargo?.eleccion} />)}
         </div>
       </aside>
 
@@ -273,6 +292,7 @@ export function AnalizadorTab() {
               <span
                 key={i}
                 className={`inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br ${e.clase} px-3 py-1.5 text-xs font-semibold text-white shadow`}
+                style={t.tipo === "partido" ? { background: t.color } : undefined}
               >
                 <span className="opacity-75">{t.tipo === "territorio" ? NIVELES[t.nivel] : e.etiqueta}:</span>
                 {t.tipo === "anio" ? t.anio : titulo(t.nombre)}
