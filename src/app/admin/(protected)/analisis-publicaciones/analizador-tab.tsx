@@ -5,6 +5,7 @@ import { CalendarDays, Flag, GripVertical, Landmark, Loader2, MapPin, MousePoint
 
 import { ELECCIONES, NIVELES } from "@/lib/gov-data/elecciones/catalogo";
 import type { VistaElectoral } from "@/lib/gov-data/elecciones/resultados";
+import { LogoPartido } from "./candidato-ui";
 import { titulo } from "./nombres";
 
 /**
@@ -245,7 +246,8 @@ export function AnalizadorTab() {
 
             {p ? (
               <div className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-border">
-                <p className="text-sm font-semibold">
+                <p className="flex items-center gap-2 text-sm font-semibold">
+                  <LogoPartido eleccionId={cargo!.eleccion} logo={p.logo} nombre={p.nombre} color={p.color} className="size-9" />
                   {titulo(p.nombre)} en {lugar}
                   {p.curules > 0 && ` · ${p.curules} curules`}
                 </p>
@@ -256,10 +258,10 @@ export function AnalizadorTab() {
                     .map((x) => (
                       <li key={x.codigo} className="flex items-center gap-3 text-sm">
                         <span className="min-w-0 flex-1 truncate">{x.soloLista ? "Solo por la lista" : titulo(x.nombre)}</span>
-                        <span className="h-2 w-32 overflow-hidden rounded-full bg-border/60">
+                        <span className="h-3 w-40 overflow-hidden rounded-full bg-border/60">
                           <span
                             className="block h-full rounded-full"
-                            style={{ width: `${(x.votos / Math.max(1, p.votos)) * 100}%`, background: p.color }}
+                            style={{ width: `${(x.votos / Math.max(1, p.votos)) * 100}%`, background: `linear-gradient(90deg, ${p.color}99, ${p.color})` }}
                           />
                         </span>
                         <span className="w-20 text-right font-semibold tabular-nums">{fmt(x.votos)}</span>
@@ -274,11 +276,27 @@ export function AnalizadorTab() {
                   <ul className="mt-3 space-y-1.5">
                     {partidos.slice(0, 15).map((x) => (
                       <li key={x.codigo} className="flex items-center gap-3 text-sm">
-                        <span className="min-w-0 flex-1 truncate">{titulo(x.nombre)}</span>
-                        <span className="h-2 w-40 overflow-hidden rounded-full bg-border/60">
-                          <span className="block h-full rounded-full" style={{ width: `${(x.votos / max) * 100}%`, background: x.color }} />
+                        <LogoPartido
+                          eleccionId={cargo!.eleccion}
+                          logo={x.logo}
+                          nombre={x.nombre}
+                          color={x.color}
+                          className="size-9 shrink-0"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-baseline justify-between gap-2">
+                            <span className="truncate font-medium">{titulo(x.nombre)}</span>
+                            <span className="shrink-0 font-semibold tabular-nums">
+                              {fmt(x.votos)} <span className="text-xs font-normal text-muted-foreground">{x.pct}</span>
+                            </span>
+                          </span>
+                          <span className="mt-1 block h-3 overflow-hidden rounded-full bg-border/60">
+                            <span
+                              className="cabal-bar block h-full rounded-full"
+                              style={{ width: `${Math.max(1.5, (x.votos / max) * 100)}%`, background: `linear-gradient(90deg, ${x.color}99, ${x.color})` }}
+                            />
+                          </span>
                         </span>
-                        <span className="w-24 text-right font-semibold tabular-nums">{fmt(x.votos)}</span>
                       </li>
                     ))}
                   </ul>
