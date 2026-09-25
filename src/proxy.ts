@@ -83,12 +83,31 @@ async function guardAdmin(request: NextRequest): Promise<NextResponse | null> {
   return null;
 }
 
+/**
+ * Las APIs del panel exigen la misma sesión, salvo el login y el logout:
+ * detrás están el Asistente (Claude y la base de datos con la llave de
+ * servicio) y el buscador de hojas de vida, que no deben quedar abiertos.
+ */
+async function guardAdminApi(request: NextRequest): Promise<NextResponse | null> {
+  const { pathname } = request.nextUrl;
+  if (pathname === "/api/admin/login" || pathname === "/api/admin/logout") return null;
+
+  const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
+  if (session) return null;
+  return NextResponse.json({ error: "Inicia sesión en el panel administrativo." }, { status: 401 });
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/admin")) {
     const redirect = await guardAdmin(request);
     if (redirect) return redirect;
+  }
+
+  if (pathname.startsWith("/api/admin/")) {
+    const denied = await guardAdminApi(request);
+    if (denied) return denied;
   }
 
   if (!pathname.startsWith(PROTECTED_API_PREFIX)) {
