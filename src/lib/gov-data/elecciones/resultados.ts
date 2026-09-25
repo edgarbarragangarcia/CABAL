@@ -283,7 +283,8 @@ async function descargar(url: string): Promise<Raw | null> {
     try {
       const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
       // Ámbitos sin elección para esa corporación (p. ej. JAL donde no hay).
-      if (res.status === 404 || res.status === 403) return null;
+      // Un 403 no cuenta: puede ser el firewall limitando, y esto se cachea para siempre.
+      if (res.status === 404) return null;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       // Algunos servidores responden la página de la app en vez de un 404.
@@ -302,7 +303,7 @@ async function descargar(url: string): Promise<Raw | null> {
 }
 
 /** Resultados cerrados: cada archivo se pide una sola vez y queda en la caché de datos de Next. */
-const descargarCacheado = unstable_cache(descargar, ["elecciones-preconteo-v1"], { revalidate: false });
+const descargarCacheado = unstable_cache(descargar, ["elecciones-preconteo-v2"], { revalidate: false });
 
 const enCurso = new Map<string, Promise<Raw | null>>();
 function descargarUnaVez(url: string) {

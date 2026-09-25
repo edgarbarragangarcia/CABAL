@@ -92,20 +92,26 @@ function mapaDe(v: VistaElectoral): Omit<MapaCtx, "clave"> | null {
   }
   if (!dane) return null;
   if (nivel === 3 && dane === "11001") {
-    // En Bogotá las zonas 01–20 son las localidades.
+    // En Bogotá las zonas 01–20 son las localidades. Sus ganadores vienen en
+    // `mapagan` o consultados uno a uno, según la elección.
+    const zonas = new Map<string, Ganador>();
+    for (const g of [...mapa, ...(v.ganadoresHijos ?? [])]) {
+      if (g.codigo.startsWith(v.ambito.codigo) && g.codigo.length > v.ambito.codigo.length) zonas.set(g.codigo, g);
+    }
     return {
       geoUrl: "/data/geo/bogota-localidades.json",
-      regiones: (v.ganadoresHijos ?? [])
+      regiones: [...zonas.values()]
         .map((g) => ({ g, loc: g.codigo.slice(-2) }))
         .filter(({ loc }) => Number(loc) >= 1 && Number(loc) <= 20)
         .map(({ g, loc }) => regionDe(g, loc, uni)),
     };
   }
-  if (nivel === 2 || nivel === 3) {
+  const regiones = mapa.filter((g) => g.dane).map((g) => regionDe(g, g.dane!, uni));
+  if (nivel === 2 || (nivel === 3 && regiones.length > 0)) {
     return {
       geoUrl: `/data/geo/municipios/${dane.slice(0, 2)}.json`,
       destacado: nivel === 3 ? dane : undefined,
-      regiones: mapa.filter((g) => g.dane).map((g) => regionDe(g, g.dane!, uni)),
+      regiones,
     };
   }
   return null;
@@ -116,7 +122,10 @@ function siguienteMapa(v: VistaElectoral, prev: MapaCtx | null): MapaCtx | null 
   const clave = `${v.eleccion.id}|${v.corporacion.sigla}`;
   const ctx = mapaDe(v);
   if (ctx) return { ...ctx, clave };
-  return v.ambito.nivel <= 3 || prev?.clave !== clave ? null : prev;
+  if (prev?.clave !== clave) return null;
+  // Municipio cuyo archivo trae ganadores por zona: el mapa del departamento, con él resaltado.
+  if (v.ambito.nivel === 3) return prev.geoUrl.includes("/municipios/") ? { ...prev, destacado: v.ambito.dane } : null;
+  return v.ambito.nivel < 3 ? null : prev;
 }
 
 type Estado = {
@@ -424,9 +433,13 @@ export function ExploradorElectoral() {
 
   const nivelHijos = vista?.hijos[0]?.nivel;
   const pideTerritorio = vista && !hayCandidatos && vista.ambito.nivel < vista.corporacion.nivelEleccion;
-  // Consultas de un solo partido (2022) se leen como un ranking de candidatos.
+  // Consultas donde cada partido lleva un solo candidato (2022) se leen como ranking;
+  // si cada consulta agrupa a varios (2026), por consulta.
   const comoRanking =
-    hayCandidatos && (uninominal || (vista?.corporacion.tipo === "consulta" && c?.partidos.length === 1));
+    hayCandidatos &&
+    (uninominal ||
+      (vista?.corporacion.tipo === "consulta" &&
+        !!c?.partidos.every((p) => p.candidatos.filter((x) => !x.soloLista).length <= 1)));
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-border bg-surface p-4 shadow-xl shadow-emerald-900/5 sm:p-6">
