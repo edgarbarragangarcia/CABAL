@@ -65,9 +65,7 @@ function Chip({ t, onAdd, eleccionId }: { t: Tarjeta; onAdd: (t: Tarjeta) => voi
         className="inline-flex max-w-full cursor-grab items-center gap-2 rounded-xl py-1.5 pr-3 pl-1.5 text-left text-xs font-semibold text-white shadow-md transition hover:-translate-y-0.5 active:cursor-grabbing"
         style={{ background: `linear-gradient(135deg, ${t.color}, color-mix(in oklab, ${t.color} 70%, black))` }}
       >
-        <span className="shrink-0 rounded-lg bg-white p-0.5">
-          <LogoPartido eleccionId={eleccionId ?? ""} logo={t.logo} nombre={t.nombre} color={t.color} className="size-7" />
-        </span>
+        <LogoPartido eleccionId={eleccionId ?? ""} logo={t.logo} nombre={t.nombre} color={t.color} className="size-8" />
         <span className="truncate">{titulo(t.nombre)}</span>
       </button>
     );
