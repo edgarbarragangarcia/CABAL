@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowUpRight, MapPin, Users } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
+import { PageHeader } from "@/components/sections/page-header";
 import { Reveal } from "@/components/animations/reveal";
 
 export const metadata: Metadata = {
@@ -64,21 +65,11 @@ const PROJECTS: Project[] = [
 export default function ProyectosPage() {
   return (
     <>
-      <Container as="section" className="pb-20 pt-40 sm:pt-48">
-        <Reveal className="max-w-3xl">
-          <span className="eyebrow inline-flex items-center gap-2.5 text-accent-ink">
-            <span className="h-px w-10 bg-accent/60" aria-hidden="true" />
-            Proyectos
-          </span>
-          <h1 className="mt-7 text-balance font-display text-[clamp(2.5rem,6vw,5rem)] font-normal leading-[1.02] tracking-[-0.03em]">
-            Programas con impacto medible
-          </h1>
-          <p className="mt-8 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Educación, empleabilidad y desarrollo comunitario. Tres frentes activos,
-            con cifras de cobertura que actualizamos cada trimestre.
-          </p>
-        </Reveal>
-      </Container>
+      <PageHeader
+        eyebrow="Proyectos"
+        title="Programas con impacto medible"
+        description="Educación, empleabilidad y desarrollo comunitario. Tres frentes activos, con cifras de cobertura que actualizamos cada trimestre."
+      />
 
       {/* Filas grandes alternadas en vez de tres tarjetas pequeñas: cada
           programa recibe el ancho suficiente para contarse. */}
@@ -125,14 +116,20 @@ export default function ProyectosPage() {
                     <dl className="mt-8 flex flex-wrap gap-x-10 gap-y-4">
                       {p.reach && (
                         <div className="flex items-center gap-2.5">
-                          <MapPin className="size-4 text-accent-ink" aria-hidden="true" />
+                          <MapPin
+                            className="size-4 text-accent-ink"
+                            aria-hidden="true"
+                          />
                           <dt className="sr-only">Cobertura</dt>
                           <dd className="text-sm font-medium">{p.reach}</dd>
                         </div>
                       )}
                       {p.people && (
                         <div className="flex items-center gap-2.5">
-                          <Users className="size-4 text-accent-ink" aria-hidden="true" />
+                          <Users
+                            className="size-4 text-accent-ink"
+                            aria-hidden="true"
+                          />
                           <dt className="sr-only">Beneficiarios</dt>
                           <dd className="text-sm font-medium">{p.people}</dd>
                         </div>

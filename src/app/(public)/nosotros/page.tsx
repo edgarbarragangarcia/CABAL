@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
+import { PageHeader } from "@/components/sections/page-header";
 import { Reveal } from "@/components/animations/reveal";
 
 export const metadata: Metadata = {
@@ -49,28 +50,11 @@ const PRINCIPLES = [
 export default function NosotrosPage() {
   return (
     <>
-      {/* Apertura: declaración a tamaño de portada, no un h1 de 40px con
-          un párrafo debajo. */}
-      <Container as="section" className="pb-24 pt-40 sm:pt-48">
-        <Reveal className="max-w-4xl">
-          <span className="eyebrow inline-flex items-center gap-2.5 text-accent-ink">
-            <span className="h-px w-10 bg-accent/60" aria-hidden="true" />
-            Nosotros
-          </span>
-          <h1 className="mt-7 text-balance font-display text-[clamp(2.5rem,6vw,5rem)] font-normal leading-[1.02] tracking-[-0.03em]">
-            La educación es la herramienta más poderosa para transformar una
-            comunidad
-          </h1>
-        </Reveal>
-
-        <Reveal delay={0.1}>
-          <p className="mt-10 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            La Fundación Escuela Libertad trabaja de la mano con familias, líderes
-            locales y aliados estratégicos para construir programas educativos y
-            sociales sostenibles en todo el territorio colombiano.
-          </p>
-        </Reveal>
-      </Container>
+      <PageHeader
+        eyebrow="Nosotros"
+        title="La educación es la herramienta más poderosa para transformar una comunidad"
+        description="La Fundación Escuela Libertad trabaja de la mano con familias, líderes locales y aliados estratégicos para construir programas educativos y sociales sostenibles en todo el territorio colombiano."
+      />
 
       {/* Propósito: rejilla con etiqueta fija a la izquierda. El contraste
           de escala entre la versalita y el serif grande es lo que da la
@@ -105,7 +89,9 @@ export default function NosotrosPage() {
           {PRINCIPLES.map((p, i) => (
             <Reveal key={p.n} delay={i * 0.06}>
               <div className="group h-full border-b border-border py-10 pr-8 sm:odd:border-r sm:odd:pr-12 sm:even:pl-12">
-                <span className="font-display text-sm text-accent-ink">{p.n}</span>
+                <span className="font-display text-sm text-accent-ink">
+                  {p.n}
+                </span>
                 <h3 className="mt-4 font-display text-2xl font-normal tracking-tight">
                   {p.title}
                 </h3>
@@ -123,7 +109,10 @@ export default function NosotrosPage() {
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 opacity-70 [background:radial-gradient(45%_60%_at_20%_20%,#0a4f37_0%,transparent_65%),radial-gradient(40%_50%_at_85%_80%,#b3893c_0%,transparent_60%)]"
         />
-        <div className="bg-grain pointer-events-none absolute inset-0 opacity-[0.15] mix-blend-overlay" aria-hidden="true" />
+        <div
+          className="bg-grain pointer-events-none absolute inset-0 opacity-[0.15] mix-blend-overlay"
+          aria-hidden="true"
+        />
 
         <Container className="relative flex flex-col items-start gap-8 md:flex-row md:items-end md:justify-between">
           <Reveal>
