@@ -4,6 +4,7 @@ import * as React from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   CalendarDays,
+  FlaskConical,
   ChevronDown,
   Circle,
   CircleCheck,
@@ -41,6 +42,7 @@ import {
   type Dimension,
   type RedCrmResponse,
 } from "@/lib/crm/types";
+import { demoSnapshot } from "@/lib/crm/demo";
 import { OTHER_COMMUNITY_COLOR, RedCrmGraph, communityColor } from "./red-crm-graph";
 
 const DIMENSION_ICON: Record<Dimension, LucideIcon> = {
@@ -112,9 +114,10 @@ function saveMapping(mapping: Mapping) {
 }
 
 /**
- * Pestaña Predicciones: la red de relaciones de los contactos de Bitrix24.
+ * Pestaña Red Cabal: la red de relaciones de los contactos de Bitrix24.
  * Quién comparte lugar, intereses o actividades, quién trajo a quién, qué
  * comunidades se forman y qué relaciones son probables aunque aún no existan.
+ * Mientras Bitrix24 no esté conectado, muestra una red de ejemplo.
  */
 export function PrediccionesTab() {
   const { body, loading, refresh } = useRedCrm();
@@ -127,7 +130,9 @@ export function PrediccionesTab() {
       </p>
     );
   }
-  if (body.status === "configurar") return <Configurar falta={body.falta} onRetry={refresh} retrying={loading} />;
+  if (body.status === "configurar") {
+    return <RedCrm snapshot={demoSnapshot()} demo={body.falta} onRefresh={refresh} refreshing={loading} />;
+  }
   if (body.status === "error") {
     return (
       <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-sm">
@@ -265,14 +270,18 @@ function Dot({ color }: { color: string }) {
 
 function RedCrm({
   snapshot,
+  demo,
   onRefresh,
   refreshing,
 }: {
   snapshot: CrmSnapshot;
+  /** Red de ejemplo: qué falta para conectar Bitrix24. */
+  demo?: { admin: boolean; bitrix: boolean };
   onRefresh: () => void;
   refreshing: boolean;
 }) {
   const { resolvedTheme } = useTheme();
+  const [showSteps, setShowSteps] = React.useState(false);
   const [mapping, setMapping] = React.useState<Mapping>(() =>
     typeof window === "undefined" ? {} : readMapping()
   );
@@ -369,7 +378,11 @@ function RedCrm({
     {
       label: "Contactos analizados",
       value: fmt(snapshot.contacts.length),
-      sub: snapshot.total > snapshot.contacts.length ? `los más recientes de ${fmt(snapshot.total)}` : "todos los del CRM",
+      sub: demo
+        ? "inventados, de ejemplo"
+        : snapshot.total > snapshot.contacts.length
+          ? `los más recientes de ${fmt(snapshot.total)}`
+          : "todos los del CRM",
     },
     { label: "Relaciones encontradas", value: fmt(network.edges.length), sub: "por parecido o referido" },
     { label: "Comunidades", value: fmt(groups), sub: "de 3 o más personas" },
@@ -383,6 +396,29 @@ function RedCrm({
 
   return (
     <div className="space-y-5">
+      {demo && (
+        <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-accent/40 bg-accent-soft p-4 text-sm text-accent-ink">
+          <FlaskConical className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Estás viendo datos de ejemplo</p>
+            <p className="mt-0.5">
+              Son {fmt(snapshot.contacts.length)} contactos inventados para que veas cómo funciona la red. Cuando
+              conectes Bitrix24, aquí aparecerán tus contactos reales.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSteps((v) => !v)}
+            aria-expanded={showSteps}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-accent/40 bg-surface px-4 py-2 font-medium text-foreground transition-colors hover:bg-surface-muted"
+          >
+            Cómo conectar Bitrix24
+            <ChevronDown className={`size-4 transition-transform ${showSteps ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+      {demo && showSteps && <Configurar falta={demo} onRetry={onRefresh} retrying={refreshing} />}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-lg font-semibold tracking-tight">
@@ -390,12 +426,12 @@ function RedCrm({
             Red de relaciones del CRM
           </p>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Cada punto es un contacto de Bitrix24 ({snapshot.portal}). Dos contactos quedan unidos cuando
-            comparten lugar, intereses o actividades —pesa más lo que comparten pocos que lo que comparte
-            toda la ciudad— o cuando uno trajo al otro.
+            Cada punto es un contacto {demo ? "de ejemplo" : `de Bitrix24 (${snapshot.portal})`}. Dos contactos
+            quedan unidos cuando comparten lugar, intereses o actividades —pesa más lo que comparten pocos que lo
+            que comparte toda la ciudad— o cuando uno trajo al otro.
           </p>
         </div>
-        <RetryButton onClick={onRefresh} busy={refreshing} label="Actualizar" />
+        {!demo && <RetryButton onClick={onRefresh} busy={refreshing} label="Actualizar" />}
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

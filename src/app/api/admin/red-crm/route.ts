@@ -8,7 +8,7 @@ import type { RedCrmResponse } from "@/lib/crm/types";
 export const maxDuration = 60;
 
 /**
- * Contactos de Bitrix24 para la red de relaciones (pestaña Predicciones).
+ * Contactos de Bitrix24 para la red de relaciones (pestaña Red Cabal).
  * `?refresh=1` ignora la copia en memoria de los últimos 10 minutos.
  *
  * El proxy solo protege las páginas /admin, no /api/admin: por eso la

@@ -91,7 +91,7 @@ export function normalizeText(s: string) {
 }
 
 /** Números al azar pero repetibles: la misma data da siempre la misma red. */
-function seededRandom(seed: number) {
+export function seededRandom(seed: number) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -327,7 +327,7 @@ export function buildNetwork(snapshot: CrmSnapshot, mapping: Mapping, enabled: R
   function communityTraits(members: number[]): Trait[] {
     const counts = new Map<number, number>();
     for (const m of members) for (const t of nodeTokens[m]) counts.set(t, (counts.get(t) ?? 0) + 1);
-    return [...counts]
+    const ranked = [...counts]
       .map(([t, count]) => {
         const pIn = count / members.length;
         const pAll = tokens[t].df / Math.max(withTokens, 1);
@@ -336,8 +336,13 @@ export function buildNetwork(snapshot: CrmSnapshot, mapping: Mapping, enabled: R
       })
       .filter((x) => x.score > 0)
       .sort((x, y) => y.score - x.score)
-      .slice(0, 3)
-      .map(({ t }) => ({ dim: tokens[t].dim, field: tokens[t].field, value: tokens[t].value }));
+      .map(({ t }) => t);
+    // Primero el mejor rasgo de cada relación (barrio, interés, actividad): así no
+    // se gastan los tres en "barrio, ciudad, departamento", que dicen lo mismo.
+    const chosen: number[] = [];
+    for (const t of ranked) if (chosen.length < 3 && !chosen.some((c) => tokens[c].dim === tokens[t].dim)) chosen.push(t);
+    for (const t of ranked) if (chosen.length < 3 && !chosen.includes(t)) chosen.push(t);
+    return chosen.map((t) => ({ dim: tokens[t].dim, field: tokens[t].field, value: tokens[t].value }));
   }
 
   function communityReferrer(members: number[]): number | null {

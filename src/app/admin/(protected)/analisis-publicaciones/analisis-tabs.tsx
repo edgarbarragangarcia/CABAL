@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Bot, Vote, Wand2 } from "lucide-react";
+import { Bot, Network, Vote } from "lucide-react";
 
 import { AsistenteTab } from "./asistente-tab";
 import { CabalResultados } from "./cabal-resultados";
@@ -13,7 +13,7 @@ type TabId = "votaciones" | "predicciones" | "asistente";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "votaciones", label: "Votaciones", icon: Vote },
-  { id: "predicciones", label: "Predicciones", icon: Wand2 },
+  { id: "predicciones", label: "Red Cabal", icon: Network },
   { id: "asistente", label: "Asistente", icon: Bot },
 ];
 
