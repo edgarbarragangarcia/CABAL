@@ -38,9 +38,43 @@ const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
 const SIN_DATOS = "#d6dcd9";
-const VISTA_INICIAL = { alpha: 52, beta: 8, distance: 115 };
-const MIN_DIST = 50;
-const MAX_DIST = 220;
+/** Inclinación de la cámara (90 = cenital) y altura máxima de las regiones. */
+const ALPHA = 55;
+const ALTURA_MAX = 11;
+const ANCHO = 100;
+
+type Caja = { ancho: number; fondo: number; aspectScale: number };
+
+/** Proporciones del mapa: longitud corregida por la latitud media, para que no salga aplastado. */
+function cajaDe(geo: GeoCollection, quitar: Set<string>): Caja {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const visit = (c: unknown): void => {
+    if (Array.isArray(c) && typeof c[0] === "number") {
+      const [x, y] = c as number[];
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    } else if (Array.isArray(c)) c.forEach(visit);
+  };
+  for (const f of geo.features) {
+    if (!quitar.has(f.properties.code) && "coordinates" in f.geometry) visit(f.geometry.coordinates);
+  }
+  const aspectScale = Math.cos((((minY + maxY) / 2) * Math.PI) / 180);
+  const aspect = ((maxX - minX) / Math.max(maxY - minY, 1e-6)) * aspectScale;
+  return { ancho: ANCHO, fondo: ANCHO / aspect, aspectScale };
+}
+
+/**
+ * Tamaño de la cámara ortográfica para que el mapa quepa entero y centrado
+ * en el contenedor: lo que más ocupe, el fondo inclinado o el ancho.
+ */
+function encuadre(caja: Caja, el: HTMLElement) {
+  const a = (ALPHA * Math.PI) / 180;
+  const alto = caja.fondo * Math.sin(a) + ALTURA_MAX * Math.cos(a);
+  const proporcion = el.clientWidth / Math.max(el.clientHeight, 1);
+  return Math.max(alto, caja.ancho / proporcion) * 1.08;
+}
 
 /**
  * Mapa 3D (echarts-gl): cada territorio se levanta según los votos de su
@@ -63,6 +97,8 @@ export function MapaElectoral3D({
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const chartRef = React.useRef<ECharts | null>(null);
+  const cajaRef = React.useRef<Caja | null>(null);
+  const tamanoRef = React.useRef(150);
   const onSelectRef = React.useRef(onSelect);
   React.useEffect(() => {
     onSelectRef.current = onSelect;
@@ -92,6 +128,11 @@ export function MapaElectoral3D({
             .filter((f) => !quitar.has(f.properties.code))
             .map((f) => ({ ...f, properties: { ...f.properties, name: f.properties.code } })),
         } as never);
+
+        const caja = cajaDe(geo, quitar);
+        cajaRef.current = caja;
+        const tamano = encuadre(caja, ref.current);
+        tamanoRef.current = tamano;
 
         const byGeo = new Map(regiones.map((r) => [r.geo, r]));
         const max = Math.max(1, ...regiones.map((r) => r.valor));
@@ -146,7 +187,9 @@ export function MapaElectoral3D({
               {
                 type: "map3D",
                 map: mapName,
-                boxWidth: 100,
+                boxWidth: caja.ancho,
+                boxDepth: caja.fondo,
+                aspectScale: caja.aspectScale,
                 regionHeight: 1,
                 shading: "realistic",
                 realisticMaterial: { roughness: 0.55, metalness: 0.05 },
@@ -161,9 +204,16 @@ export function MapaElectoral3D({
                 },
                 temporalSuperSampling: { enable: true },
                 viewControl: {
-                  ...VISTA_INICIAL,
-                  minDistance: MIN_DIST,
-                  maxDistance: MAX_DIST,
+                  projection: "orthographic",
+                  orthographicSize: tamano,
+                  minOrthographicSize: tamano * 0.3,
+                  maxOrthographicSize: tamano * 2.2,
+                  alpha: ALPHA,
+                  beta: 0,
+                  center: [0, ALTURA_MAX / 4, 0],
+                  distance: 250,
+                  // Sin paneo: el mapa siempre queda centrado.
+                  panSensitivity: 0,
                   // La rueda sigue desplazando la página (el zoom va en botones), y
                   // en pantallas táctiles arrastrar también desplaza en vez de girar.
                   rotateSensitivity: window.matchMedia("(pointer: coarse)").matches ? 0 : 1.2,
@@ -194,23 +244,41 @@ export function MapaElectoral3D({
   }, [geoUrl, regiones, destacado, excluirKey]);
 
   React.useEffect(() => {
-    const onResize = () => chartRef.current?.resize();
-    window.addEventListener("resize", onResize);
+    const el = ref.current;
+    if (!el) return;
+    // Al cambiar el tamaño del contenedor, el mapa se vuelve a encuadrar.
+    const observer = new ResizeObserver(() => {
+      const chart = chartRef.current;
+      if (!chart) return;
+      chart.resize();
+      if (cajaRef.current) {
+        tamanoRef.current = encuadre(cajaRef.current, el);
+        const t = tamanoRef.current;
+        chart.setOption({
+          series: [{ viewControl: { orthographicSize: t, minOrthographicSize: t * 0.3, maxOrthographicSize: t * 2.2 } }],
+        });
+      }
+    });
+    observer.observe(el);
     return () => {
-      window.removeEventListener("resize", onResize);
+      observer.disconnect();
       chartRef.current?.dispose();
       chartRef.current = null;
     };
   }, []);
 
-  const distance = React.useRef(VISTA_INICIAL.distance);
+  const zoomActual = React.useRef<number | null>(null);
   const resetView = () => {
-    distance.current = VISTA_INICIAL.distance;
-    chartRef.current?.setOption({ series: [{ viewControl: { ...VISTA_INICIAL } }] });
+    zoomActual.current = null;
+    chartRef.current?.setOption({
+      series: [{ viewControl: { alpha: ALPHA, beta: 0, orthographicSize: tamanoRef.current } }],
+    });
   };
   const zoom = (factor: number) => {
-    distance.current = Math.min(MAX_DIST, Math.max(MIN_DIST, distance.current * factor));
-    chartRef.current?.setOption({ series: [{ viewControl: { distance: distance.current } }] });
+    const base = tamanoRef.current;
+    const next = Math.min(base * 2.2, Math.max(base * 0.3, (zoomActual.current ?? base) * factor));
+    zoomActual.current = next;
+    chartRef.current?.setOption({ series: [{ viewControl: { orthographicSize: next } }] });
   };
 
   return (

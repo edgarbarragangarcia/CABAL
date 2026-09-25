@@ -20,6 +20,7 @@ import {
   ELECCIONES,
   NIVELES,
   findEleccion,
+  type OpcionCargo,
 } from "@/lib/gov-data/elecciones/catalogo";
 import type {
   AmbitoRef,
@@ -29,6 +30,7 @@ import type {
   PartidoResultado,
   VistaElectoral,
 } from "@/lib/gov-data/elecciones/resultados";
+import { FiltroEleccion } from "./filtro-eleccion";
 import { MapaElectoral3D, type RegionMapa } from "./mapa-electoral-3d";
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
@@ -380,19 +382,19 @@ export function ExploradorElectoral() {
   const setFiltroHijos = (q: string) => setFiltroHijosSel({ url: vistaUrl, q });
 
   const irA = (codigo: string) => setDestino({ a: codigo });
-  const cambiarEleccion = (id: string) => {
-    const e = findEleccion(id);
-    if (!e) return;
-    // Se conserva el departamento o municipio (por DANE), no el código: cambia entre elecciones.
+  const cambiarCargo = (o: OpcionCargo) => {
     const lugar = [...(vista?.ruta ?? [])].reverse().find((r) => r.dane && r.nivel <= 3);
-    setEleccionId(id);
-    setSigla(e.corporaciones.find((c) => c.sigla === sigla)?.sigla ?? e.corporaciones[0].sigla);
-    setDestino(lugar?.dane ? { dane: lugar.dane } : {});
+    // En la misma elección los códigos coinciden entre cargos; entre elecciones
+    // cambian, así que se conserva el departamento o municipio por DANE.
+    setDestino(
+      o.eleccionId === eleccionId && vista ? { a: vista.ambito.codigo, dane: lugar?.dane } : lugar?.dane ? { dane: lugar.dane } : {}
+    );
+    setEleccionId(o.eleccionId);
+    setSigla(o.sigla);
   };
-  const cambiarCorporacion = (s: string) => {
-    setSigla(s);
-    setDestino(vista ? { a: vista.ambito.codigo, dane: [...vista.ruta].reverse().find((r) => r.dane)?.dane } : {});
-  };
+  const cargo = eleccion.corporaciones.find((co) => co.sigla === sigla) ?? eleccion.corporaciones[0];
+  const encabezado =
+    cargo.sigla === "PR" ? eleccion.nombre : `${cargo.nombre} ${eleccion.fecha.slice(0, 4)}`;
 
   const r = vista?.resultado ?? null;
   const circs = r?.circunscripciones ?? [];
@@ -451,54 +453,24 @@ export function ExploradorElectoral() {
 
       <div className="relative">
         {/* Encabezado: elección y corporación */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-700 via-teal-600 to-sky-600 p-5 text-white shadow-lg shadow-emerald-700/25">
-          <div aria-hidden="true" className="absolute -right-10 -bottom-16 size-48 rounded-full bg-white/10" />
-          <div aria-hidden="true" className="absolute right-24 -top-12 size-28 rounded-full bg-amber-300/25 blur-xl" />
+        <div className="relative z-20 rounded-2xl bg-gradient-to-br from-emerald-700 via-teal-600 to-sky-600 p-5 text-white shadow-lg shadow-emerald-700/25">
+          {/* Los círculos van en su propia capa recortada: el desplegable del filtro debe poder salirse. */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+            <div className="absolute -right-10 -bottom-16 size-48 rounded-full bg-white/10" />
+            <div className="absolute right-24 -top-12 size-28 rounded-full bg-amber-300/25 blur-xl" />
+          </div>
           <div className="relative">
             <p className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide backdrop-blur">
               <Vote className="size-3.5" aria-hidden="true" />
               Resultados oficiales · todos los candidatos
             </p>
-            <p className="mt-2 text-xl font-bold tracking-tight sm:text-2xl">{eleccion.nombre}</p>
+            <p className="mt-2 text-xl font-bold tracking-tight sm:text-2xl">{encabezado}</p>
             <p className="mt-1 text-xs text-white/80">
               {vista?.fuente ?? "Preconteo oficial de la Registraduría Nacional del Estado Civil"}
               {r?.corte ? ` · corte ${r.corte}` : ""}
             </p>
 
-            <div className="mt-4 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
-              {ELECCIONES.map((e) => (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => cambiarEleccion(e.id)}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
-                    e.id === eleccionId
-                      ? "bg-white text-emerald-800 shadow-md"
-                      : "bg-white/15 text-white/85 hover:bg-white/25 hover:text-white"
-                  }`}
-                >
-                  {e.nombre}
-                </button>
-              ))}
-            </div>
-            {eleccion.corporaciones.length > 1 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {eleccion.corporaciones.map((co) => (
-                  <button
-                    key={co.sigla}
-                    type="button"
-                    onClick={() => cambiarCorporacion(co.sigla)}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                      co.sigla === sigla
-                        ? "border-amber-300 bg-amber-300 text-amber-950 shadow"
-                        : "border-white/30 text-white/90 hover:border-white/60 hover:bg-white/10"
-                    }`}
-                  >
-                    {co.nombre}
-                  </button>
-                ))}
-              </div>
-            )}
+            <FiltroEleccion eleccionId={eleccionId} sigla={sigla} onChange={cambiarCargo} />
           </div>
         </div>
 
