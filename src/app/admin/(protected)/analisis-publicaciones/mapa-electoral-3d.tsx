@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { ECharts } from "echarts";
 import type { FeatureCollection, Geometry } from "geojson";
-import { Loader2, RotateCcw } from "lucide-react";
+import { Loader2, Minus, Plus, RotateCcw } from "lucide-react";
 
 export type RegionMapa = {
   /** Código de la región en el GeoJSON (DANE o localidad). */
@@ -39,6 +39,8 @@ const esc = (s: string) =>
 
 const SIN_DATOS = "#d6dcd9";
 const VISTA_INICIAL = { alpha: 52, beta: 8, distance: 115 };
+const MIN_DIST = 50;
+const MAX_DIST = 220;
 
 /**
  * Mapa 3D (echarts-gl): cada territorio se levanta según los votos de su
@@ -160,11 +162,13 @@ export function MapaElectoral3D({
                 temporalSuperSampling: { enable: true },
                 viewControl: {
                   ...VISTA_INICIAL,
-                  minDistance: 50,
-                  maxDistance: 220,
-                  rotateSensitivity: 1.2,
-                  zoomSensitivity: 1.2,
-                  animationDurationUpdate: 900,
+                  minDistance: MIN_DIST,
+                  maxDistance: MAX_DIST,
+                  // La rueda sigue desplazando la página (el zoom va en botones), y
+                  // en pantallas táctiles arrastrar también desplaza en vez de girar.
+                  rotateSensitivity: window.matchMedia("(pointer: coarse)").matches ? 0 : 1.2,
+                  zoomSensitivity: 0,
+                  animationDurationUpdate: 600,
                 },
                 groundPlane: { show: false },
                 label: { show: false },
@@ -199,8 +203,15 @@ export function MapaElectoral3D({
     };
   }, []);
 
-  const resetView = () =>
+  const distance = React.useRef(VISTA_INICIAL.distance);
+  const resetView = () => {
+    distance.current = VISTA_INICIAL.distance;
     chartRef.current?.setOption({ series: [{ viewControl: { ...VISTA_INICIAL } }] });
+  };
+  const zoom = (factor: number) => {
+    distance.current = Math.min(MAX_DIST, Math.max(MIN_DIST, distance.current * factor));
+    chartRef.current?.setOption({ series: [{ viewControl: { distance: distance.current } }] });
+  };
 
   return (
     <div className="relative">
@@ -212,21 +223,41 @@ export function MapaElectoral3D({
       )}
       {status === "error" && (
         <p className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-muted-foreground">
-          No se pudo dibujar el mapa 3D (el navegador necesita WebGL).
+          No se pudo dibujar el mapa 3D en este navegador.
         </p>
       )}
       {status === "ready" && (
-        <button
-          type="button"
-          onClick={resetView}
-          className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur transition hover:text-foreground"
-        >
-          <RotateCcw className="size-3.5" aria-hidden="true" />
-          Vista inicial
-        </button>
+        <div className="absolute right-2 top-2 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => zoom(0.8)}
+            aria-label="Acercar"
+            title="Acercar"
+            className="grid size-7 place-items-center rounded-full bg-surface/90 text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur transition hover:text-foreground"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => zoom(1.25)}
+            aria-label="Alejar"
+            title="Alejar"
+            className="grid size-7 place-items-center rounded-full bg-surface/90 text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur transition hover:text-foreground"
+          >
+            <Minus className="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={resetView}
+            className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur transition hover:text-foreground"
+          >
+            <RotateCcw className="size-3.5" aria-hidden="true" />
+            Vista inicial
+          </button>
+        </div>
       )}
       <p className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-muted-foreground">
-        Arrastra para girar · rueda para acercar · clic para entrar
+        Arrastra para girar · + / − para acercar · clic para entrar
       </p>
     </div>
   );

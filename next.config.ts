@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { securityHeaders } from "./src/config/security-headers";
+import { adminContentSecurityPolicy, securityHeaders } from "./src/config/security-headers";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -21,6 +21,11 @@ const nextConfig: NextConfig = {
         // Aplica las cabeceras de seguridad OWASP a todas las rutas.
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        // Va después: con la misma cabecera, la última regla que coincide gana.
+        source: "/admin/:path*",
+        headers: [{ key: "Content-Security-Policy", value: adminContentSecurityPolicy }],
       },
     ];
   },
