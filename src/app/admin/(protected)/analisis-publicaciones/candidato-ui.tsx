@@ -4,7 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { Briefcase, ExternalLink, GraduationCap, Landmark, Loader2, MapPin, SearchX } from "lucide-react";
 
-import type { HojaDeVida } from "@/lib/gov-data/elecciones/hoja-de-vida";
+import type { HojaDeVida, PersonaSigep } from "@/lib/gov-data/elecciones/hoja-de-vida";
 import type { Candidato } from "@/lib/gov-data/elecciones/resultados";
 import { titulo } from "./nombres";
 
@@ -135,7 +135,7 @@ export function FotoCandidato({
 
 // ------------------------------------------------------------ hoja de vida ---
 
-type Estado = { cedula: string; hv?: HojaDeVida; error?: string };
+type Estado = { clave: string; hv?: HojaDeVida; error?: string };
 
 /** "PROFESIONAL - DERECHO - Graduado" → "Profesional · Derecho · Graduado". */
 const item = (s: string) =>
@@ -145,59 +145,114 @@ const item = (s: string) =>
     .map(titulo)
     .join(" · ");
 
+/** "MEDELLÍN - ANTIOQUIA" → "Medellín, Antioquia"; "BOGOTÁ. D.C. - BOGOTÁ. D.C." → "Bogotá D.C.". */
+const lugar = (s: string) => {
+  const [municipio, departamento] = s.split(" - ").map((p) => p.replace(/\.\s*D\.C\./, " D.C.").trim());
+  return titulo(!departamento || departamento === municipio ? municipio : `${municipio}, ${departamento}`);
+};
+
+const enlaceExterno = "inline-flex items-center gap-1 font-semibold text-emerald-700 hover:underline dark:text-emerald-300";
+
+/** Personas del SIGEP con el nombre del candidato, para revisarlas a mano. */
+function Homonimos({ personas }: { personas: PersonaSigep[] }) {
+  return (
+    <ul className="mt-2 space-y-1.5">
+      {personas.map((p) => (
+        <li key={p.enlace}>
+          <a
+            href={p.enlace}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-start justify-between gap-3 rounded-lg bg-surface px-2.5 py-1.5 ring-1 ring-border transition hover:ring-emerald-500/50"
+          >
+            <span className="min-w-0">
+              <span className="font-medium">{titulo(p.nombre)}</span>
+              <span className="block text-xs text-muted-foreground">
+                {titulo(p.entidad)}
+                {p.lugar && ` · ${lugar(p.lugar)}`}
+                {p.tipo && ` · ${p.tipo}`}
+              </span>
+            </span>
+            <ExternalLink className="mt-1 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function HojaDeVidaPanel({ cedula, nombre }: { cedula?: string; nombre: string }) {
   const [estado, setEstado] = React.useState<Estado | null>(null);
+  const [intento, setIntento] = React.useState(0);
   const [todo, setTodo] = React.useState(false);
+  const url = `/api/admin/elecciones/hoja-de-vida?${new URLSearchParams(cedula ? { nombre, cedula } : { nombre })}`;
+  const clave = `${url}#${intento}`;
 
   React.useEffect(() => {
-    if (!cedula) return;
+    const k = `${url}#${intento}`;
     let cancelled = false;
-    fetch(`/api/admin/elecciones/hoja-de-vida?cedula=${cedula}`)
+    // Al reintentar, saltarse la copia que haya guardado el navegador.
+    fetch(url, intento ? { cache: "reload" } : undefined)
       .then(async (res) => {
         const body = await res.json();
         if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
-        if (!cancelled) setEstado({ cedula, hv: body as HojaDeVida });
+        if (!cancelled) setEstado({ clave: k, hv: body as HojaDeVida });
       })
       .catch((err: Error) => {
-        if (!cancelled) setEstado({ cedula, error: err.message });
+        if (!cancelled) setEstado({ clave: k, error: err.message });
       });
     return () => {
       cancelled = true;
     };
-  }, [cedula]);
+  }, [url, intento]);
 
   const marco = "cabal-rise mt-3 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 via-surface to-sky-500/5 p-4 text-sm";
 
-  if (!cedula) {
-    return (
-      <div className={marco}>
-        <p className="text-muted-foreground">
-          La Registraduría no publicó la cédula de los candidatos en esta elección; sin ella no se puede ubicar
-          con certeza la hoja de vida de {titulo(nombre)}.
-        </p>
-      </div>
-    );
-  }
-  const actual = estado?.cedula === cedula ? estado : null;
+  const actual = estado?.clave === clave ? estado : null;
   if (!actual) {
     return (
       <div className={`${marco} flex items-center gap-2 text-muted-foreground`}>
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Consultando la hoja de vida en el SIGEP…
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Buscando la hoja de vida en Función Pública…
       </div>
     );
   }
   if (actual.error) {
-    return <div className={`${marco} text-red-700 dark:text-red-300`}>{actual.error}</div>;
+    return (
+      <div className={`${marco} flex flex-wrap items-center justify-between gap-2 text-red-700 dark:text-red-300`}>
+        {actual.error}
+        <button
+          type="button"
+          onClick={() => setIntento((n) => n + 1)}
+          className="rounded-full bg-surface px-3 py-1 text-xs font-semibold text-foreground ring-1 ring-border transition hover:ring-emerald-500/50"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
   }
   const hv = actual.hv!;
+  const buscarEnSigep = (
+    <a href={hv.busqueda} target="_blank" rel="noopener noreferrer" className={enlaceExterno}>
+      Buscar el nombre en el directorio del SIGEP <ExternalLink className="size-3.5" aria-hidden="true" />
+    </a>
+  );
+
   if (!hv.encontrada) {
+    const n = hv.homonimos.length;
     return (
-      <div className={`${marco} flex items-start gap-3`}>
-        <SearchX className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <p className="text-muted-foreground">
-          {titulo(nombre)} no tiene hoja de vida pública en el SIGEP. Solo aparecen quienes han sido servidores
-          públicos (congresistas, alcaldes, concejales, diputados, funcionarios…).
-        </p>
+      <div className={marco}>
+        <div className="flex items-start gap-3">
+          <SearchX className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <p className="text-muted-foreground">
+            {n > 1
+              ? `Hay ${n} personas llamadas ${titulo(nombre)} en el SIGEP y nada indica cuál es el candidato. Revísalas:`
+              : n === 1
+                ? `En el SIGEP aparece una persona llamada ${titulo(nombre)}, pero nada confirma que sea el candidato: puede ser un homónimo. Revísala:`
+                : `${titulo(nombre)} no aparece en el SIGEP ni en la lista PEP de Función Pública, las únicas hojas de vida oficiales: solo incluyen a quienes hoy trabajan para el Estado (servidores públicos y contratistas). La Registraduría no publica hojas de vida de los candidatos.`}
+          </p>
+        </div>
+        {n > 0 && <Homonimos personas={hv.homonimos} />}
+        <p className="mt-3 text-xs">{buscarEnSigep}</p>
       </div>
     );
   }
@@ -207,10 +262,26 @@ export function HojaDeVidaPanel({ cedula, nombre }: { cedula?: string; nombre: s
     <div className={marco}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+          <p className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
             Hoja de vida pública
+            {hv.ubicadaPor === "cedula" && (
+              <span className="rounded-full bg-emerald-600/10 px-2 py-0.5 normal-case tracking-normal">
+                Verificada con la cédula
+              </span>
+            )}
+            {hv.ubicadaPor === "nombre" && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 normal-case tracking-normal text-amber-800 dark:text-amber-300">
+                Ubicada por el nombre completo
+              </span>
+            )}
           </p>
           <p className="font-semibold">{titulo(hv.nombre ?? nombre)}</p>
+          {hv.cargoActual && (
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <Landmark className="size-3.5 shrink-0" aria-hidden="true" /> Hoy:{" "}
+              {[hv.cargoActual.cargo, hv.cargoActual.entidad].filter(Boolean).map(titulo).join(" · ")}
+            </p>
+          )}
           {hv.nacimiento && (
             <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
               <MapPin className="size-3.5" aria-hidden="true" /> Nació en {titulo(hv.nacimiento)}
@@ -229,24 +300,38 @@ export function HojaDeVidaPanel({ cedula, nombre }: { cedula?: string; nombre: s
         )}
       </div>
 
-      <div className="mt-3 grid gap-4 md:grid-cols-2">
-        <section>
-          <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            <Landmark className="size-3.5" aria-hidden="true" /> Cargos públicos
-          </h4>
-          <ul className="mt-2 space-y-1.5">
-            {hv.cargos.map((c, i) => (
-              <li key={i} className="rounded-lg bg-surface px-2.5 py-1.5 ring-1 ring-border">
-                <span className="font-medium">{titulo(c.cargo)}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {titulo(c.entidad)}
-                  {c.desde && ` · desde ${c.desde}`}
-                  {c.hasta && ` hasta ${c.hasta}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {hv.ubicadaPor === "nombre" && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {!cedula
+            ? "La Registraduría no publicó cédulas en esta elección"
+            : hv.cargos.length
+              ? "La lista PEP no enlaza su hoja de vida"
+              : "Su cédula no figura en la lista PEP"}
+          , así que se ubicó por el nombre completo, que en el SIGEP corresponde a una sola persona. Confirma que el cargo
+          y la entidad sean los del candidato.
+        </p>
+      )}
+
+      <div className={`mt-3 grid gap-4 ${hv.cargos.length ? "md:grid-cols-2" : ""}`}>
+        {hv.cargos.length > 0 && (
+          <section>
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Landmark className="size-3.5" aria-hidden="true" /> Cargos públicos (lista PEP)
+            </h4>
+            <ul className="mt-2 space-y-1.5">
+              {hv.cargos.map((c, i) => (
+                <li key={i} className="rounded-lg bg-surface px-2.5 py-1.5 ring-1 ring-border">
+                  <span className="font-medium">{titulo(c.cargo)}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {titulo(c.entidad)}
+                    {c.desde && ` · desde ${c.desde}`}
+                    {c.hasta && ` hasta ${c.hasta}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section>
           <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -299,6 +384,18 @@ export function HojaDeVidaPanel({ cedula, nombre }: { cedula?: string; nombre: s
         )}
       </section>
 
+      {hv.homonimos.length > 0 && (
+        <section className="mt-4">
+          <p className="text-xs text-muted-foreground">
+            {hv.homonimos.length > 1
+              ? `En el SIGEP hay ${hv.homonimos.length} personas con este nombre y nada indica cuál es el candidato:`
+              : "En el SIGEP aparece una persona con este nombre, pero nada confirma que sea el candidato: puede ser un homónimo."}
+          </p>
+          <Homonimos personas={hv.homonimos} />
+        </section>
+      )}
+
+      {!hv.enlace && <p className="mt-3 text-xs">{buscarEnSigep}</p>}
       <p className="mt-3 text-[11px] text-muted-foreground">Fuente: {hv.fuente}.</p>
     </div>
   );

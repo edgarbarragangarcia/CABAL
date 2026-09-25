@@ -7,31 +7,45 @@ import { unstable_cache } from "next/cache";
 import { querySocrataDataset } from "../socrata";
 
 /**
- * Hoja de vida pública de un candidato, de fuentes oficiales de Función
+ * Hoja de vida pública de un candidato. La Registraduría solo publica las
+ * listas de inscritos, así que las fuentes oficiales son las de Función
  * Pública:
  * - "Personas Expuestas Políticamente (PEP)" en datos.gov.co (3qxn-uc22):
- *   cargos públicos por cédula, con el enlace a su hoja de vida en el SIGEP.
- * - La hoja de vida del SIGEP (directorio de servidores públicos): formación
- *   académica y experiencia laboral, publicadas por la Ley de Transparencia.
- * Solo tienen hoja de vida quienes han sido servidores públicos; el resto
- * de candidatos no aparece.
+ *   cargos públicos por cédula, a veces con el enlace a su hoja de vida.
+ * - El directorio del SIGEP: formación académica y experiencia laboral de
+ *   todo servidor público y contratista activo del Estado, publicadas por la
+ *   Ley de Transparencia. Se busca por nombre y cubre a muchos que la lista
+ *   PEP deja por fuera (buena parte del Senado, por ejemplo).
+ * Quien hoy no trabaja para el Estado no aparece en ninguna de las dos.
  */
 
 const PEP_DATASET = "3qxn-uc22";
-const SIGEP_HOST = "www1.funcionpublica.gov.co";
-const SIGEP_PATH = "/dafpIndexerBHV/hvSigep/detallarHV/";
+const SIGEP = "https://www.funcionpublica.gov.co/dafpIndexerBHV/hvSigep";
 
 export type CargoPublico = { cargo: string; entidad: string; desde?: string; hasta?: string };
 export type Experiencia = { cargo: string; entidad: string; inicio: string; fin: string };
+/** Una persona del directorio del SIGEP. */
+export type PersonaSigep = { nombre: string; tipo: string; entidad: string; lugar: string; enlace: string };
 
 export type HojaDeVida = {
   encontrada: boolean;
+  /**
+   * Cómo se ubicó la hoja de vida del SIGEP: con la cédula (el enlace de la
+   * lista PEP) o solo por el nombre completo, que puede tener homónimos.
+   */
+  ubicadaPor?: "cedula" | "nombre";
   nombre?: string;
   nacimiento?: string;
+  cargoActual?: { cargo: string; entidad: string };
+  /** Cargos de la lista PEP, por cédula. */
   cargos: CargoPublico[];
   formacion: string[];
   experiencia: Experiencia[];
   enlace?: string;
+  /** Personas del SIGEP con el mismo nombre, cuando nada dice cuál es el candidato. */
+  homonimos: PersonaSigep[];
+  /** La búsqueda del nombre en el directorio del SIGEP, para revisarla a mano. */
+  busqueda: string;
   fuente: string;
 };
 
@@ -90,12 +104,15 @@ MntHWpdLgtJmwsQt6j8k9Kf5qLnjatkYYaA7jBU=
 -----END CERTIFICATE-----`;
 const CA = [...tls.rootCertificates, SECTIGO_OV_INTERMEDIO];
 
+/** null si la página no existe; un error del servidor sí falla, para no dejarlo en caché. */
 function getHtml(url: URL): Promise<string | null> {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { ca: CA, timeout: 15_000 }, (res) => {
-      if (res.statusCode !== 200) {
+      const status = res.statusCode ?? 0;
+      if (status !== 200) {
         res.resume();
-        resolve(null);
+        if (status >= 500) reject(new Error(`El SIGEP respondió ${status}; intenta de nuevo en un momento.`));
+        else resolve(null);
         return;
       }
       let html = "";
@@ -118,6 +135,7 @@ const texto = (html: string) =>
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
     .replace(/\s+/g, " ")
     .trim();
 
@@ -134,12 +152,90 @@ function seccion(html: string, id: string) {
   return html.slice(start, next < 0 ? undefined : next);
 }
 
-/** La página del SIGEP es HTML de plantilla fija: se leen sus tres bloques. */
-async function leerSigep(url: string) {
-  const u = new URL(url);
-  if (u.hostname !== SIGEP_HOST || !u.pathname.startsWith(SIGEP_PATH)) return null;
-  const html = await getHtml(u);
+// ------------------------------------------------------------- nombres ---
+
+const PARTICULAS = new Set(["DE", "DEL", "LA", "LAS", "LOS", "Y"]);
+
+/** "José de la Espriella" → ["JOSE", "ESPRIELLA"]: sin tildes, eñes ni partículas. */
+const palabras = (nombre: string) =>
+  nombre
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .split(" ")
+    .filter((p) => p && !PARTICULAS.has(p));
+
+/** El mismo nombre aunque cambie el orden ("Padilla Villarraga" en el tarjetón, "Villarraga Padilla" en el SIGEP). */
+const clave = (nombre: string) => palabras(nombre).sort().join(" ");
+
+// --------------------------------------------------------------- SIGEP ---
+
+type FilaSigep = PersonaSigep & { id: string };
+
+/** Entidades de elección popular, ya sin partículas ("CAMARA REPRESENTANTES"). */
+const CORPORACION = /\b(SENADO|CAMARA REPRESENTANTES|ASAMBLEA|CONCEJO|JUNTA ADMINISTRADORA LOCAL)\b/;
+
+const enlaceHv = (id: string) => `${SIGEP}/detallarHV/${id}`;
+
+/** El buscador del directorio, con todas las palabras del nombre (ignora tildes y eñes). */
+const urlBusqueda = (nombre: string) =>
+  `${SIGEP}/index?${new URLSearchParams({ find: "FindNext", query: palabras(nombre).join(" ") })}`;
+
+/** Los primeros 50 resultados del directorio para ese nombre. */
+async function buscarEnSigep(nombre: string): Promise<FilaSigep[]> {
+  const html = await getHtml(new URL(`${urlBusqueda(nombre)}&offset=0&max=50`));
+  if (!html) return [];
+  return [...html.matchAll(/<td class="columna-datos">([\s\S]*?)<\/td>/g)].flatMap(([, td]) => {
+    const a = td.match(/href="\/dafpIndexerBHV\/hvSigep\/detallarHV\/([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+    if (!a) return [];
+    // Bloques: nombre, tipo de vínculo, entidad y "correo / teléfono / municipio - departamento".
+    const [, tipo = "", entidad = "", contacto = ""] = [...td.matchAll(/<span>([\s\S]*?)<\/span>/g)].map((m) =>
+      texto(m[1])
+    );
+    return [{ id: a[1], nombre: texto(a[2]), tipo, entidad, lugar: contacto.split(" / ").pop() ?? "", enlace: enlaceHv(a[1]) }];
+  });
+}
+
+/**
+ * La hoja de vida que corresponde al nombre, si se puede saber cuál es: el
+ * nombre completo tiene que coincidir palabra por palabra, y si hay varias
+ * personas lo decide la entidad que reporta la lista PEP (por cédula).
+ */
+async function ubicarPorNombre(
+  nombre: string,
+  entidadesPep: Set<string>
+): Promise<{ fila?: FilaSigep; homonimos: FilaSigep[] }> {
+  const buscado = clave(nombre);
+  // Una persona puede tener varias filas (una por entidad) con el mismo número
+  // antes del primer guion; se prefiere su vínculo de servidor público (-4).
+  const porPersona = new Map<string, FilaSigep>();
+  for (const fila of await buscarEnSigep(nombre)) {
+    if (clave(fila.nombre) !== buscado) continue;
+    const persona = fila.id.split("-")[0];
+    const previa = porPersona.get(persona);
+    if (!previa || (!previa.id.endsWith("-4") && fila.id.endsWith("-4"))) porPersona.set(persona, fila);
+  }
+  const personas = [...porPersona.values()];
+  const enPep = personas.filter((p) => entidadesPep.has(clave(p.entidad)));
+  if (enPep.length === 1) return { fila: enPep[0], homonimos: [] };
+  if (personas.length === 1) {
+    // Cuatro palabras bastan; con tres, solo si trabaja en una corporación de
+    // elección popular. Si no, puede ser un homónimo (hay un "Santiago Montoya
+    // Montoya" auxiliar del Metro de Medellín) y queda para revisar a mano.
+    const n = palabras(nombre).length;
+    if (n >= 4 || (n === 3 && CORPORACION.test(palabras(personas[0].entidad).join(" ")))) {
+      return { fila: personas[0], homonimos: [] };
+    }
+  }
+  return { homonimos: personas };
+}
+
+/** La página de la hoja de vida es HTML de plantilla fija: se leen sus bloques. */
+async function leerSigep(id: string) {
+  const html = await getHtml(new URL(enlaceHv(encodeURIComponent(id))));
   if (!html) return null;
+  const parrafo = (clase: string) => texto(html.match(new RegExp(`<p class="${clase}">([\\s\\S]*?)</p>`))?.[1] ?? "");
 
   const formacion = [...seccion(html, "formacionAcademica").matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)]
     .map((m) => texto(m[1]))
@@ -151,54 +247,85 @@ async function leerSigep(url: string) {
     .filter((c) => c.length >= 4)
     .map(([cargo, entidad, inicio, fin]) => ({ cargo, entidad, inicio, fin }));
   const nacimiento = html.match(/Municipio de Nacimiento:<\/span>[\s\S]*?<span>([\s\S]*?)<\/span>/)?.[1];
-  const nombre = html.match(/<p class="nombre_funcionario">([\s\S]*?)<\/p>/)?.[1];
+  const cargo = parrafo("cargo_funcionario").replace(/^no reportado$/i, "");
+  const entidad = parrafo("institucion_funcionario");
   return {
     formacion,
     experiencia,
-    nacimiento: nacimiento ? texto(nacimiento).replace(/\s*,\s*/g, ", ").replace(/ - /g, " · ") : undefined,
-    nombre: nombre ? texto(nombre) : undefined,
+    nacimiento: nacimiento ? lugarDeNacimiento(texto(nacimiento)) : undefined,
+    nombre: parrafo("nombre_funcionario") || undefined,
+    cargoActual: cargo || entidad ? { cargo, entidad } : undefined,
   };
 }
 
-async function buscar(cedula: string): Promise<HojaDeVida> {
-  // Solo por cédula: por nombre aparecen homónimos (otro "Federico Gutiérrez"),
-  // y mostrar la hoja de vida de otra persona sería peor que no mostrar nada.
-  const rows = await querySocrataDataset<PepRow>(PEP_DATASET, {
-    $where: `numero_documento='${cedula}'`,
-    $limit: 50,
-  });
-  if (rows.length === 0) return { encontrada: false, cargos: [], formacion: [], experiencia: [], fuente: FUENTE };
+/** "BOGOTÁ. D.C., BOGOTÁ. D.C. - COLOMBIA" → "BOGOTÁ D.C."; el país solo si no es Colombia. */
+function lugarDeNacimiento(s: string) {
+  const [lugar, pais = ""] = s.split(/\s+-\s+/);
+  const partes = lugar
+    .split(",")
+    .map((p) => p.replace(/\.\s*D\.C\./, " D.C.").trim())
+    .filter((p, i, todas) => p && p !== todas[i - 1]);
+  if (pais && pais.toUpperCase() !== "COLOMBIA") partes.push(pais);
+  return partes.join(", ");
+}
 
+// ----------------------------------------------------------- consulta ---
+
+async function buscar(cedula: string, nombre: string): Promise<HojaDeVida> {
+  // La cédula identifica sin dudas; el nombre se usa cuando la Registraduría no
+  // la publicó (2022) o cuando la lista PEP no enlaza la hoja de vida.
+  const rows = cedula
+    ? await querySocrataDataset<PepRow>(PEP_DATASET, { $where: `numero_documento='${cedula}'`, $limit: 50 })
+    : [];
   const ordenadas = [...rows].sort((a, b) => fechaOrden(b.fecha_vinculacion) - fechaOrden(a.fecha_vinculacion));
-  const cargos = ordenadas.map((r) => ({
-    cargo: r.denominacion_cargo ?? "",
-    entidad: r.nombre_entidad ?? "",
-    ...(r.fecha_vinculacion ? { desde: r.fecha_vinculacion } : {}),
-    ...(r.fecha_desvinculacion ? { hasta: r.fecha_desvinculacion } : {}),
-  }));
-  const enlace = ordenadas
-    .map((r) => r.enlace_hoja_vida_sigep?.url)
-    .find((url) => url && !url.endsWith("/0-0-0"));
+  // La lista trae filas repetidas (el mismo cargo reportado dos veces).
+  const cargos = [
+    ...new Map(
+      ordenadas.map((r) => {
+        const cargo: CargoPublico = {
+          cargo: r.denominacion_cargo ?? "",
+          entidad: r.nombre_entidad ?? "",
+          ...(r.fecha_vinculacion ? { desde: r.fecha_vinculacion } : {}),
+          ...(r.fecha_desvinculacion ? { hasta: r.fecha_desvinculacion } : {}),
+        };
+        return [JSON.stringify(cargo), cargo] as const;
+      })
+    ).values(),
+  ];
+  const idPep = ordenadas
+    .map((r) => r.enlace_hoja_vida_sigep?.url?.match(/\/detallarHV\/([^/?#]+)$/)?.[1])
+    .find((id) => id && id !== "0-0-0");
 
-  let sigep: Awaited<ReturnType<typeof leerSigep>> = null;
-  if (enlace) {
-    try {
-      sigep = await leerSigep(enlace);
-    } catch {
-      sigep = null;
-    }
+  let id = idPep;
+  let homonimos: PersonaSigep[] = [];
+  if (!id && nombre) {
+    const ubicada = await ubicarPorNombre(nombre, new Set(ordenadas.map((r) => clave(r.nombre_entidad ?? ""))));
+    id = ubicada.fila?.id;
+    homonimos = ubicada.homonimos.map((fila) => ({
+      nombre: fila.nombre,
+      tipo: fila.tipo,
+      entidad: fila.entidad,
+      lugar: fila.lugar,
+      enlace: fila.enlace,
+    }));
   }
+  const sigep = id ? await leerSigep(id) : null;
+
   return {
-    encontrada: true,
-    nombre: sigep?.nombre ?? ordenadas[0].nombre_pep,
+    encontrada: rows.length > 0 || sigep !== null,
+    ...(sigep ? { ubicadaPor: idPep ? ("cedula" as const) : ("nombre" as const) } : {}),
+    nombre: sigep?.nombre ?? ordenadas[0]?.nombre_pep ?? nombre,
     ...(sigep?.nacimiento ? { nacimiento: sigep.nacimiento } : {}),
+    ...(sigep?.cargoActual ? { cargoActual: sigep.cargoActual } : {}),
     cargos,
     formacion: sigep?.formacion ?? [],
     experiencia: sigep?.experiencia ?? [],
-    ...(enlace ? { enlace } : {}),
+    ...(sigep && id ? { enlace: enlaceHv(id) } : {}),
+    homonimos,
+    busqueda: urlBusqueda(nombre || ordenadas[0]?.nombre_pep || ""),
     fuente: FUENTE,
   };
 }
 
 /** Las hojas de vida cambian poco: una semana en caché. */
-export const getHojaDeVida = unstable_cache(buscar, ["hoja-de-vida-v1"], { revalidate: 7 * 24 * 3600 });
+export const getHojaDeVida = unstable_cache(buscar, ["hoja-de-vida-v2"], { revalidate: 7 * 24 * 3600 });
