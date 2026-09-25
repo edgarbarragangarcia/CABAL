@@ -12,10 +12,9 @@
 // Ajusta connect-src si agregas Supabase / Sanity / pasarelas de pago.
 const isDev = process.env.NODE_ENV !== "production";
 
-function buildCsp({ allowEval }: { allowEval: boolean }) {
-  return `
+const contentSecurityPolicy = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${isDev || allowEval ? "'unsafe-eval'" : ""} https://vercel.live;
+  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${isDev ? "'unsafe-eval'" : ""} https://vercel.live;
   style-src 'self' 'unsafe-inline';
   img-src 'self' blob: data: https:;
   font-src 'self' data:;
@@ -28,19 +27,8 @@ function buildCsp({ allowEval }: { allowEval: boolean }) {
   form-action 'self';
   upgrade-insecure-requests;
 `
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
-const contentSecurityPolicy = buildCsp({ allowEval: false });
-
-/**
- * El panel (/admin, detrás de login) usa echarts-gl para los gráficos 3D, y
- * su motor (claygl) compila con `new Function` las expresiones de tamaño de
- * sus efectos: sin 'unsafe-eval' no dibuja. Solo ahí se permite; el sitio
- * público conserva la política estricta.
- */
-export const adminContentSecurityPolicy = buildCsp({ allowEval: true });
+  .replace(/\s{2,}/g, " ")
+  .trim();
 
 export const securityHeaders = [
   {

@@ -33,7 +33,7 @@ import type {
 import { FotoCandidato, HojaDeVidaPanel, LogoPartido } from "./candidato-ui";
 import { FiltroEleccion } from "./filtro-eleccion";
 import { titulo } from "./nombres";
-import { MapaElectoral3D, type RegionMapa } from "./mapa-electoral-3d";
+import { CabalMap, type MapArea } from "./cabal-map";
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
@@ -46,25 +46,26 @@ const DATOS_VERSION = "3";
 type MapaCtx = {
   /** Elección y corporación de las que salen los ganadores. */
   clave: string;
-  geoUrl: string;
-  regiones: RegionMapa[];
-  destacado?: string;
-  excluir?: string[];
+  /** Departamento abierto (DANE), o null para el país. */
+  dept: string | null;
+  areas: MapArea[];
+  /** Territorio resaltado (código de la Registraduría). */
+  seleccionado?: string;
 };
 
-function regionDe(g: Ganador, geo: string, uninominal: boolean): RegionMapa {
+const pctNum = (s: string) => Number(s.replace("%", "").replace(",", ".")) || 0;
+
+/** Cada territorio con el color de su ganador; más intenso cuanto más amplia la victoria. */
+function areaDe(g: Ganador, geo: string, uninominal: boolean): MapArea {
+  const ganador = uninominal && g.candidato ? titulo(g.candidato) : titulo(g.partidoNombre);
   return {
+    id: g.codigo,
+    name: titulo(g.nombre),
+    votos: g.votos,
     geo,
-    codigo: g.codigo,
-    nombre: titulo(g.nombre),
     color: g.color,
-    valor: g.votos,
-    detalle: [
-      uninominal && g.candidato ? `Ganó: ${titulo(g.candidato)}` : `Ganó: ${titulo(g.partidoNombre)}`,
-      `${fmt(g.votos)} votos (${g.pct})`,
-      `Participación ${g.participacion}`,
-      ...(g.empate ? ["Empate"] : []),
-    ],
+    intensidad: (pctNum(g.pct) - 20) / 50,
+    detalle: `${ganador} · ${g.pct}${g.empate ? " (empate)" : ""}`,
   };
 }
 
@@ -74,11 +75,7 @@ function mapaDe(v: VistaElectoral): Omit<MapaCtx, "clave"> | null {
   const mapa = v.resultado?.circunscripciones[0]?.mapa ?? [];
   const { nivel, dane } = v.ambito;
   if (nivel === 1) {
-    return {
-      geoUrl: "/data/geo/departamentos.json",
-      excluir: ["88"],
-      regiones: mapa.filter((g) => g.dane).map((g) => regionDe(g, g.dane!, uni)),
-    };
+    return { dept: null, areas: mapa.filter((g) => g.dane).map((g) => areaDe(g, g.dane!, uni)) };
   }
   if (!dane) return null;
   if (nivel === 3 && dane === "11001") {
@@ -89,21 +86,16 @@ function mapaDe(v: VistaElectoral): Omit<MapaCtx, "clave"> | null {
       if (g.codigo.startsWith(v.ambito.codigo) && g.codigo.length > v.ambito.codigo.length) zonas.set(g.codigo, g);
     }
     return {
-      geoUrl: "/data/geo/bogota-localidades.json",
-      regiones: [...zonas.values()]
+      dept: "11",
+      areas: [...zonas.values()]
         .map((g) => ({ g, loc: g.codigo.slice(-2) }))
         .filter(({ loc }) => Number(loc) >= 1 && Number(loc) <= 20)
-        .map(({ g, loc }) => regionDe(g, loc, uni)),
+        .map(({ g, loc }) => areaDe(g, loc, uni)),
     };
   }
-  const regiones = mapa.filter((g) => g.dane).map((g) => regionDe(g, g.dane!, uni));
-  if (nivel === 2 || (nivel === 3 && regiones.length > 0)) {
-    return {
-      geoUrl: `/data/geo/municipios/${dane.slice(0, 2)}.json`,
-      destacado: nivel === 3 ? dane : undefined,
-      regiones,
-    };
-  }
+  const areas = mapa.filter((g) => g.dane).map((g) => areaDe(g, g.dane!, uni));
+  if (nivel === 2) return { dept: dane, areas };
+  if (nivel === 3 && areas.length > 0) return { dept: dane.slice(0, 2), areas, seleccionado: v.ambito.codigo };
   return null;
 }
 
@@ -114,7 +106,9 @@ function siguienteMapa(v: VistaElectoral, prev: MapaCtx | null): MapaCtx | null 
   if (ctx) return { ...ctx, clave };
   if (prev?.clave !== clave) return null;
   // Municipio cuyo archivo trae ganadores por zona: el mapa del departamento, con él resaltado.
-  if (v.ambito.nivel === 3) return prev.geoUrl.includes("/municipios/") ? { ...prev, destacado: v.ambito.dane } : null;
+  if (v.ambito.nivel === 3) {
+    return prev.dept && prev.dept === v.ambito.dane?.slice(0, 2) ? { ...prev, seleccionado: v.ambito.codigo } : null;
+  }
   return v.ambito.nivel < 3 ? null : prev;
 }
 
@@ -470,10 +464,11 @@ export function ExploradorElectoral() {
 
   // Leyenda: territorios ganados por partido en el mapa.
   const leyenda = new Map<string, { nombre: string; color: string; n: number }>();
-  for (const reg of mapaCtx?.regiones ?? []) {
-    const nombre = reg.detalle[0]?.replace(/^Ganó: /, "") ?? "";
-    const k = `${reg.color}|${nombre}`;
-    const e = leyenda.get(k) ?? { nombre, color: reg.color, n: 0 };
+  for (const a of mapaCtx?.areas ?? []) {
+    const nombre = a.detalle?.split(" · ")[0] ?? "";
+    const color = a.color ?? "#94a3b8";
+    const k = `${color}|${nombre}`;
+    const e = leyenda.get(k) ?? { nombre, color, n: 0 };
     e.n += 1;
     leyenda.set(k, e);
   }
@@ -597,15 +592,20 @@ export function ExploradorElectoral() {
         <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
           {/* Mapa 3D + territorios */}
           <div className="min-w-0 space-y-4">
-            {mapaCtx && mapaCtx.regiones.length > 0 ? (
+            {mapaCtx && (mapaCtx.areas.length > 0 || mapaCtx.dept) ? (
               <div className="overflow-hidden rounded-2xl bg-gradient-to-b from-sky-500/10 via-emerald-500/5 to-amber-400/10 ring-1 ring-border/60">
-                <MapaElectoral3D
-                  geoUrl={mapaCtx.geoUrl}
-                  regiones={mapaCtx.regiones}
-                  destacado={mapaCtx.destacado}
-                  excluir={mapaCtx.excluir}
-                  onSelect={irA}
-                />
+                <div className="mx-auto w-full max-w-[520px] p-3">
+                  <CabalMap
+                    dept={mapaCtx.dept}
+                    areas={mapaCtx.areas}
+                    selectedId={mapaCtx.seleccionado}
+                    loading={loading}
+                    onSelect={(a) => irA(a.id)}
+                    onBack={() => vista && irA(vista.ruta[0].codigo)}
+                    onOpenBogota={() => setDestino({ dane: "11001" })}
+                    ariaLabel={`Mapa de ganadores: ${vista?.corporacion.nombre ?? ""}`}
+                  />
+                </div>
                 {leyenda.size > 0 && (
                   <div className="flex flex-wrap gap-1.5 border-t border-border/60 bg-surface/70 p-3 backdrop-blur">
                     {[...leyenda.values()]

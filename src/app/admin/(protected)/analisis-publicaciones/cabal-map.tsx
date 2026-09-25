@@ -14,7 +14,18 @@ type GeoCollection = FeatureCollection<Geometry, GeoProps>;
 type Bounds = [[number, number], [number, number]];
 type Box = [number, number, number, number];
 
-export type MapArea = { id: string; name: string; votos: number; geo?: string };
+export type MapArea = {
+  id: string;
+  name: string;
+  votos: number;
+  geo?: string;
+  /** Color propio (p. ej. el del partido ganador) en vez del mapa de calor. */
+  color?: string;
+  /** Qué tan fuerte se pinta ese color, de 0 a 1 (p. ej. el % del ganador). */
+  intensidad?: number;
+  /** Texto del recuadro al pasar el cursor, en vez de "N votos". */
+  detalle?: string;
+};
 
 const W = 560;
 const H = 700;
@@ -117,7 +128,9 @@ export function CabalMap({
   onSelect,
   onBack,
   onOpenBogota,
+  ariaLabel = "Mapa de calor de votos de María Fernanda Cabal",
 }: {
+  ariaLabel?: string;
   /** Código DANE del departamento abierto; null muestra el país. */
   dept: string | null;
   /** Datos del nivel visible: departamentos, o municipios/localidades del departamento abierto. */
@@ -185,7 +198,7 @@ export function CabalMap({
     } else if (subGeo) {
       const candidates = subGeo.features.map((f) => f.properties);
       for (const a of areas) {
-        const code = matchMunicipio(a.name, candidates);
+        const code = a.geo ?? matchMunicipio(a.name, candidates);
         if (code) out.set(code, a);
       }
     }
@@ -205,8 +218,14 @@ export function CabalMap({
   const box = useAnimatedBox(target);
 
   const max = Math.max(1, ...areas.map((a) => a.votos));
+  const colores = areas.some((a) => a.color);
   const fill = (code: string) => {
     const area = areaByCode.get(code);
+    if (colores) {
+      if (!area?.color) return "#e5e7e6";
+      const t = Math.max(0, Math.min(1, area.intensidad ?? 1));
+      return `color-mix(in oklab, ${area.color} ${Math.round(45 + 55 * t)}%, white)`;
+    }
     return heatColor(area ? Math.sqrt(area.votos / max) : 0);
   };
   const selectedCode = [...areaByCode].find(([, a]) => a.id === selectedId)?.[0];
@@ -226,7 +245,7 @@ export function CabalMap({
       // Sin dato a nivel país es falta de datos (Cesar en 2018); en un
       // departamento, que no obtuvo votos allí.
       text: area
-        ? `${area.votos.toLocaleString("es-CO")} votos`
+        ? (area.detalle ?? `${area.votos.toLocaleString("es-CO")} votos`)
         : layer === "d"
           ? "sin datos"
           : "0 votos",
@@ -247,7 +266,7 @@ export function CabalMap({
         viewBox={box.join(" ")}
         className="h-auto w-full"
         role="img"
-        aria-label="Mapa de calor de votos de María Fernanda Cabal"
+        aria-label={ariaLabel}
       >
         {/* País. Al abrir un departamento, los demás se desvanecen. */}
         <g>
@@ -369,14 +388,20 @@ export function CabalMap({
       )}
 
       <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-[11px] text-muted-foreground">
-        <span>Menos votos</span>
-        <span
-          className="h-2 w-28 rounded-full"
-          style={{
-            background: `linear-gradient(90deg, ${heatColor(0)}, ${heatColor(0.35)}, ${heatColor(0.7)}, ${heatColor(1)})`,
-          }}
-        />
-        <span>Más votos</span>
+        {colores ? (
+          <span>Color del partido ganador · más intenso, más amplia la victoria</span>
+        ) : (
+          <>
+            <span>Menos votos</span>
+            <span
+              className="h-2 w-28 rounded-full"
+              style={{
+                background: `linear-gradient(90deg, ${heatColor(0)}, ${heatColor(0.35)}, ${heatColor(0.7)}, ${heatColor(1)})`,
+              }}
+            />
+            <span>Más votos</span>
+          </>
+        )}
         {dept === BOGOTA_DANE && <span className="w-full text-center">Sumapaz (rural) continúa al sur del encuadre.</span>}
         {dept === CUNDINAMARCA && <span className="w-full text-center">Bogotá (punteado) abre sus localidades.</span>}
       </div>
