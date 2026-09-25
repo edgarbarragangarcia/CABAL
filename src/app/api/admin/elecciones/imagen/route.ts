@@ -55,6 +55,9 @@ export async function GET(req: Request) {
     return new Response(null, { status: 400 });
   }
 
+  // Solo si todos los intentos dicen "no existe" se cachea la ausencia: un
+  // corte o un 403 del firewall no debe dejar un logo en blanco por un día.
+  let dudoso = false;
   for (const ruta of rutas(eleccion, params)) {
     try {
       const res = await fetch(`https://${eleccion.host}.registraduria.gov.co${ruta}`, {
@@ -62,7 +65,10 @@ export async function GET(req: Request) {
         signal: AbortSignal.timeout(10_000),
       });
       const type = res.headers.get("content-type") ?? "";
-      if (!res.ok || !type.startsWith("image/")) continue;
+      if (!res.ok || !type.startsWith("image/")) {
+        if (res.status !== 404 && !(res.ok && type.startsWith("text/html"))) dudoso = true;
+        continue;
+      }
       return new Response(await res.arrayBuffer(), {
         headers: {
           "Content-Type": type,
@@ -71,9 +77,10 @@ export async function GET(req: Request) {
         },
       });
     } catch {
-      // Siguiente nombre posible.
+      dudoso = true;
     }
   }
+  if (dudoso) return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
   // Sin imagen: el cliente muestra iniciales. Se cachea un día para no volver a preguntar.
   return new Response(null, { status: 404, headers: { "Cache-Control": "public, s-maxage=86400" } });
 }

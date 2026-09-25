@@ -13,10 +13,11 @@ const imagenUrl = (e: string, q: Record<string, string | undefined>) =>
     Object.entries({ e, ...q }).filter((kv): kv is [string, string] => !!kv[1])
   )}`;
 
+/** Iniciales sin conectores ni la palabra "partido": "Partido Liberal Colombiano" → "LC". */
 const iniciales = (nombre: string) =>
   nombre
     .split(" ")
-    .filter((w) => w.length > 2)
+    .filter((w) => w.length > 2 && !/^(partido|movimiento|politico|político|coalicion|coalición|del|las|los)$/i.test(w))
     .slice(0, 2)
     .map((w) => w[0])
     .join("")
@@ -26,6 +27,7 @@ const iniciales = (nombre: string) =>
 function Avatar({
   src,
   alt,
+  nombre,
   color,
   className,
   rounded,
@@ -33,34 +35,38 @@ function Avatar({
 }: {
   src: string | null;
   alt: string;
+  /** Para las iniciales cuando no hay imagen. */
+  nombre: string;
   color: string;
   className: string;
   rounded: string;
   fit?: "cover" | "contain";
 }) {
-  const [fallo, setFallo] = React.useState<string | null>(null);
-  if (!src || fallo === src) {
+  // Un reintento (la Registraduría a veces corta) antes de quedarse con las iniciales.
+  const [fallos, setFallos] = React.useState<{ src: string | null; n: number }>({ src: null, n: 0 });
+  const n = fallos.src === src ? fallos.n : 0;
+  if (!src || n >= 2) {
     return (
       <span
         className={`${className} ${rounded} grid shrink-0 place-items-center text-[0.65em] font-bold text-white shadow-sm`}
         style={{ backgroundColor: color }}
         aria-hidden="true"
       >
-        {iniciales(alt)}
+        {iniciales(nombre)}
       </span>
     );
   }
   return (
     <span className={`${className} ${rounded} relative shrink-0 overflow-hidden bg-white shadow-sm ring-1 ring-border`}>
       <Image
-        src={src}
+        src={n === 1 ? `${src}&r=1` : src}
         alt={alt}
         fill
         unoptimized
         loading="lazy"
         sizes="64px"
         className={fit === "cover" ? "object-cover object-top" : "object-contain p-0.5"}
-        onError={() => setFallo(src)}
+        onError={() => setFallos({ src, n: n + 1 })}
       />
     </span>
   );
@@ -83,6 +89,7 @@ export function LogoPartido({
     <Avatar
       src={logo && logo !== "0" ? imagenUrl(eleccionId, { t: "partido", logo }) : null}
       alt={`Logo de ${titulo(nombre)}`}
+      nombre={nombre}
       color={color}
       className={className}
       rounded="rounded-lg"
@@ -114,7 +121,16 @@ export function FotoCandidato({
           cedula: candidato.cedula,
         })
       : null;
-  return <Avatar src={src} alt={titulo(candidato.nombre)} color={color} className={className} rounded="rounded-full" />;
+  return (
+    <Avatar
+      src={src}
+      alt={titulo(candidato.nombre)}
+      nombre={candidato.nombre}
+      color={color}
+      className={className}
+      rounded="rounded-full"
+    />
+  );
 }
 
 // ------------------------------------------------------------ hoja de vida ---

@@ -37,6 +37,9 @@ import { MapaElectoral3D, type RegionMapa } from "./mapa-electoral-3d";
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
+/** Súbela cuando la API de resultados agregue o cambie campos. */
+const DATOS_VERSION = "3";
+
 
 // ---------------------------------------------------------------- mapa ---
 
@@ -410,6 +413,8 @@ export function ExploradorElectoral() {
 
   const eleccion = findEleccion(eleccionId) ?? ELECCIONES[0];
   const url = `/api/admin/elecciones?${new URLSearchParams({
+    // Versión de la forma de los datos: al cambiarla, el navegador no reutiliza respuestas viejas.
+    v: DATOS_VERSION,
     e: eleccionId,
     c: sigla,
     ...(destino.a ? { a: destino.a } : {}),

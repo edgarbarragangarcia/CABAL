@@ -20,7 +20,7 @@ export async function GET(req: Request) {
       dane: searchParams.get("dane"),
     });
     // Resultados cerrados: pueden cachearse en el navegador sin problema.
-    return NextResponse.json(vista, { headers: { "Cache-Control": "private, max-age=3600" } });
+    return NextResponse.json(vista, { headers: { "Cache-Control": "private, max-age=600" } });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "No fue posible cargar los resultados." },
