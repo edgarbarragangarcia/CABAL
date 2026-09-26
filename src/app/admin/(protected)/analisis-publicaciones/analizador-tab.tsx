@@ -6,6 +6,8 @@ import { CalendarDays, Flag, GripVertical, Landmark, Loader2, MapPin, MousePoint
 import { ELECCIONES, NIVELES } from "@/lib/gov-data/elecciones/catalogo";
 import type { VistaElectoral } from "@/lib/gov-data/elecciones/resultados";
 import { LogoPartido } from "./candidato-ui";
+import { Markdown } from "./markdown-ia";
+import { OportunidadPanel } from "./oportunidad-panel";
 import { titulo } from "./nombres";
 
 /**
@@ -85,22 +87,6 @@ function Chip({ t, onAdd, eleccionId }: { t: Tarjeta; onAdd: (t: Tarjeta) => voi
       <Icon className="size-3.5" aria-hidden="true" />
       <span className="max-w-[14rem] truncate">{texto}</span>
     </button>
-  );
-}
-
-/** Markdown mínimo del análisis: títulos, viñetas y párrafos. */
-function Markdown({ texto }: { texto: string }) {
-  return (
-    <div className="space-y-2 text-sm leading-relaxed">
-      {texto.split("\n").map((l, i) => {
-        const t = l.trim();
-        if (!t) return null;
-        const limpio = t.replace(/\*\*(.+?)\*\*/g, "$1");
-        if (t.startsWith("#")) return <p key={i} className="pt-2 font-semibold text-foreground">{limpio.replace(/^#+\s*/, "")}</p>;
-        if (/^[-*•]\s/.test(t)) return <p key={i} className="pl-4 before:-ml-3 before:mr-1.5 before:content-['•']">{limpio.replace(/^[-*•]\s/, "")}</p>;
-        return <p key={i} className="text-muted-foreground">{limpio}</p>;
-      })}
-    </div>
   );
 }
 
@@ -329,6 +315,14 @@ export function AnalizadorTab() {
               <AnalisisIA
                 key={`${url}-${elegido.codigo}`}
                 nombre={elegido.nombre}
+                params={{ e: cargo.eleccion, c: cargo.sigla, a: ambito ?? "", circ: circ.codigo, p: p.codigo, k: elegido.codigo }}
+              />
+            )}
+            {p && elegido && cargo && circ && (vista?.ambito.nivel ?? 0) >= 3 && (
+              <OportunidadPanel
+                key={`op-${url}-${elegido.codigo}`}
+                nombre={elegido.nombre}
+                lugar={lugar}
                 params={{ e: cargo.eleccion, c: cargo.sigla, a: ambito ?? "", circ: circ.codigo, p: p.codigo, k: elegido.codigo }}
               />
             )}

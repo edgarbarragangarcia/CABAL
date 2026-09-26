@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 
 import { ELECCIONES_DATA, GEOS } from "@/data/elecciones";
 import { findEleccion, type CorporacionInfo, type EleccionInfo } from "./catalogo";
+import type { PuestoDatos } from "./oportunidad";
 
 /**
  * Resultados de cualquier elección y corporación del catálogo, ámbito por
@@ -535,4 +536,65 @@ export async function getVotosCandidato(
     hijos: votosHijos,
     pendientes: votosHijos.filter((h) => h.votos === null).length,
   };
+}
+
+// ----------------------------------------------------- oportunidad ---
+
+/** Por encima de esto, pedir un municipio o una localidad: son demasiados archivos para una consulta. */
+const MAX_PUESTOS_OPORTUNIDAD = 1500;
+
+export type DatosOportunidad = {
+  ambito: AmbitoRef;
+  /** Puestos bajo el ámbito. */
+  total: number;
+  /** Puestos consultados hasta ahora; si faltan, la siguiente llamada los completa (los demás ya están en caché). */
+  puestos: PuestoDatos[];
+  pendientes: number;
+  /** El ámbito tiene más puestos de los que se analizan; hay que elegir uno más pequeño. */
+  demasiados: boolean;
+};
+
+/**
+ * Censo, votantes y votos de un candidato en cada puesto de votación bajo un
+ * ámbito (un municipio, una localidad, una zona...). Cada puesto es un
+ * archivo del preconteo, y queda en caché al consultarse.
+ */
+export async function getDatosOportunidad(
+  params: ParamsAmbito & { circunscripcion: string; partido: string; candidato: string }
+): Promise<DatosOportunidad> {
+  const { eleccion, corporacion, data, geo, codigo, ambito } = await contexto(params);
+  const idx = geo.byCode.get(codigo);
+  if (idx === undefined || ambito.nivel < 3) {
+    return { ambito, total: 0, puestos: [], pendientes: 0, demasiados: ambito.nivel < 3 };
+  }
+
+  // Todos los puestos (nivel 6) bajo el ámbito, con la zona donde están.
+  const lista: { i: number; zona: string }[] = [];
+  const bajar = (i: number, zona: string) => {
+    if (geo.rows[i][2] === 6) return void lista.push({ i, zona });
+    for (const h of geo.children.get(i) ?? []) bajar(h, geo.rows[i][2] === 4 ? geo.rows[i][1] : zona);
+  };
+  bajar(idx, "");
+  if (lista.length > MAX_PUESTOS_OPORTUNIDAD) return { ambito, total: lista.length, puestos: [], pendientes: 0, demasiados: true };
+
+  const delCandidato = (r: Resultado | null) => {
+    const circ =
+      r?.circunscripciones.find((c) => c.codigo === params.circunscripcion) ??
+      (r?.circunscripciones.length === 1 ? r.circunscripciones[0] : undefined);
+    return circ?.partidos.find((p) => p.codigo === params.partido)?.candidatos.find((k) => k.codigo === params.candidato)
+      ?.votos ?? 0;
+  };
+  const limite = Date.now() + PRESUPUESTO_MS;
+  const filas = await mapLimit(lista, 6, async ({ i, zona }): Promise<PuestoDatos | null> => {
+    if (Date.now() > limite) return null;
+    const [cod, nombre] = geo.rows[i];
+    try {
+      const r = await resultadoDe(eleccion, corporacion.sigla, cod, data.partidos, geo);
+      return r ? { codigo: cod, nombre, zona, censo: r.censo, votantes: r.votantes, votos: delCandidato(r) } : null;
+    } catch {
+      return null;
+    }
+  });
+  const puestos = filas.filter((f): f is PuestoDatos => f !== null);
+  return { ambito, total: lista.length, puestos, pendientes: lista.length - puestos.length, demasiados: false };
 }
