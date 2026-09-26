@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { calcularTransferencia } from "@/lib/gov-data/elecciones/comparacion";
 import { SEGMENTO_NOMBRE, calcularOportunidad } from "@/lib/gov-data/elecciones/oportunidad";
-import { getDatosOportunidad, getVistaElectoral, getVotosCandidato } from "@/lib/gov-data/elecciones/resultados";
+import { getComparacion, getDatosOportunidad, getVistaElectoral, getVotosCandidato } from "@/lib/gov-data/elecciones/resultados";
 import { generarTexto } from "@/lib/ia-config";
 
 export const maxDuration = 60;
@@ -19,6 +20,41 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Faltan la elección, el cargo o el candidato." }, { status: 400 });
   }
   try {
+    // Cambio entre dos elecciones: no necesita ubicar al candidato en una lista.
+    if (body.comparar) {
+      const c = await getComparacion({
+        a: { eleccion: body.ea, corporacion: body.ca },
+        b: { eleccion: body.eb, corporacion: body.cb },
+        ambito: body.a || null,
+        persona: body.persona,
+      });
+      if (c.noSoportado) {
+        return NextResponse.json({ error: "Sube a un país, un departamento o un municipio para comparar." }, { status: 400 });
+      }
+      const t = calcularTransferencia(c.filas);
+      const fila = (f: (typeof t.filas)[number]) =>
+        `- ${f.nombre}: ${f.a.votos} → ${f.b.votos} (${f.delta >= 0 ? "+" : ""}${f.delta}); cuota ${f.cuotaA.toFixed(1)}% → ${f.cuotaB.toFixed(1)}%`;
+      const datos = [
+        `Candidato: ${c.a.nombre ?? body.persona} (${c.a.partido ?? "s/d"}) en la primera elección; ${c.b.nombre ?? "sin datos"} (${c.b.partido ?? "s/d"}) en la segunda.`,
+        `Territorio: ${c.ambito.nombre}. Territorios comparados: ${c.filas.length} de ${c.total}${c.pendientes ? ` (faltaron ${c.pendientes})` : ""}.`,
+        `Votos: ${t.votosA} → ${t.votosB} (${t.delta >= 0 ? "+" : ""}${t.delta}); cuota ${t.cuotaA.toFixed(1)}% → ${t.cuotaB.toFixed(1)}% de los válidos.`,
+        `Cayó en ${t.fugas.territorios} territorios (${t.fugas.votosPerdidos} votos menos) y creció en ${t.crecimiento.territorios} (${t.crecimiento.votosGanados} votos más).`,
+        "Mayores caídas:",
+        ...t.filas.filter((f) => f.delta < 0).slice(0, 10).map(fila),
+        "Mayores crecimientos:",
+        ...[...t.filas].reverse().filter((f) => f.delta > 0).slice(0, 10).map(fila),
+        "Partidos que más votos sumaron en los territorios donde el candidato bajó:",
+        ...t.herederos.map((h) => `- ${h.partido}${h.esPropio ? " (su partido en la segunda elección)" : ""}: +${h.ganados} votos en ${h.territorios} territorios`),
+      ].join("\n");
+      const texto = await generarTexto({
+        maxTokens: 2000,
+        system:
+          "Eres analista electoral en Colombia. Con los datos oficiales que te dan (preconteo de la Registraduría), explica el cambio de votos de un candidato entre dos elecciones. Estructura en markdown: '## Resumen', '## Dónde perdió y dónde ganó', '## Quién ganó donde perdió' y '## Qué revisar'. Aclara siempre que es un cambio entre territorios y no un flujo de electores: con resultados agregados no se sabe a quién votó cada persona, y la participación y los candidatos cambian entre elecciones. No inventes causas, encuestas ni cifras que no estén en los datos. Español, claro.",
+        user: datos,
+      });
+      return NextResponse.json({ analisis: texto });
+    }
+
     const params = { eleccion: body.e, corporacion: body.c, ambito: body.a || null };
     const [vista, votos] = await Promise.all([
       getVistaElectoral(params),

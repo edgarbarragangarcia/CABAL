@@ -71,7 +71,7 @@ export function CurulesPanel({
           <ul className="mt-1.5 space-y-1 text-xs text-muted-foreground">
             {!propia.supera && <li>No alcanzó el umbral: le faltaron {fmt(propia.faltaUmbral)} votos.</li>}
             {propia.supera && propia.faltaCurul !== null && (
-              <li>Para una curul más necesitaba {fmt(propia.faltaCurul)} votos adicionales.</li>
+              <li>Para una curul más necesitaba {fmt(propia.faltaCurul)} {propia.faltaCurul === 1 ? "voto adicional" : "votos adicionales"}.</li>
             )}
             {propia.ultima && propia.margen !== null && (
               <li>Tuvo la última curul repartida: podía perder hasta {fmt(propia.margen)} votos antes de cederla.</li>

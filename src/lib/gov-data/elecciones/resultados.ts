@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 
 import { ELECCIONES_DATA, GEOS } from "@/data/elecciones";
 import { findEleccion, type CorporacionInfo, type EleccionInfo } from "./catalogo";
+import { mismaPersona, normalizar as normalizarTexto, type FilaComparacion, type Lado } from "./comparacion";
 import type { PuestoDatos } from "./oportunidad";
 
 /**
@@ -597,4 +598,108 @@ export async function getDatosOportunidad(
   });
   const puestos = filas.filter((f): f is PuestoDatos => f !== null);
   return { ambito, total: lista.length, puestos, pendientes: lista.length - puestos.length, demasiados: false };
+}
+
+// -------------------------------------------------------- comparación ---
+
+export type Comparacion = {
+  ambito: AmbitoRef;
+  /** Nombre y partido con los que apareció el candidato en cada elección (para que se verifique que es la misma persona). */
+  a: { nombre?: string; partido?: string };
+  b: { nombre?: string; partido?: string };
+  filas: FilaComparacion[];
+  total: number;
+  /** Territorios sin consultar todavía: la siguiente llamada los completa. */
+  pendientes: number;
+  /** Solo se comparan país, departamentos y municipios. */
+  noSoportado: boolean;
+};
+
+/** Clave para emparejar un territorio entre dos elecciones cuyos códigos no coinciden. */
+function claveTerritorio(h: AmbitoRef, bogota: boolean) {
+  if (h.dane) return h.dane;
+  if (bogota && h.nivel === 4) return `loc${h.codigo.slice(-2)}`;
+  return normalizarTexto(h.nombre);
+}
+
+/** La persona en un resultado: su mayor votación entre todas las circunscripciones y listas, y el contexto de esa circunscripción. */
+function ladoDe(r: Resultado, persona: string): { lado: Lado; nombre?: string } {
+  let mejor: { circ: Circunscripcion; p: PartidoResultado; k: Candidato } | undefined;
+  for (const circ of r.circunscripciones) {
+    for (const p of circ.partidos) {
+      for (const k of p.candidatos) {
+        if (!k.soloLista && mismaPersona(k.nombre, persona) && (!mejor || k.votos > mejor.k.votos)) mejor = { circ, p, k };
+      }
+    }
+  }
+  const circ = mejor?.circ ?? r.circunscripciones[0];
+  return {
+    nombre: mejor?.k.nombre,
+    lado: {
+      votos: mejor?.k.votos ?? 0,
+      validos: circ?.validos ?? 0,
+      partido: mejor?.p.nombre,
+      partidos: [...(circ?.partidos ?? [])]
+        .sort((x, y) => y.votos - x.votos)
+        .slice(0, 14)
+        .map((p): [string, number] => [p.nombre, p.votos]),
+    },
+  };
+}
+
+/**
+ * Votos de una persona en dos elecciones, territorio por territorio (los hijos
+ * del ámbito pedido). Los territorios se emparejan por código DANE o por
+ * nombre, porque los códigos de la Registraduría cambian entre elecciones.
+ */
+export async function getComparacion(params: {
+  a: { eleccion: string; corporacion: string };
+  b: { eleccion: string; corporacion: string };
+  /** Ámbito en la elección `b` (la actual); en `a` se ubica por DANE. */
+  ambito?: string | null;
+  persona: string;
+}): Promise<Comparacion> {
+  const cb = await contexto({ eleccion: params.b.eleccion, corporacion: params.b.corporacion, ambito: params.ambito });
+  const dane = cb.ambito.dane;
+  const ca = await contexto({ eleccion: params.a.eleccion, corporacion: params.a.corporacion, ambito: null, dane });
+  const vacio = { ambito: cb.ambito, a: {}, b: {}, filas: [], total: 0, pendientes: 0 };
+  if (cb.ambito.nivel > 3 || ca.ambito.nivel !== cb.ambito.nivel) return { ...vacio, noSoportado: true };
+
+  const bogota = dane === "11001";
+  const porClave = new Map(ca.hijos.map((h) => [claveTerritorio(h, bogota), h]));
+  const pares = cb.hijos.flatMap((hb) => {
+    const ha = porClave.get(claveTerritorio(hb, bogota));
+    return ha ? [{ ha, hb }] : [];
+  });
+
+  const limite = Date.now() + PRESUPUESTO_MS;
+  const nombres: { a?: string; b?: string; pa?: string; pb?: string } = {};
+  const filas = await mapLimit(pares, 6, async ({ ha, hb }): Promise<FilaComparacion | null> => {
+    if (Date.now() > limite) return null;
+    try {
+      const [ra, rb] = await Promise.all([
+        resultadoDe(ca.eleccion, ca.corporacion.sigla, ha.codigo, ca.data.partidos, ca.geo),
+        resultadoDe(cb.eleccion, cb.corporacion.sigla, hb.codigo, cb.data.partidos, cb.geo),
+      ]);
+      if (!ra || !rb) return null;
+      const [la, lb] = [ladoDe(ra, params.persona), ladoDe(rb, params.persona)];
+      nombres.a ??= la.nombre;
+      nombres.b ??= lb.nombre;
+      nombres.pa ??= la.lado.partido;
+      nombres.pb ??= lb.lado.partido;
+      return { clave: claveTerritorio(hb, bogota), nombre: hb.nombre, ...(hb.dane ? { dane: hb.dane } : {}), a: la.lado, b: lb.lado };
+    } catch {
+      return null;
+    }
+  });
+  const listas = filas.filter((f): f is FilaComparacion => f !== null);
+  return {
+    ambito: cb.ambito,
+    a: { nombre: nombres.a, partido: nombres.pa },
+    b: { nombre: nombres.b, partido: nombres.pb },
+    filas: listas,
+    total: pares.length,
+    pendientes: pares.length - listas.length,
+    noSoportado: false,
+  };
 }
