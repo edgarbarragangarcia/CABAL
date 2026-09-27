@@ -1,5 +1,7 @@
 import "server-only";
 
+import { indicadores } from "@/lib/dane/contexto";
+import { anioDisponible, poblacionDe, poblacionPais } from "@/lib/dane/poblacion";
 import { generarTexto } from "@/lib/ia-config";
 import { calcularTransferencia, mismaPersona } from "./comparacion";
 import { ELECCIONES, findEleccion } from "./catalogo";
@@ -27,7 +29,8 @@ export type Generar = (p: { system: string; user: string; maxTokens: number }) =
 export type Consulta =
   | { fn: "resultados"; eleccion: string; cargo: string; territorio?: string }
   | { fn: "candidato"; nombre: string; eleccion: string; cargo: string; territorio?: string }
-  | { fn: "comparar"; nombre: string; eleccionA: string; cargoA: string; eleccionB: string; cargoB: string; territorio?: string };
+  | { fn: "comparar"; nombre: string; eleccionA: string; cargoA: string; eleccionB: string; cargoB: string; territorio?: string }
+  | { fn: "poblacion"; territorio?: string; anio?: number };
 
 export type Hecha = { descripcion: string; ok: boolean; datos: string };
 export type Respuesta = { respuesta: string; consultas: Hecha[] };
@@ -51,6 +54,8 @@ Consultas posibles:
 - {"fn":"resultados","eleccion":"<id>","cargo":"<sigla>","territorio":"<país, departamento o municipio>"}: resultados de un territorio (partidos y candidatos más votados). Sin territorio = todo el país.
 - {"fn":"candidato","nombre":"<nombre completo>","eleccion":"<id>","cargo":"<sigla>","territorio":"<...>"}: votos de una persona en un territorio y en cada uno de sus subterritorios.
 - {"fn":"comparar","nombre":"<nombre completo>","eleccionA":"<id>","cargoA":"<sigla>","eleccionB":"<id>","cargoB":"<sigla>","territorio":"<país, departamento o municipio>"}: cambio de votos de una persona entre dos elecciones, por territorio.
+
+- {"fn":"poblacion","territorio":"<país, departamento o municipio>","anio":2026}: población, ruralidad y edades del territorio (proyecciones del DANE, años 2018, 2022, 2023 y 2026; sin año, 2026).
 
 Reglas: máximo ${MAX_CONSULTAS} consultas; el nombre de la persona lo más completo que puedas (nombres y apellidos); "Senado 2022" es {"eleccion":"congreso-2022","cargo":"SE"}; si la pregunta no se puede responder con estos datos (encuestas, edades de votantes, opiniones, hechos ajenos a resultados electorales), devuelve {"consultas":[],"motivo":"<por qué>"}.
 Formato: {"consultas":[...]}.`;
@@ -101,6 +106,9 @@ export function validarPlan(bruto: unknown): { consultas: Consulta[]; avisos: st
       texto(c.nombre).split(" ").length >= 2
     ) {
       consultas.push({ fn, nombre: texto(c.nombre), eleccionA: texto(c.eleccionA), cargoA: texto(c.cargoA), eleccionB: texto(c.eleccionB), cargoB: texto(c.cargoB), territorio });
+    } else if (fn === "poblacion") {
+      const anio = Number(c.anio);
+      consultas.push({ fn, territorio, ...(Number.isFinite(anio) && anio > 2000 ? { anio } : {}) });
     } else {
       avisos.push(`Se descartó una consulta no válida (${fn || "sin función"}).`);
     }
@@ -202,18 +210,44 @@ async function ejecutarComparar(c: Extract<Consulta, { fn: "comparar" }>): Promi
     .join("\n");
 }
 
+async function ejecutarPoblacion(c: Extract<Consulta, { fn: "poblacion" }>): Promise<string> {
+  const anio = anioDisponible(c.anio ?? 2026);
+  // Cualquier elección sirve para ubicar el territorio: se usa la más reciente.
+  const u = c.territorio ? (await buscarAmbito("congreso-2026", "SE", c.territorio)) : [];
+  let nombre = "todo el país";
+  let pob = poblacionPais(anio);
+  if (c.territorio && !["colombia", "pais", "país", "nacional"].includes(c.territorio.toLowerCase())) {
+    if (u.length === 0) return `No encontré el territorio «${c.territorio}».`;
+    const mismo = u.filter((h) => h.nivel === u[0].nivel);
+    if (u[0].nivel === 3 && mismo.length > 1) return `«${c.territorio}» es ambiguo: ${mismo.map((h) => `${h.nombre} (${h.departamento ?? "?"})`).join("; ")}.`;
+    nombre = u[0].nombre;
+    pob = poblacionDe(u[0].dane, anio);
+  }
+  if (!pob) return `No hay población del DANE para ${nombre}.`;
+  const i = indicadores(pob);
+  const g = pob.edades;
+  const pc = (n: number) => `${((100 * n) / pob.total).toFixed(1)} %`;
+  return [
+    `Población de ${nombre} en ${anio} (proyección del DANE, Censo 2018): ${fmt(i.total)} habitantes; ${i.pctRural.toFixed(1)} % en centros poblados y rural disperso.`,
+    `En edad de votar (18 años o más): ${fmt(i.adultos)} (${i.pctAdultos.toFixed(1)} %). Por edades: 0-17 años ${pc(g[0])}; 18-29 ${pc(g[1])}; 30-44 ${pc(g[2])}; 45-59 ${pc(g[3])}; 60 o más ${pc(g[4])}.`,
+    "(Es la población del territorio, no la de quienes votaron.)",
+  ].join("\n");
+}
+
 function describir(c: Consulta): string {
   const lugar = (t?: string) => t ?? "todo el país";
   const nombre = (id: string, sigla: string) => `${findEleccion(id)?.corporaciones.find((x) => x.sigla === sigla)?.nombre ?? sigla} ${findEleccion(id)?.fecha.slice(0, 4) ?? ""}`.trim();
   if (c.fn === "resultados") return `Resultados de ${nombre(c.eleccion, c.cargo)} en ${lugar(c.territorio)}`;
   if (c.fn === "candidato") return `Votos de ${c.nombre} en ${nombre(c.eleccion, c.cargo)}, ${lugar(c.territorio)}`;
+  if (c.fn === "poblacion") return `Población de ${lugar(c.territorio)} (DANE)`;
   return `Cambio de ${c.nombre} entre ${nombre(c.eleccionA, c.cargoA)} y ${nombre(c.eleccionB, c.cargoB)}, ${lugar(c.territorio)}`;
 }
 
 export async function ejecutarConsulta(c: Consulta): Promise<Hecha> {
   const descripcion = describir(c);
   try {
-    const datos = c.fn === "resultados" ? await ejecutarResultados(c) : c.fn === "candidato" ? await ejecutarCandidato(c) : await ejecutarComparar(c);
+    const datos =
+      c.fn === "resultados" ? await ejecutarResultados(c) : c.fn === "candidato" ? await ejecutarCandidato(c) : c.fn === "poblacion" ? await ejecutarPoblacion(c) : await ejecutarComparar(c);
     return { descripcion, ok: true, datos };
   } catch (err) {
     return { descripcion, ok: false, datos: `La consulta falló: ${err instanceof Error ? err.message : "error desconocido"}.` };

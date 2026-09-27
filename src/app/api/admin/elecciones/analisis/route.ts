@@ -20,6 +20,42 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Faltan la elección, el cargo o el candidato." }, { status: 400 });
   }
   try {
+    // Contexto demográfico (DANE): el panel manda el perfil ya calculado, cifras agregadas por territorio.
+    if (body.contexto) {
+      type Grupo = { etiqueta: string; territorios: number; votos: number; votosPorMilAdultos: number; pctDeSusVotos: number };
+      const r = JSON.parse(body.contexto) as {
+        lugar: string;
+        unidad: string;
+        anio: number;
+        votos: number;
+        ambito: { total: number; pctRural: number; pctAdultos: number; pct18a29: number; pct60: number } | null;
+        perfil: { territorios: number; porRuralidad: Grupo[]; porTamano: Grupo[]; correlaciones: { factor: string; r: number; fuerza: string; lectura: string }[] };
+      };
+      const g = (x: Grupo) =>
+        `- ${x.etiqueta}: ${x.territorios} ${r.unidad}, ${x.votos} votos, ${x.votosPorMilAdultos.toFixed(1)} votos por mil adultos, ${x.pctDeSusVotos.toFixed(1)} % de sus votos`;
+      const datos = [
+        `Territorio: ${r.lugar} (por ${r.unidad}); población y edades: proyecciones del DANE (Censo 2018) para ${r.anio}. Votos del candidato: ${r.votos}.`,
+        r.ambito
+          ? `El territorio: ${r.ambito.total} habitantes, ${r.ambito.pctRural.toFixed(1)} % rural, ${r.ambito.pctAdultos.toFixed(1)} % en edad de votar (18+), ${r.ambito.pct18a29.toFixed(1)} % de 18 a 29 años, ${r.ambito.pct60.toFixed(1)} % de 60 años o más.`
+          : "",
+        `Comparación entre ${r.perfil.territorios} ${r.unidad}. Votos por mil adultos según la ruralidad:`,
+        ...r.perfil.porRuralidad.map(g),
+        "Según el tamaño:",
+        ...r.perfil.porTamano.map(g),
+        "Relaciones (correlación de Pearson entre votos por adulto y cada factor):",
+        ...r.perfil.correlaciones.map((k) => `- ${k.factor}: r = ${k.r.toFixed(2)} (${k.fuerza}); ${k.lectura}`),
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const texto = await generarTexto({
+        maxTokens: 1500,
+        system:
+          "Eres analista electoral en Colombia. Con estas cifras (votos oficiales del preconteo y población del DANE por territorio), explica en qué tipo de territorios le va mejor al candidato y qué implica. Estructura en markdown: '## Resumen', '## Dónde le va mejor', '## Dónde tiene margen' y '## Cautelas'. Aclara siempre que es la población del territorio y no la de quienes votaron (ninguna fuente oficial publica la edad de los votantes) y que una relación entre territorios no dice cómo vota cada persona. Usa solo las cifras dadas; no inventes causas. Español, claro y breve.",
+        user: datos,
+      });
+      return NextResponse.json({ analisis: texto });
+    }
+
     // Base del CRM contra votos: el panel manda cifras agregadas por territorio (sin personas).
     if (body.crm) {
       type Fila = { n: string; v: number; c: number; e: string };

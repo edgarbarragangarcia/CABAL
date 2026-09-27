@@ -728,7 +728,7 @@ export async function getComparacion(params: {
 
 // ------------------------------------------------ territorio por nombre ---
 
-export type AmbitoHallado = { codigo: string; nombre: string; nivel: number; /** Departamento al que pertenece (para distinguir homónimos). */ departamento?: string };
+export type AmbitoHallado = { codigo: string; nombre: string; nivel: number; /** Código DANE, si lo tiene. */ dane?: string; /** Departamento al que pertenece (para distinguir homónimos). */ departamento?: string };
 
 /**
  * Busca un país, departamento o municipio por su nombre ("Bogotá", "Valle del
@@ -755,7 +755,7 @@ export async function buscarAmbito(eleccionId: string, sigla: string, nombre: st
     if (r[2] !== 2 && r[2] !== 3) return;
     const m = normalizarTexto(r[1]);
     const igual = m === n || m.startsWith(`${n} `) || n.startsWith(`${m} `);
-    if (igual) hallados.push({ codigo: r[0], nombre: r[1], nivel: r[2], departamento: r[2] === 3 ? depto(i) : undefined });
+    if (igual) hallados.push({ codigo: r[0], nombre: r[1], nivel: r[2], ...(r[5] ? { dane: r[5] } : {}), departamento: r[2] === 3 ? depto(i) : undefined });
   });
   // Un departamento con el mismo nombre que su capital ("Bogotá"): gana el departamento; luego, coincidencia exacta.
   return hallados

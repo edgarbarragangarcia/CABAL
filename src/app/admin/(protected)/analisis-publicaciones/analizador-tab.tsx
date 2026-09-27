@@ -6,6 +6,7 @@ import { CalendarDays, Flag, GripVertical, Landmark, Loader2, MapPin, MousePoint
 import { ELECCIONES, NIVELES } from "@/lib/gov-data/elecciones/catalogo";
 import type { VistaElectoral } from "@/lib/gov-data/elecciones/resultados";
 import { ComparacionPanel } from "./comparacion-panel";
+import { ContextoPanel } from "./contexto-panel";
 import { CrmVotosPanel } from "./crm-votos-panel";
 import { CurulesPanel } from "./curules-panel";
 import { LogoPartido } from "./candidato-ui";
@@ -328,6 +329,15 @@ export function AnalizadorTab() {
                 circ={circ}
                 partidoSel={p}
                 candidatoSel={elegido?.codigo}
+              />
+            )}
+            {p && elegido && cargo && circ && vista && (vista.ambito.nivel === 1 || vista.ambito.nivel === 2) && (
+              <ContextoPanel
+                key={`ctx-${url}-${elegido.codigo}`}
+                nombre={elegido.nombre}
+                lugar={lugar}
+                nivel={vista.ambito.nivel as 1 | 2}
+                params={{ e: cargo.eleccion, c: cargo.sigla, a: ambito ?? "", circ: circ.codigo, p: p.codigo, k: elegido.codigo }}
               />
             )}
             {p && elegido && cargo && circ && vista && (vista.ambito.nivel === 1 || vista.ambito.nivel === 2) && (
