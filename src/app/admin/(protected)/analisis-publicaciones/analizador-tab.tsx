@@ -6,6 +6,7 @@ import { CalendarDays, Flag, GripVertical, Landmark, Loader2, MapPin, MousePoint
 import { ELECCIONES, NIVELES } from "@/lib/gov-data/elecciones/catalogo";
 import type { VistaElectoral } from "@/lib/gov-data/elecciones/resultados";
 import { ComparacionPanel } from "./comparacion-panel";
+import { CrmVotosPanel } from "./crm-votos-panel";
 import { CurulesPanel } from "./curules-panel";
 import { LogoPartido } from "./candidato-ui";
 import { Markdown } from "./markdown-ia";
@@ -212,8 +213,8 @@ export function AnalizadorTab() {
   const partidos = [...(circ?.partidos ?? [])].filter((x) => x.votos > 0).sort((a, b) => b.votos - a.votos);
   const max = Math.max(1, partidos[0]?.votos ?? 0);
   const lugar = ruta.length ? titulo(ruta.at(-1)!.nombre) : "todo el país";
-  // Candidato elegido para el análisis: vale para el territorio y partido en que se eligió.
-  const elegido = candSel && candSel.url === url && p?.candidatos.some((x) => x.codigo === candSel.codigo) ? candSel : null;
+  // Candidato elegido para el análisis: se conserva al bajar de territorio mientras siga en la lista del partido.
+  const elegido = candSel && p?.candidatos.some((x) => x.codigo === candSel.codigo) ? candSel : null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -327,6 +328,15 @@ export function AnalizadorTab() {
                 circ={circ}
                 partidoSel={p}
                 candidatoSel={elegido?.codigo}
+              />
+            )}
+            {p && elegido && cargo && circ && vista && (vista.ambito.nivel === 1 || vista.ambito.nivel === 2) && (
+              <CrmVotosPanel
+                key={`crm-${url}-${elegido.codigo}`}
+                nombre={elegido.nombre}
+                lugar={lugar}
+                nivel={vista.ambito.nivel as 1 | 2}
+                params={{ e: cargo.eleccion, c: cargo.sigla, a: ambito ?? "", circ: circ.codigo, p: p.codigo, k: elegido.codigo }}
               />
             )}
             {p && elegido && cargo && vista && vista.ambito.nivel <= 3 && (

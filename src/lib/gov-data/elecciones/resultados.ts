@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import { ELECCIONES_DATA, GEOS } from "@/data/elecciones";
 import { findEleccion, type CorporacionInfo, type EleccionInfo } from "./catalogo";
 import { mismaPersona, normalizar as normalizarTexto, type FilaComparacion, type Lado } from "./comparacion";
+import { resultadoCongreso2018 } from "./congreso-2018";
 import type { PuestoDatos } from "./oportunidad";
 
 /**
@@ -106,7 +107,7 @@ export type VistaElectoral = {
 // -------------------------------------------------------- geografía ---
 
 /** [código, nombre, nivel, mesas, posición del padre, DANE?] */
-type Row = [string, string, number, number, number, string?];
+type Row = [string, string, number, number, number, string?, string?];
 
 type Geografia = {
   rows: Row[];
@@ -334,8 +335,11 @@ async function resultadoDe(
   sigla: string,
   codigo: string,
   partidos: EleccionData["partidos"],
-  geo: Geografia
+  geo: Geografia,
+  /** Solo en elecciones de datos.gov.co: traer también el ganador de cada territorio hijo. */
+  conMapa = false
 ): Promise<Resultado | null> {
+  if (eleccion.fuente === "socrata") return resultadoCongreso2018(sigla, codigo, geo, conMapa);
   const raw = await descargarUnaVez(
     `https://${eleccion.host}.registraduria.gov.co/json/ACT/${sigla}/${codigo}.json`
   );
@@ -445,7 +449,7 @@ async function contexto(params: ParamsAmbito) {
 
 export async function getVistaElectoral(params: ParamsAmbito): Promise<VistaElectoral> {
   const { eleccion, corporacion, data, geo, codigo, ambito, ruta, hijos } = await contexto(params);
-  const resultado = await resultadoDe(eleccion, corporacion.sigla, codigo, data.partidos, geo);
+  const resultado = await resultadoDe(eleccion, corporacion.sigla, codigo, data.partidos, geo, true);
 
   // Del país y los departamentos, `mapagan` ya trae el ganador de cada hijo.
   // Más abajo se consulta cada hijo, si no son demasiados.
@@ -471,7 +475,10 @@ export async function getVistaElectoral(params: ParamsAmbito): Promise<VistaElec
     hijos,
     ganadoresHijos,
     resultado,
-    fuente: `Preconteo oficial de la Registraduría Nacional del Estado Civil (${eleccion.host}.registraduria.gov.co)`,
+    fuente:
+      eleccion.fuente === "socrata"
+        ? "Resultados oficiales de la Registraduría publicados en datos.gov.co, mesa a mesa (no incluyen el departamento del Cesar ni el censo)"
+        : `Preconteo oficial de la Registraduría Nacional del Estado Civil (${eleccion.host}.registraduria.gov.co)`,
   };
 }
 
@@ -553,6 +560,8 @@ export type DatosOportunidad = {
   pendientes: number;
   /** El ámbito tiene más puestos de los que se analizan; hay que elegir uno más pequeño. */
   demasiados: boolean;
+  /** La fuente no trae el censo (Congreso 2018): no hay abstención ni oportunidad. */
+  sinCenso?: boolean;
 };
 
 /**
@@ -564,6 +573,7 @@ export async function getDatosOportunidad(
   params: ParamsAmbito & { circunscripcion: string; partido: string; candidato: string }
 ): Promise<DatosOportunidad> {
   const { eleccion, corporacion, data, geo, codigo, ambito } = await contexto(params);
+  if (eleccion.fuente === "socrata") return { ambito, total: 0, puestos: [], pendientes: 0, demasiados: false, sinCenso: true };
   const idx = geo.byCode.get(codigo);
   if (idx === undefined || ambito.nivel < 3) {
     return { ambito, total: 0, puestos: [], pendientes: 0, demasiados: ambito.nivel < 3 };

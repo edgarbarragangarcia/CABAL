@@ -1,6 +1,8 @@
 // Generado por scripts/snapshot-elecciones.mjs — no editar a mano.
 
 export const ELECCIONES_DATA = {
+  // congreso-2018 lo genera scripts/snapshot-congreso-2018.mjs (las demás, scripts/snapshot-elecciones.mjs).
+  "congreso-2018": () => import("./congreso-2018.json"),
   "presidencia-2026-2v": () => import("./presidencia-2026-2v.json"),
   "presidencia-2026-1v": () => import("./presidencia-2026-1v.json"),
   "congreso-2026": () => import("./congreso-2026.json"),
@@ -11,6 +13,7 @@ export const ELECCIONES_DATA = {
 } as const;
 
 export const GEOS: Record<string, () => Promise<{ default: unknown }>> = {
+  "congreso-2018": () => import("./geo/congreso-2018.json"),
   "04cf03331f": () => import("./geo/04cf03331f.json"),
   "15c64fcb8f": () => import("./geo/15c64fcb8f.json"),
   "25c73b4ec1": () => import("./geo/25c73b4ec1.json"),

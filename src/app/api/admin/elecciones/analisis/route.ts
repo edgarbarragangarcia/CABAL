@@ -20,6 +20,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Faltan la elección, el cargo o el candidato." }, { status: 400 });
   }
   try {
+    // Base del CRM contra votos: el panel manda cifras agregadas por territorio (sin personas).
+    if (body.crm) {
+      type Fila = { n: string; v: number; c: number; e: string };
+      const r = JSON.parse(body.crm) as { lugar: string; nivel: number; demo: boolean; sinUbicar: number; sinEmparejar: number; filas: Fila[] };
+      const datos = [
+        `Territorio: ${r.lugar} (por ${r.nivel === 1 ? "departamento" : "municipio"}).${r.demo ? " OJO: el CRM es de ejemplo, con contactos inventados." : ""}`,
+        `Contactos sin ubicar: ${r.sinUbicar + r.sinEmparejar}.`,
+        "Territorio: votos del candidato · contactos del CRM · lectura",
+        ...r.filas.map((f) => `- ${f.n}: ${f.v} votos · ${f.c} contactos · ${f.e}`),
+      ].join("\n");
+      const texto = await generarTexto({
+        maxTokens: 1800,
+        system:
+          "Eres analista de campaña en Colombia. Con estas cifras agregadas por territorio (votos oficiales del preconteo y contactos de un CRM), explica dónde hay base sin votos (movilizar), votos sin base (construir presencia) y dónde van parejos. Estructura en markdown: '## Resumen', '## Base sin votos', '## Votos sin base', '## Qué hacer'. Usa solo las cifras dadas, no inventes causas ni datos demográficos. Recuerda que los contactos del CRM no son votantes verificados ni todos los simpatizantes. Si el CRM es de ejemplo, dilo al principio. Español, claro y breve.",
+        user: datos,
+      });
+      return NextResponse.json({ analisis: texto });
+    }
+
     // Cambio entre dos elecciones: no necesita ubicar al candidato en una lista.
     if (body.comparar) {
       const c = await getComparacion({

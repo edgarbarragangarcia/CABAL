@@ -24,6 +24,12 @@ export type EleccionInfo = {
   fecha: string;
   /** Subdominio de registraduria.gov.co con el preconteo. */
   host: string;
+  /**
+   * De dónde salen los votos. Por defecto, los archivos JSON del preconteo de la
+   * Registraduría; "socrata" = mesa a mesa en datos.gov.co (Congreso 2018), sin
+   * censo, curules, logos ni cédulas.
+   */
+  fuente?: "socrata";
   corporaciones: CorporacionInfo[];
 };
 
@@ -99,6 +105,17 @@ export const ELECCIONES: EleccionInfo[] = [
       { sigla: "CC", nombre: "Consulta Centro Esperanza", descripcion: "Consulta presidencial", tipo: "consulta", nivelEleccion: 1 },
     ],
   },
+  {
+    id: "congreso-2018",
+    nombre: "Congreso 2018",
+    fecha: "2018-03-11",
+    host: "datos.gov.co",
+    fuente: "socrata",
+    corporaciones: [
+      { sigla: "SE", nombre: "Senado", descripcion: "Senadores, circunscripción nacional", tipo: "lista", nivelEleccion: 1 },
+      { sigla: "CA", nombre: "Cámara", descripcion: "Representantes por departamento", tipo: "lista", nivelEleccion: 2 },
+    ],
+  },
 ];
 
 /** Circunscripciones (campo `cam` de los archivos del preconteo). */
@@ -109,6 +126,7 @@ export const CIRCUNSCRIPCIONES: Record<string, string> = {
   "3": "Local",
   "4": "Indígenas",
   "5": "Afrodescendientes",
+  "6": "Internacional",
   "9": "CITREP",
 };
 

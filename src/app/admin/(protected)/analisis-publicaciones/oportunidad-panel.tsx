@@ -14,6 +14,7 @@ type Respuesta = {
   total: number;
   pendientes: number;
   demasiados: boolean;
+  sinCenso?: boolean;
   oportunidad: Oportunidad;
 };
 
@@ -126,6 +127,12 @@ export function OportunidadPanel({ params, nombre, lugar }: { params: Record<str
           <button type="button" onClick={retry} className="rounded-full border border-border bg-surface px-2.5 py-0.5 font-medium text-foreground">
             Reintentar
           </button>
+        </p>
+      )}
+      {data?.sinCenso && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Esta elección (Congreso 2018) no trae el censo electoral de cada puesto, así que no se puede calcular la abstención ni la
+          oportunidad. Funciona con las elecciones de 2022 en adelante.
         </p>
       )}
       {data?.demasiados && (

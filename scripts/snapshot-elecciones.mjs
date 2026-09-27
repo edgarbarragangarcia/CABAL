@@ -244,14 +244,17 @@ await fs.writeFile(
   `// Generado por scripts/snapshot-elecciones.mjs — no editar a mano.
 
 export const ELECCIONES_DATA = {
+  // congreso-2018 lo genera scripts/snapshot-congreso-2018.mjs (las demás, scripts/snapshot-elecciones.mjs).
+  "congreso-2018": () => import("./congreso-2018.json"),
 ${indice.map((e) => `  "${e.id}": () => import("./${e.id}.json"),`).join("\n")}
 } as const;
 
 export const GEOS: Record<string, () => Promise<{ default: unknown }>> = {
+  "congreso-2018": () => import("./geo/congreso-2018.json"),
 ${geos.map((g) => `  "${g}": () => import("./geo/${g}.json"),`).join("\n")}
 };
 `
 );
 for (const f of await fs.readdir(GEO_OUT)) {
-  if (!geosUsadas.has(f.replace(/\.json$/, ""))) await fs.rm(path.join(GEO_OUT, f));
+  if (f !== "congreso-2018.json" && !geosUsadas.has(f.replace(/\.json$/, ""))) await fs.rm(path.join(GEO_OUT, f));
 }
