@@ -725,3 +725,40 @@ export async function getComparacion(params: {
     noSoportado: false,
   };
 }
+
+// ------------------------------------------------ territorio por nombre ---
+
+export type AmbitoHallado = { codigo: string; nombre: string; nivel: number; /** Departamento al que pertenece (para distinguir homónimos). */ departamento?: string };
+
+/**
+ * Busca un país, departamento o municipio por su nombre ("Bogotá", "Valle del
+ * Cauca", "Medellín"). Vacío, "Colombia" o "país" es el país entero. Si varios
+ * territorios se llaman igual, devuelve todos para que se elija con el departamento.
+ */
+export async function buscarAmbito(eleccionId: string, sigla: string, nombre: string): Promise<AmbitoHallado[]> {
+  const eleccion = findEleccion(eleccionId);
+  if (!eleccion) throw new Error("Elección no válida.");
+  const data = await loadEleccionData(eleccion.id);
+  const corp = data.corporaciones.find((c) => c.sigla === sigla);
+  if (!corp) throw new Error("Corporación no disponible para esta elección.");
+  const geo = await loadGeografia(corp.geo);
+  const n = normalizarTexto(nombre);
+  if (!n || ["COLOMBIA", "PAIS", "NACIONAL", "TODO EL PAIS"].includes(n)) {
+    return [{ codigo: geo.rows[0][0], nombre: geo.rows[0][1], nivel: 1 }];
+  }
+  const depto = (i: number) => {
+    for (let k = i; k > 0; k = geo.rows[k][4]) if (geo.rows[k][2] === 2) return geo.rows[k][1];
+    return undefined;
+  };
+  const hallados: AmbitoHallado[] = [];
+  geo.rows.forEach((r, i) => {
+    if (r[2] !== 2 && r[2] !== 3) return;
+    const m = normalizarTexto(r[1]);
+    const igual = m === n || m.startsWith(`${n} `) || n.startsWith(`${m} `);
+    if (igual) hallados.push({ codigo: r[0], nombre: r[1], nivel: r[2], departamento: r[2] === 3 ? depto(i) : undefined });
+  });
+  // Un departamento con el mismo nombre que su capital ("Bogotá"): gana el departamento; luego, coincidencia exacta.
+  return hallados
+    .sort((a, b) => a.nivel - b.nivel || Number(normalizarTexto(b.nombre) === n) - Number(normalizarTexto(a.nombre) === n))
+    .slice(0, 6);
+}

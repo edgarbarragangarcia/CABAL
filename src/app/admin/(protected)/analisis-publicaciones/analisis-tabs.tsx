@@ -2,19 +2,21 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Network, Vote } from "lucide-react";
+import { LayoutDashboard, MessageSquareText, Network, Vote } from "lucide-react";
 
 import { AnalizadorTab } from "./analizador-tab";
 import { CabalResultados } from "./cabal-resultados";
 import { ExploradorElectoral } from "./explorador-electoral";
 import { PrediccionesTab } from "./predicciones-tab";
+import { PreguntasTab } from "./preguntas-tab";
 
-type TabId = "votaciones" | "predicciones" | "asistente";
+type TabId = "votaciones" | "predicciones" | "asistente" | "preguntas";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Red Cabal", icon: Network },
   { id: "asistente", label: "Analizador", icon: LayoutDashboard },
+  { id: "preguntas", label: "Preguntar", icon: MessageSquareText },
 ];
 
 /** Votaciones: todas las elecciones y candidatos, o el seguimiento de Cabal. */
@@ -87,6 +89,7 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
         {tab === "votaciones" && <Votaciones />}
         {tab === "predicciones" && <PrediccionesTab />}
         {tab === "asistente" && <AnalizadorTab />}
+        {tab === "preguntas" && <PreguntasTab />}
       </div>
     </div>
   );
