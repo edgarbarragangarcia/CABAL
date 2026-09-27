@@ -74,6 +74,15 @@ export function mismaPersona(a: string, b: string) {
   return corto.size >= 3 && [...corto].every((t) => largo.has(t));
 }
 
+/**
+ * La comparación siempre va de la elección más antigua a la más reciente ("antes" →
+ * "ahora"), sin importar cuál esté abierta en pantalla: si vino al revés, se
+ * intercambian los dos lados.
+ */
+export function alReves(filas: FilaComparacion[]): FilaComparacion[] {
+  return filas.map((f) => ({ ...f, a: f.b, b: f.a }));
+}
+
 export function calcularTransferencia(datos: FilaComparacion[]): Transferencia {
   const filas: FilaAnalizada[] = datos
     .map((f) => {

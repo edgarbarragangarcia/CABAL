@@ -16,8 +16,9 @@ const pct = (n: number) => `${n.toLocaleString("es-CO", { maximumFractionDigits:
 
 type Respuesta = {
   ambito: { nombre: string; nivel: number };
-  a: { nombre?: string; partido?: string };
-  b: { nombre?: string; partido?: string };
+  /** Antes (la elección más antigua) y ahora (la más reciente). */
+  a: { nombre?: string; partido?: string; clave: string };
+  b: { nombre?: string; partido?: string; clave: string };
   total: number;
   pendientes: number;
   noSoportado: boolean;
@@ -196,20 +197,20 @@ export function ComparacionPanel({
               <p className="flex flex-wrap items-center gap-1.5 rounded-lg bg-surface p-2 text-xs ring-1 ring-border">
                 <span>
                   <b>{titulo(data.a.nombre ?? "sin datos")}</b>
-                  {data.a.partido && <> · {titulo(data.a.partido)}</>} ({etiqueta(base)})
+                  {data.a.partido && <> · {titulo(data.a.partido)}</>} ({etiqueta(data.a.clave)})
                 </span>
                 <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
                 <span>
                   <b>{titulo(data.b.nombre ?? "sin datos")}</b>
-                  {data.b.partido && <> · {titulo(data.b.partido)}</>} ({etiquetaActual})
+                  {data.b.partido && <> · {titulo(data.b.partido)}</>} ({etiqueta(data.b.clave)})
                 </span>
                 <span className="basis-full text-[11px] text-muted-foreground">Verifica que sea la misma persona.</span>
               </p>
 
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 {[
-                  ["Votos antes", fmt(t.votosA), pct(t.cuotaA) + " de los válidos"],
-                  ["Votos ahora", fmt(t.votosB), pct(t.cuotaB) + " de los válidos"],
+                  [`Votos en ${etiqueta(data.a.clave)}`, fmt(t.votosA), pct(t.cuotaA) + " de los válidos"],
+                  [`Votos en ${etiqueta(data.b.clave)}`, fmt(t.votosB), pct(t.cuotaB) + " de los válidos"],
                   ["Cambio", signo(t.delta), t.votosA ? `${signo((100 * t.delta) / t.votosA)}%` : "sin base"],
                   ["Cuota", pp(t.cuotaB - t.cuotaA), "puntos de los válidos"],
                 ].map(([k, v, h]) => (
@@ -275,8 +276,8 @@ export function ComparacionPanel({
                     <thead>
                       <tr className="bg-surface-muted/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                         <th className="px-3 py-2 font-medium">Territorio</th>
-                        <th className="px-3 py-2 text-right font-medium">Antes</th>
-                        <th className="px-3 py-2 text-right font-medium">Ahora</th>
+                        <th className="px-3 py-2 text-right font-medium">{etiqueta(data.a.clave)}</th>
+                        <th className="px-3 py-2 text-right font-medium">{etiqueta(data.b.clave)}</th>
                         <th className="px-3 py-2 text-right font-medium">Cambio</th>
                         <th className="px-3 py-2 text-right font-medium">Cuota</th>
                       </tr>

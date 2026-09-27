@@ -30,6 +30,8 @@ export type EleccionInfo = {
    * censo, curules, logos ni cédulas.
    */
   fuente?: "socrata";
+  /** Elección cuyo sitio sirve los logos de partido cuando este no los tiene (los partidos se emparejan por nombre). */
+  logosDe?: string;
   corporaciones: CorporacionInfo[];
 };
 
@@ -111,6 +113,7 @@ export const ELECCIONES: EleccionInfo[] = [
     fecha: "2018-03-11",
     host: "datos.gov.co",
     fuente: "socrata",
+    logosDe: "congreso-2022",
     corporaciones: [
       { sigla: "SE", nombre: "Senado", descripcion: "Senadores, circunscripción nacional", tipo: "lista", nivelEleccion: 1 },
       { sigla: "CA", nombre: "Cámara", descripcion: "Representantes por departamento", tipo: "lista", nivelEleccion: 2 },

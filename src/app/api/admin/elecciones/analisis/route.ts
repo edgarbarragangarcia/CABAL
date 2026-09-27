@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       const fila = (f: (typeof t.filas)[number]) =>
         `- ${f.nombre}: ${f.a.votos} → ${f.b.votos} (${f.delta >= 0 ? "+" : ""}${f.delta}); cuota ${f.cuotaA.toFixed(1)}% → ${f.cuotaB.toFixed(1)}%`;
       const datos = [
-        `Candidato: ${c.a.nombre ?? body.persona} (${c.a.partido ?? "s/d"}) en la primera elección; ${c.b.nombre ?? "sin datos"} (${c.b.partido ?? "s/d"}) en la segunda.`,
+        `Candidato: ${c.a.nombre ?? body.persona} (${c.a.partido ?? "s/d"}) en la elección más antigua (${c.a.clave}); ${c.b.nombre ?? "sin datos"} (${c.b.partido ?? "s/d"}) en la más reciente (${c.b.clave}). Los votos van de la más antigua a la más reciente.`,
         `Territorio: ${c.ambito.nombre}. Territorios comparados: ${c.filas.length} de ${c.total}${c.pendientes ? ` (faltaron ${c.pendientes})` : ""}.`,
         `Votos: ${t.votosA} → ${t.votosB} (${t.delta >= 0 ? "+" : ""}${t.delta}); cuota ${t.cuotaA.toFixed(1)}% → ${t.cuotaB.toFixed(1)}% de los válidos.`,
         `Cayó en ${t.fugas.territorios} territorios (${t.fugas.votosPerdidos} votos menos) y creció en ${t.crecimiento.territorios} (${t.crecimiento.votosGanados} votos más).`,

@@ -43,7 +43,9 @@ const digits = (v: string | null) => (v && /^\d{1,12}$/.test(v) ? v : "");
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const eleccion = findEleccion(searchParams.get("e"));
+  const pedida = findEleccion(searchParams.get("e"));
+  // Una elección sin logos propios (Congreso 2018) los toma del sitio de otra.
+  const eleccion = searchParams.get("t") !== "candidato" && pedida?.logosDe ? findEleccion(pedida.logosDe) : pedida;
   const params: Params = {
     tipo: searchParams.get("t") === "candidato" ? "candidato" : "partido",
     logo: digits(searchParams.get("logo")),

@@ -3,6 +3,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 
 import { querySocrataDataset, type SoqlParams } from "../socrata";
+import { ELECCIONES_DATA } from "@/data/elecciones";
 import { normalizar } from "./comparacion";
 import type { Candidato, Circunscripcion, Ganador, PartidoResultado, Resultado } from "./resultados";
 
@@ -43,6 +44,38 @@ function codigoCircunscripcion(nombre: string) {
   if (n.startsWith("INDIGENA")) return "4";
   if (n.startsWith("AFRO")) return "5";
   return "6";
+}
+
+/** Partidos que cambiaron de nombre entre 2018 y 2022 (clave y valor, sin tildes ni signos). */
+const RENOMBRADOS: Record<string, string> = {
+  "PARTIDO SOCIAL DE UNIDAD NACIONAL PARTIDO DE LA U": "PARTIDO DE LA UNION POR LA GENTE PARTIDO DE LA U",
+  // El dataset trae este nombre cortado ("DEL COMÚ").
+  "PARTIDO FUERZA ALTERNATIVA REVOLUCIONARIA DEL COMU": "PARTIDO COMUNES",
+};
+
+type Oficial = { color: string; logo?: string };
+let oficiales: Promise<Map<string, Oficial>> | null = null;
+
+/** Color y logo oficiales de los partidos, según el nomenclátor de 2022 (los de 2018 no los traen). */
+function cargarOficiales() {
+  oficiales ??= ELECCIONES_DATA["congreso-2022"]().then(({ default: d }) => {
+    const m = new Map<string, Oficial>();
+    for (const [nombre, color, logo] of Object.values((d as unknown as { partidos: Record<string, [string, string | null, string?]> }).partidos)) {
+      if (color) m.set(normalizar(nombre), { color, ...(logo && logo !== "0" ? { logo } : {}) });
+    }
+    return m;
+  });
+  return oficiales;
+}
+
+/** El partido de 2018 en el nomenclátor de 2022: por nombre exacto, renombrado, sin "G.S.C." o como comienzo del nombre. */
+function oficialDe(m: Map<string, Oficial>, nombre: string): Oficial | undefined {
+  const n = normalizar(nombre);
+  const sinGsc = n.replace(/^G S C /, "PARTIDO ");
+  for (const k of [n, RENOMBRADOS[n], sinGsc]) if (k && m.has(k)) return m.get(k);
+  if (n.split(" ").length < 3) return undefined;
+  for (const [k, v] of m) if (k.startsWith(`${n} `)) return v;
+  return undefined;
 }
 
 function fallbackColor(clave: string) {
@@ -133,6 +166,8 @@ export async function resultadoCongreso2018(
   const dataset = DATASET[sigla];
   const ambito = dataset ? ambitoDe(geo, codigo) : null;
   if (!ambito) return null;
+  const oficiales = await cargarOficiales();
+  const colorDe = (nombre: string) => oficialDe(oficiales, nombre)?.color ?? fallbackColor(normalizar(nombre));
   const donde = ambito.donde.join(" AND ");
   const pedir = (params: SoqlParams) => consultarCacheada(dataset, JSON.stringify(params));
 
@@ -206,7 +241,7 @@ export async function resultadoCongreso2018(
         dane: hijo.dane,
         partido: normalizar(ganador.nombre),
         partidoNombre: ganador.nombre,
-        color: fallbackColor(normalizar(ganador.nombre)),
+        color: colorDe(ganador.nombre),
         votos: ganador.votos,
         pct: porcentaje(ganador.votos, validos),
         votantes,
@@ -227,7 +262,8 @@ export async function resultadoCongreso2018(
         .map(([clave, p]) => ({
           codigo: clave,
           nombre: p.nombre,
-          color: fallbackColor(clave),
+          color: colorDe(p.nombre),
+          ...(oficialDe(oficiales, p.nombre)?.logo ? { logo: oficialDe(oficiales, p.nombre)!.logo } : {}),
           votos: p.votos,
           pct: porcentaje(p.votos, validos),
           curules: 0,

@@ -4,7 +4,7 @@ import { unstable_cache } from "next/cache";
 
 import { ELECCIONES_DATA, GEOS } from "@/data/elecciones";
 import { findEleccion, type CorporacionInfo, type EleccionInfo } from "./catalogo";
-import { mismaPersona, normalizar as normalizarTexto, type FilaComparacion, type Lado } from "./comparacion";
+import { alReves, mismaPersona, normalizar as normalizarTexto, type FilaComparacion, type Lado } from "./comparacion";
 import { resultadoCongreso2018 } from "./congreso-2018";
 import type { PuestoDatos } from "./oportunidad";
 
@@ -614,9 +614,13 @@ export async function getDatosOportunidad(
 
 export type Comparacion = {
   ambito: AmbitoRef;
-  /** Nombre y partido con los que apareció el candidato en cada elección (para que se verifique que es la misma persona). */
-  a: { nombre?: string; partido?: string };
-  b: { nombre?: string; partido?: string };
+  /**
+   * "Antes" (la elección más antigua) y "ahora" (la más reciente): nombre y partido con los que
+   * apareció el candidato (para que se verifique que es la misma persona) y qué elección es
+   * (`${id}|${sigla}`).
+   */
+  a: { nombre?: string; partido?: string; clave: string };
+  b: { nombre?: string; partido?: string; clave: string };
   filas: FilaComparacion[];
   total: number;
   /** Territorios sin consultar todavía: la siguiente llamada los completa. */
@@ -672,7 +676,9 @@ export async function getComparacion(params: {
   const cb = await contexto({ eleccion: params.b.eleccion, corporacion: params.b.corporacion, ambito: params.ambito });
   const dane = cb.ambito.dane;
   const ca = await contexto({ eleccion: params.a.eleccion, corporacion: params.a.corporacion, ambito: null, dane });
-  const vacio = { ambito: cb.ambito, a: {}, b: {}, filas: [], total: 0, pendientes: 0 };
+  const claveA = `${ca.eleccion.id}|${ca.corporacion.sigla}`;
+  const claveB = `${cb.eleccion.id}|${cb.corporacion.sigla}`;
+  const vacio = { ambito: cb.ambito, a: { clave: claveA }, b: { clave: claveB }, filas: [], total: 0, pendientes: 0 };
   if (cb.ambito.nivel > 3 || ca.ambito.nivel !== cb.ambito.nivel) return { ...vacio, noSoportado: true };
 
   const bogota = dane === "11001";
@@ -703,11 +709,17 @@ export async function getComparacion(params: {
     }
   });
   const listas = filas.filter((f): f is FilaComparacion => f !== null);
+  // La elección de referencia (a) puede ser posterior a la abierta (b): se ordena por fecha.
+  const invertir = cb.eleccion.fecha < ca.eleccion.fecha;
+  const [izq, der] = [
+    { nombre: nombres.a, partido: nombres.pa, clave: claveA },
+    { nombre: nombres.b, partido: nombres.pb, clave: claveB },
+  ];
   return {
     ambito: cb.ambito,
-    a: { nombre: nombres.a, partido: nombres.pa },
-    b: { nombre: nombres.b, partido: nombres.pb },
-    filas: listas,
+    a: invertir ? der : izq,
+    b: invertir ? izq : der,
+    filas: invertir ? alReves(listas) : listas,
     total: pares.length,
     pendientes: pares.length - listas.length,
     noSoportado: false,
