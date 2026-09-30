@@ -5,7 +5,9 @@ import {
   AlertTriangle,
   ExternalLink,
   Gavel,
+  Globe,
   Loader2,
+  Newspaper,
   Save,
   ScrollText,
   Search,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 
 import type { AvalesResult } from "@/lib/gov-data/avales";
+import type { PresenciaInternet } from "@/lib/gov-data/avales/presencia-internet";
 import type { Atestacion, Atestaciones, EstadoRevision, RevisionAval, Veredicto } from "@/lib/avales-store";
 import { AvalesTerritorioPanel } from "./avales-territorio-panel";
 import { HojaDeVidaPanel } from "./candidato-ui";
@@ -192,6 +195,8 @@ function FichaAval({ cedula, nombre }: { cedula: string; nombre: string }) {
 
       <SeccionElectoral datos={datos} cedula={cedula} nombre={nombre} />
 
+      <SeccionInternet nombre={nombre} />
+
       {revision.estado === "cargando" ? (
         <div className={`${marco} flex items-center gap-2 text-sm text-muted-foreground`}>
           <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Cargando la revisión guardada…
@@ -302,6 +307,80 @@ function SeccionElectoral({ datos, cedula, nombre }: { datos: Peticion<AvalesRes
         candidato a uno de esos cargos.
       </p>
       <AvalesTerritorioPanel cedula={cedula} nombre={nombre} />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------- internet ---
+
+/** Ninguna plataforma ofrece búsqueda por nombre vía API pública; son solo enlaces para que el revisor entre a mirar. */
+function enlacesRedes(nombre: string) {
+  const q = encodeURIComponent(nombre);
+  return [
+    { plataforma: "Google", url: `https://www.google.com/search?q=${q}` },
+    { plataforma: "X / Twitter", url: `https://twitter.com/search?q=${q}&f=live` },
+    { plataforma: "Facebook", url: `https://www.facebook.com/search/top?q=${q}` },
+    { plataforma: "Instagram", url: `https://www.instagram.com/explore/search/keyword/?q=${q}` },
+    { plataforma: "LinkedIn", url: `https://www.linkedin.com/search/results/all/?keywords=${q}` },
+    { plataforma: "TikTok", url: `https://www.tiktok.com/search?q=${q}` },
+  ];
+}
+
+function SeccionInternet({ nombre }: { nombre: string }) {
+  const datos = usePeticion<PresenciaInternet>(`/api/admin/avales/internet?${new URLSearchParams({ nombre })}`);
+  return (
+    <div className={marco}>
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <Globe className="size-3.5" aria-hidden="true" /> Presencia en internet y redes sociales
+      </p>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        {enlacesRedes(nombre).map((e) => (
+          <a
+            key={e.plataforma}
+            href={e.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-3 py-1 text-xs font-semibold ring-1 ring-border transition hover:ring-emerald-500/50"
+          >
+            {e.plataforma} <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+          </a>
+        ))}
+      </div>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        Ninguna red social ofrece búsqueda por nombre vía API pública: son enlaces para revisar a mano.
+      </p>
+
+      <p className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+        <Newspaper className="size-3.5" aria-hidden="true" /> Menciones en Google Noticias
+      </p>
+      {datos.estado === "cargando" ? (
+        <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Buscando menciones recientes…
+        </p>
+      ) : datos.estado === "error" ? (
+        <p className="mt-2 text-sm text-red-700 dark:text-red-300">{datos.error}</p>
+      ) : datos.data.noticias.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">Sin menciones recientes en Google Noticias.</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5 text-sm">
+          {datos.data.noticias.map((n, i) => (
+            <li key={i}>
+              <a
+                href={n.enlace}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+              >
+                {n.titulo}
+              </a>
+              <span className="block text-xs text-muted-foreground">
+                {n.medio} · {new Date(n.fecha).toLocaleDateString("es-CO")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

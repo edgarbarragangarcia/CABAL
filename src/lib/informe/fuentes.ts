@@ -33,14 +33,14 @@ async function pedir(url: string, init?: RequestInit) {
   return res;
 }
 
-/** Noticias entre dos fechas (Google Noticias devuelve hasta 100 por consulta; una semana son unas 30). */
-export async function noticias(desde: Date, hasta: Date): Promise<Noticia[]> {
-  const q = `${QUERY} after:${dia(desde)} before:${dia(hasta)}`;
+/** Google Noticias para cualquier consulta, hasta `limite` titulares sin duplicar (el feed trae como máximo unos 100). */
+export async function buscarNoticias(q: string, limite = 100): Promise<Noticia[]> {
   const url = `https://news.google.com/rss/search?${new URLSearchParams({ q, hl: "es-419", gl: "CO", ceid: "CO:es-419" })}`;
   const xml = await (await pedir(url)).text();
   const vistas = new Set<string>();
   const lista: Noticia[] = [];
   for (const it of xml.match(/<item>[\s\S]*?<\/item>/g) ?? []) {
+    if (lista.length >= limite) break;
     const medio = entidades(etiqueta(it, "source") ?? "");
     // El título termina con " - Medio": se separa para no repetirlo.
     let titulo = entidades(etiqueta(it, "title") ?? "");
@@ -52,6 +52,11 @@ export async function noticias(desde: Date, hasta: Date): Promise<Noticia[]> {
     lista.push({ titulo, medio: medio || "Medio sin nombre", fecha: new Date(fecha).toISOString(), enlace: entidades(etiqueta(it, "link") ?? "") });
   }
   return lista.sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
+/** Noticias de María Fernanda Cabal entre dos fechas (una semana son unas 30). */
+export async function noticias(desde: Date, hasta: Date): Promise<Noticia[]> {
+  return buscarNoticias(`${QUERY} after:${dia(desde)} before:${dia(hasta)}`);
 }
 
 /** Los 15 últimos videos del canal, con vistas y me gusta. */

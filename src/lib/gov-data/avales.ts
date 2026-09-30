@@ -16,9 +16,11 @@ const mensajeError = (err: unknown) => (err instanceof Error ? err.message : "No
 
 /**
  * Junta las fuentes automáticas para la ficha de un candidato, salvo la hoja
- * de vida: `HojaDeVidaPanel` (candidato-ui.tsx) ya se consulta sola contra
- * `/api/admin/elecciones/hoja-de-vida`, así que duplicarla aquí solo
- * repetiría la misma consulta al SIGEP dos veces.
+ * de vida y la presencia en internet: `HojaDeVidaPanel` (candidato-ui.tsx) y
+ * la sección de internet (avales-tab.tsx) ya se consultan solas contra su
+ * propia ruta, así que duplicarlas aquí solo repetiría la consulta y las
+ * ataría a lo más lento del grupo (el historial electoral, sujeto al
+ * firewall de la Registraduría).
  * `allSettled` aísla cada fuente: que una esté caída o lenta no debe ocultar
  * la otra.
  */
