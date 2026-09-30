@@ -150,6 +150,70 @@ export async function generarTexto({ system, user, maxTokens }: { system: string
   return body.choices?.[0]?.message?.content ?? "";
 }
 
+export type FuenteWeb = { titulo: string; url: string };
+
+/**
+ * Como `generarTexto`, pero dejando que el modelo busque en internet en
+ * tiempo real (herramienta nativa del proveedor, no scraping propio): Claude
+ * con su herramienta `web_search`, Gemini con su grounding de Google Search.
+ * La API de OpenAI que usa este archivo (Chat Completions) no ofrece esa
+ * herramienta, así que ahí se lanza un error claro en vez de fingir que buscó.
+ */
+export async function generarConBusqueda({
+  system,
+  user,
+  maxTokens,
+}: {
+  system: string;
+  user: string;
+  maxTokens: number;
+}): Promise<{ texto: string; fuentes: FuenteWeb[] }> {
+  const g = await leer();
+  const proveedor = g?.proveedor ?? "anthropic";
+  const modelo = g?.modelo || PROVEEDORES[proveedor].modelo;
+  const guardada = g?.claves[proveedor] ? await descifrar(g.claves[proveedor]!) : undefined;
+  const clave = guardada ?? (proveedor === "anthropic" ? process.env.ANTHROPIC_API_KEY : undefined);
+  if (!clave) throw new Error(`Falta la clave API de ${PROVEEDORES[proveedor].nombre}. Agrégala en Configuración.`);
+
+  if (proveedor === "anthropic") {
+    const res = await new Anthropic({ apiKey: clave }).messages.create({
+      model: modelo,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: user }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+    });
+    const texto = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
+    const fuentes: FuenteWeb[] = res.content.flatMap((b) =>
+      b.type === "web_search_tool_result" && Array.isArray(b.content)
+        ? b.content.map((r) => ({ titulo: r.title, url: r.url }))
+        : []
+    );
+    return { texto, fuentes };
+  }
+
+  if (proveedor === "gemini") {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": clave },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        tools: [{ google_search: {} }],
+        generationConfig: { maxOutputTokens: maxTokens },
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(`Gemini respondió: ${body.error?.message ?? res.status}`);
+    const texto = (body.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("\n");
+    const chunks = (body.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) as { web?: { uri?: string; title?: string } }[];
+    const fuentes: FuenteWeb[] = chunks.flatMap((c) => (c.web?.uri ? [{ titulo: c.web.title || c.web.uri, url: c.web.uri }] : []));
+    return { texto, fuentes };
+  }
+
+  throw new Error(`${PROVEEDORES[proveedor].nombre} no soporta búsqueda en internet aquí; cambia a Claude o Gemini en Configuración.`);
+}
+
 /** Clave del proveedor: la escrita ahora, la guardada o (Anthropic) la variable de entorno. */
 async function claveDe(proveedor: Proveedor, escrita?: string) {
   if (escrita?.trim()) return escrita.trim();

@@ -14,14 +14,17 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldQuestion,
+  Sparkles,
   Vote,
 } from "lucide-react";
 
 import type { AvalesResult } from "@/lib/gov-data/avales";
 import type { PresenciaInternet } from "@/lib/gov-data/avales/presencia-internet";
+import type { ResumenIa } from "@/lib/gov-data/avales/resumen-ia";
 import type { Atestacion, Atestaciones, EstadoRevision, RevisionAval, Veredicto } from "@/lib/avales-store";
 import { AvalesTerritorioPanel } from "./avales-territorio-panel";
 import { HojaDeVidaPanel } from "./candidato-ui";
+import { Markdown } from "./markdown-ia";
 import { titulo } from "./nombres";
 
 const marco = "rounded-2xl border border-border bg-surface p-4 shadow-sm";
@@ -326,8 +329,28 @@ function enlacesRedes(nombre: string) {
   ];
 }
 
+type EstadoIa =
+  | { estado: "inicial" }
+  | { estado: "buscando" }
+  | { estado: "listo"; data: ResumenIa }
+  | { estado: "error"; error: string };
+
 function SeccionInternet({ nombre }: { nombre: string }) {
   const datos = usePeticion<PresenciaInternet>(`/api/admin/avales/internet?${new URLSearchParams({ nombre })}`);
+  const [ia, setIa] = React.useState<EstadoIa>({ estado: "inicial" });
+
+  const buscarConIa = () => {
+    setIa({ estado: "buscando" });
+    fetch("/api/admin/avales/ia", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre }) })
+      .then(async (res) => {
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
+        return body as ResumenIa;
+      })
+      .then((data) => setIa({ estado: "listo", data }))
+      .catch((err: Error) => setIa({ estado: "error", error: err.message }));
+  };
+
   return (
     <div className={marco}>
       <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -381,6 +404,56 @@ function SeccionInternet({ nombre }: { nombre: string }) {
           ))}
         </ul>
       )}
+
+      <div className="mt-4 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <Sparkles className="size-3.5" aria-hidden="true" /> Búsqueda con IA
+          </p>
+          <button
+            type="button"
+            onClick={buscarConIa}
+            disabled={ia.estado === "buscando"}
+            className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1.5 text-xs font-semibold ring-1 ring-border transition hover:ring-emerald-500/50 disabled:opacity-50"
+          >
+            {ia.estado === "buscando" ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Sparkles className="size-3.5" aria-hidden="true" />
+            )}
+            Buscar con IA
+          </button>
+        </div>
+
+        {ia.estado === "inicial" && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            El proveedor de IA elegido en Configuración busca por su cuenta en internet (redes sociales, noticias,
+            controversias) y resume lo que encuentre, con sus fuentes. Cada clic consume una llamada a esa API.
+          </p>
+        )}
+        {ia.estado === "error" && <p className="mt-2 text-sm text-red-700 dark:text-red-300">{ia.error}</p>}
+        {ia.estado === "listo" && (
+          <div className="mt-2">
+            <Markdown texto={ia.data.texto} />
+            {ia.data.fuentes.length > 0 && (
+              <ul className="mt-3 space-y-1 border-t border-border pt-2 text-xs">
+                {ia.data.fuentes.map((f, i) => (
+                  <li key={i}>
+                    <a
+                      href={f.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-700 hover:underline dark:text-emerald-300"
+                    >
+                      {f.titulo}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
