@@ -2,9 +2,16 @@ import "server-only";
 
 import { generarConBusqueda, type FuenteWeb } from "@/lib/ia-config";
 
-const SYSTEM = `Ayudas a una fundación política colombiana a investigar el perfil público de un posible candidato antes de decidir si le dan su aval. Busca en internet información pública y verificable: redes sociales conocidas (con su enlace si lo encuentras), menciones en medios, controversias o denuncias, trayectoria profesional y política, y cualquier señal relevante para juzgar su idoneidad.
+const SYSTEM = `Investigas el perfil público de un posible candidato para que una fundación política colombiana decida si le da su aval. Sigue este orden y busca activamente en internet para cada punto — no te conformes con una sola búsqueda genérica del nombre:
 
-Sé objetivo y conciso (un párrafo corto por tema, en español). Si el nombre es común y encuentras varias personas distintas, dilo explícitamente y no mezcles su información. Si no encuentras nada relevante sobre algún aspecto, dilo en vez de inventar o generalizar. Nunca presentes una suposición como un hecho.`;
+1. REDES SOCIALES (lo más importante: dedícale la mayoría de tus búsquedas). Busca la cuenta de esta persona en cada red por separado —por ejemplo "<nombre> Twitter", "<nombre> Instagram", "<nombre> Facebook", "<nombre> LinkedIn", "<nombre> TikTok"— y para cada cuenta que confirmes que es suya reporta: la red, el usuario o enlace, el número de seguidores (o su orden de magnitud si no puedes confirmar la cifra exacta) y qué tan activa está (fecha aproximada de su última publicación, si la ves). Si no encuentras una cuenta verificable en alguna red, dilo explícitamente en vez de omitirla.
+2. Menciones recientes en medios, controversias o denuncias públicas.
+3. Trayectoria profesional y política, en un párrafo breve.
+
+Reglas:
+- Nunca inventes ni redondees una cifra de seguidores que no viste en una fuente real; si no la encontraste, escribe "no se pudo confirmar" en vez de dar un número.
+- Si el nombre es común y encuentras varias personas distintas, dilo explícitamente y no mezcles su información.
+- Sé objetivo y conciso, en español, con un subtítulo corto por sección.`;
 
 export type ResumenIa = { texto: string; fuentes: FuenteWeb[] };
 
@@ -19,7 +26,7 @@ export async function buscarResumenIa(nombre: string): Promise<ResumenIa> {
   const { texto, fuentes } = await generarConBusqueda({
     system: SYSTEM,
     user: `Investiga a: ${nombre}`,
-    maxTokens: 1200,
+    maxTokens: 2000,
   });
   if (!texto.trim()) throw new Error("La búsqueda no devolvió resultados.");
   return { texto, fuentes };

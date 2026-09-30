@@ -181,7 +181,8 @@ export async function generarConBusqueda({
       max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content: user }],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+      // Suficientes búsquedas para revisar cada red por separado (Twitter, Instagram, Facebook, LinkedIn, TikTok) y aun así noticias/controversias.
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 10 }],
     });
     const texto = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
     const fuentes: FuenteWeb[] = res.content.flatMap((b) =>
