@@ -255,7 +255,7 @@ export function AvalesTab() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="space-y-4">
       <div className={marco}>
         <p className="flex items-center gap-2 text-lg font-semibold tracking-tight">
           <ShieldCheck className="size-5 text-brand" aria-hidden="true" /> Avales
