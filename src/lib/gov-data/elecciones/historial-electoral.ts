@@ -40,7 +40,7 @@ export type CoincidenciaElectoral = {
   corporacion: string;
   corporacionNombre: string;
   partido?: string;
-  candidato: { nombre: string; votos: number; pct: string; electo: boolean; cedula?: string };
+  candidato: { codigo: string; nombre: string; votos: number; pct: string; electo: boolean; cedula?: string; sorteo?: string };
   coincidePor: "cedula" | "nombre";
 };
 
@@ -65,11 +65,13 @@ function coincidenciasEnCandidatos(carrera: Carrera, candidatos: Candidato[], ce
       corporacion: carrera.sigla,
       corporacionNombre: carrera.corporacionNombre,
       candidato: {
+        codigo: k.codigo,
         nombre: k.nombre,
         votos: k.votos,
         pct: k.pct,
         electo: k.electo,
         ...(k.cedula ? { cedula: k.cedula.trim() } : {}),
+        ...(k.sorteo ? { sorteo: k.sorteo } : {}),
       },
       coincidePor: porCedula ? "cedula" : "nombre",
     });

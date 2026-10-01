@@ -8,7 +8,7 @@ import type { HojaDeVida, PersonaSigep } from "@/lib/gov-data/elecciones/hoja-de
 import type { Candidato } from "@/lib/gov-data/elecciones/resultados";
 import { titulo } from "./nombres";
 
-const imagenUrl = (e: string, q: Record<string, string | undefined>) =>
+export const imagenUrl = (e: string, q: Record<string, string | undefined>) =>
   `/api/admin/elecciones/imagen?${new URLSearchParams(
     Object.entries({ e, ...q }).filter((kv): kv is [string, string] => !!kv[1])
   )}`;
@@ -24,7 +24,7 @@ export const iniciales = (nombre: string) =>
     .toUpperCase();
 
 /** Imagen de la Registraduría; si no existe, las iniciales sobre el color del partido. */
-function Avatar({
+export function Avatar({
   src,
   alt,
   nombre,
