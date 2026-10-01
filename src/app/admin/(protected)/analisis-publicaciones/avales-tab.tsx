@@ -428,22 +428,38 @@ function HojaDeVidaLinkedIn({ cedula, nombre }: { cedula?: string; nombre: strin
 
   if (!hv.encontrada) {
     const n = hv.homonimos.length;
+    // La mayoría de aspirantes a un aval NO trabajan hoy para el Estado, así
+    // que este es el caso más común en Avales, no una excepción: necesita la
+    // misma tarjeta cuidada que el perfil encontrado, no un texto suelto.
     return (
-      <div className={marco}>
-        <div className="flex items-start gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-surface-muted text-muted-foreground">
-            <SearchX className="size-4" aria-hidden="true" />
+      <div className="cabal-rise overflow-hidden rounded-2xl border border-border shadow-sm">
+        <div className="flex items-center gap-4 bg-slate-800 px-5 py-5">
+          <span className="grid size-16 shrink-0 place-items-center rounded-full bg-white/10 text-white ring-4 ring-white/15">
+            <SearchX className="size-6" aria-hidden="true" />
           </span>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <p className="truncate text-xl font-bold text-white">{titulo(nombre)}</p>
+            <p className="mt-0.5 text-xs font-semibold tracking-wide text-white/70 uppercase">Sin hoja de vida pública</p>
+          </div>
+        </div>
+        <div className="space-y-3 bg-surface p-5 text-sm">
+          <p className="text-muted-foreground">
             {n > 1
               ? `Hay ${n} personas llamadas ${titulo(nombre)} en el SIGEP y nada indica cuál es el candidato. Revísalas:`
               : n === 1
                 ? `En el SIGEP aparece una persona llamada ${titulo(nombre)}, pero nada confirma que sea el candidato: puede ser un homónimo. Revísala:`
                 : `${titulo(nombre)} no aparece en el SIGEP ni en la lista PEP de Función Pública, las únicas hojas de vida oficiales: solo incluyen a quienes hoy trabajan para el Estado (servidores públicos y contratistas). La Registraduría no publica hojas de vida de los candidatos.`}
           </p>
+          {n > 0 && <Homonimos personas={hv.homonimos} />}
+          <a
+            href={hv.busqueda}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1.5 text-xs font-semibold ring-1 ring-border transition hover:ring-emerald-500/50"
+          >
+            Buscar el nombre en el directorio del SIGEP <ExternalLink className="size-3.5" aria-hidden="true" />
+          </a>
         </div>
-        {n > 0 && <Homonimos personas={hv.homonimos} />}
-        <p className="mt-3 text-xs">{buscarEnSigep}</p>
       </div>
     );
   }
