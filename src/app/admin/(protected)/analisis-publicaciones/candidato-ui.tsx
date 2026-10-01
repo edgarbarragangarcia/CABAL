@@ -14,7 +14,7 @@ const imagenUrl = (e: string, q: Record<string, string | undefined>) =>
   )}`;
 
 /** Iniciales sin conectores ni la palabra "partido": "Partido Liberal Colombiano" → "LC". */
-const iniciales = (nombre: string) =>
+export const iniciales = (nombre: string) =>
   nombre
     .split(" ")
     .filter((w) => w.length > 2 && !/^(partido|movimiento|politico|político|coalicion|coalición|del|las|los)$/i.test(w))
@@ -138,7 +138,7 @@ export function FotoCandidato({
 type Estado = { clave: string; hv?: HojaDeVida; error?: string };
 
 /** "PROFESIONAL - DERECHO - Graduado" → "Profesional · Derecho · Graduado". */
-const item = (s: string) =>
+export const item = (s: string) =>
   s
     .split(" - ")
     .filter((p) => p && p !== "NO APLICA")
@@ -146,15 +146,15 @@ const item = (s: string) =>
     .join(" · ");
 
 /** "MEDELLÍN - ANTIOQUIA" → "Medellín, Antioquia"; "BOGOTÁ. D.C. - BOGOTÁ. D.C." → "Bogotá D.C.". */
-const lugar = (s: string) => {
+export const lugar = (s: string) => {
   const [municipio, departamento] = s.split(" - ").map((p) => p.replace(/\.\s*D\.C\./, " D.C.").trim());
   return titulo(!departamento || departamento === municipio ? municipio : `${municipio}, ${departamento}`);
 };
 
-const enlaceExterno = "inline-flex items-center gap-1 font-semibold text-emerald-700 hover:underline dark:text-emerald-300";
+export const enlaceExterno = "inline-flex items-center gap-1 font-semibold text-emerald-700 hover:underline dark:text-emerald-300";
 
 /** Personas del SIGEP con el nombre del candidato, para revisarlas a mano. */
-function Homonimos({ personas }: { personas: PersonaSigep[] }) {
+export function Homonimos({ personas }: { personas: PersonaSigep[] }) {
   return (
     <ul className="mt-2 space-y-1.5">
       {personas.map((p) => (
@@ -181,10 +181,15 @@ function Homonimos({ personas }: { personas: PersonaSigep[] }) {
   );
 }
 
-export function HojaDeVidaPanel({ cedula, nombre }: { cedula?: string; nombre: string }) {
+export type EstadoHojaDeVida =
+  | { estado: "cargando" }
+  | { estado: "error"; error: string; reintentar: () => void }
+  | { estado: "listo"; hv: HojaDeVida; reintentar: () => void };
+
+/** La consulta a `/api/admin/elecciones/hoja-de-vida`, sin nada de presentación: la comparten `HojaDeVidaPanel` y cualquier otra vista de la misma hoja de vida. */
+export function useHojaDeVida(cedula: string | undefined, nombre: string): EstadoHojaDeVida {
   const [estado, setEstado] = React.useState<Estado | null>(null);
   const [intento, setIntento] = React.useState(0);
-  const [todo, setTodo] = React.useState(false);
   const url = `/api/admin/elecciones/hoja-de-vida?${new URLSearchParams(cedula ? { nombre, cedula } : { nombre })}`;
   const clave = `${url}#${intento}`;
 
@@ -206,23 +211,33 @@ export function HojaDeVidaPanel({ cedula, nombre }: { cedula?: string; nombre: s
     };
   }, [url, intento]);
 
+  const actual = estado?.clave === clave ? estado : null;
+  const reintentar = () => setIntento((n) => n + 1);
+  if (!actual) return { estado: "cargando" };
+  if (actual.error) return { estado: "error", error: actual.error, reintentar };
+  return { estado: "listo", hv: actual.hv!, reintentar };
+}
+
+export function HojaDeVidaPanel({ cedula, nombre }: { cedula?: string; nombre: string }) {
+  const [todo, setTodo] = React.useState(false);
+  const estado = useHojaDeVida(cedula, nombre);
+
   const marco = "cabal-rise mt-3 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 via-surface to-sky-500/5 p-4 text-sm";
 
-  const actual = estado?.clave === clave ? estado : null;
-  if (!actual) {
+  if (estado.estado === "cargando") {
     return (
       <div className={`${marco} flex items-center gap-2 text-muted-foreground`}>
         <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Buscando la hoja de vida en Función Pública…
       </div>
     );
   }
-  if (actual.error) {
+  if (estado.estado === "error") {
     return (
       <div className={`${marco} flex flex-wrap items-center justify-between gap-2 text-red-700 dark:text-red-300`}>
-        {actual.error}
+        {estado.error}
         <button
           type="button"
-          onClick={() => setIntento((n) => n + 1)}
+          onClick={estado.reintentar}
           className="rounded-full bg-surface px-3 py-1 text-xs font-semibold text-foreground ring-1 ring-border transition hover:ring-emerald-500/50"
         >
           Reintentar
@@ -230,7 +245,7 @@ export function HojaDeVidaPanel({ cedula, nombre }: { cedula?: string; nombre: s
       </div>
     );
   }
-  const hv = actual.hv!;
+  const hv = estado.hv;
   const buscarEnSigep = (
     <a href={hv.busqueda} target="_blank" rel="noopener noreferrer" className={enlaceExterno}>
       Buscar el nombre en el directorio del SIGEP <ExternalLink className="size-3.5" aria-hidden="true" />

@@ -4,14 +4,19 @@ import * as React from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
+  Briefcase,
   ExternalLink,
   Gavel,
   Globe,
+  GraduationCap,
+  Landmark,
   Loader2,
+  MapPin,
   Newspaper,
   Save,
   ScrollText,
   Search,
+  SearchX,
   ShieldAlert,
   ShieldCheck,
   ShieldQuestion,
@@ -24,7 +29,7 @@ import type { PresenciaInternet } from "@/lib/gov-data/avales/presencia-internet
 import type { ResumenIa } from "@/lib/gov-data/avales/resumen-ia";
 import type { Atestacion, Atestaciones, EstadoRevision, RevisionAval, Veredicto } from "@/lib/avales-store";
 import { AvalesTerritorioPanel } from "./avales-territorio-panel";
-import { HojaDeVidaPanel } from "./candidato-ui";
+import { Homonimos, enlaceExterno, iniciales, item, useHojaDeVida } from "./candidato-ui";
 import { Markdown } from "./markdown-ia";
 import { titulo } from "./nombres";
 
@@ -312,9 +317,7 @@ function FichaAval({ cedula, nombre }: { cedula: string; nombre: string }) {
 
       <SeccionDisciplinario datos={datos} />
 
-      <div className={marco}>
-        <HojaDeVidaPanel cedula={cedula} nombre={nombre} />
-      </div>
+      <HojaDeVidaLinkedIn cedula={cedula} nombre={nombre} />
 
       <SeccionElectoral datos={datos} cedula={cedula} nombre={nombre} />
 
@@ -376,6 +379,228 @@ function SeccionDisciplinario({ datos }: { datos: Peticion<AvalesResult> }) {
         Fuente: Función Pública — Sistema de Información de Registro de Sanciones e Inhabilidades (SIRI). Referencia
         informativa, no reemplaza el certificado oficial de la Procuraduría.
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------- hoja de vida ---
+
+/**
+ * Ficha de perfil al estilo LinkedIn para Avales: mismo dato y misma lógica
+ * de homónimos que `HojaDeVidaPanel` (candidato-ui.tsx, usado también en el
+ * Explorador Electoral), vía el hook compartido `useHojaDeVida` — solo
+ * cambia la presentación de este lado, así que el Explorador no se ve
+ * afectado.
+ */
+function HojaDeVidaLinkedIn({ cedula, nombre }: { cedula?: string; nombre: string }) {
+  const [todo, setTodo] = React.useState(false);
+  const estado = useHojaDeVida(cedula, nombre);
+
+  if (estado.estado === "cargando") {
+    return (
+      <div className={`${marco} flex items-center gap-2 text-sm text-muted-foreground`}>
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Buscando la hoja de vida en Función Pública…
+      </div>
+    );
+  }
+  if (estado.estado === "error") {
+    return (
+      <div className={`${marco} flex flex-wrap items-center justify-between gap-2 text-sm text-red-700 dark:text-red-300`}>
+        {estado.error}
+        <button
+          type="button"
+          onClick={estado.reintentar}
+          className="rounded-full bg-surface-muted px-3 py-1 text-xs font-semibold text-foreground ring-1 ring-border transition hover:ring-emerald-500/50"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  const hv = estado.hv;
+  const buscarEnSigep = (
+    <a href={hv.busqueda} target="_blank" rel="noopener noreferrer" className={enlaceExterno}>
+      Buscar el nombre en el directorio del SIGEP <ExternalLink className="size-3.5" aria-hidden="true" />
+    </a>
+  );
+
+  if (!hv.encontrada) {
+    const n = hv.homonimos.length;
+    return (
+      <div className={marco}>
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-surface-muted text-muted-foreground">
+            <SearchX className="size-4" aria-hidden="true" />
+          </span>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {n > 1
+              ? `Hay ${n} personas llamadas ${titulo(nombre)} en el SIGEP y nada indica cuál es el candidato. Revísalas:`
+              : n === 1
+                ? `En el SIGEP aparece una persona llamada ${titulo(nombre)}, pero nada confirma que sea el candidato: puede ser un homónimo. Revísala:`
+                : `${titulo(nombre)} no aparece en el SIGEP ni en la lista PEP de Función Pública, las únicas hojas de vida oficiales: solo incluyen a quienes hoy trabajan para el Estado (servidores públicos y contratistas). La Registraduría no publica hojas de vida de los candidatos.`}
+          </p>
+        </div>
+        {n > 0 && <Homonimos personas={hv.homonimos} />}
+        <p className="mt-3 text-xs">{buscarEnSigep}</p>
+      </div>
+    );
+  }
+
+  const experiencia = todo ? hv.experiencia : hv.experiencia.slice(0, 5);
+  const nombreMostrado = titulo(hv.nombre ?? nombre);
+
+  return (
+    <div className="cabal-rise overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
+      <div className="h-14 bg-gradient-to-r from-emerald-500 to-teal-600" />
+      <div className="px-5 pb-5">
+        <div className="-mt-8 flex flex-wrap items-end justify-between gap-3">
+          <div className="flex items-end gap-3">
+            <span className="grid size-16 shrink-0 place-items-center rounded-full border-4 border-surface bg-gradient-to-br from-emerald-500 to-teal-600 text-base font-bold text-white shadow-md">
+              {iniciales(nombreMostrado)}
+            </span>
+            <div className="pb-1">
+              <p className="text-base font-bold leading-tight">{nombreMostrado}</p>
+              {hv.cargoActual && (
+                <p className="text-sm text-muted-foreground">
+                  {[hv.cargoActual.cargo, hv.cargoActual.entidad].filter(Boolean).map(titulo).join(" · ")}
+                </p>
+              )}
+            </div>
+          </div>
+          {hv.enlace && (
+            <a
+              href={hv.enlace}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-[#0A66C2] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-90"
+            >
+              Ver en el SIGEP <ExternalLink className="size-3.5" aria-hidden="true" />
+            </a>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          {hv.ubicadaPor === "cedula" && (
+            <span className="rounded-full bg-emerald-600/10 px-2 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
+              Verificada con la cédula
+            </span>
+          )}
+          {hv.ubicadaPor === "nombre" && (
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-800 dark:text-amber-300">
+              Ubicada por el nombre completo
+            </span>
+          )}
+          {hv.nacimiento && (
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <MapPin className="size-3.5" aria-hidden="true" /> Nació en {titulo(hv.nacimiento)}
+            </span>
+          )}
+        </div>
+
+        {hv.ubicadaPor === "nombre" && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {!cedula
+              ? "La Registraduría no publicó cédulas en esta elección"
+              : hv.cargos.length
+                ? "La lista PEP no enlaza su hoja de vida"
+                : "Su cédula no figura en la lista PEP"}
+            , así que se ubicó por el nombre completo, que en el SIGEP corresponde a una sola persona. Confirma que el
+            cargo y la entidad sean los del candidato.
+          </p>
+        )}
+
+        <div className="mt-5 border-t border-border pt-4">
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold">
+            <Briefcase className="size-4 text-brand" aria-hidden="true" /> Experiencia
+          </h4>
+          {hv.experiencia.length ? (
+            <ul className="mt-3 space-y-4">
+              {experiencia.map((x, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-surface-muted text-muted-foreground">
+                    <Briefcase className="size-4" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold">{titulo(x.cargo)}</p>
+                    <p className="text-xs text-muted-foreground">{titulo(x.entidad)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {x.inicio} – {x.fin === "Actual" ? "Actual" : x.fin}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">No registrada en el SIGEP.</p>
+          )}
+          {hv.experiencia.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setTodo((v) => !v)}
+              className="mt-3 text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300"
+            >
+              {todo ? "Ver menos" : `Ver los ${hv.experiencia.length} cargos`}
+            </button>
+          )}
+        </div>
+
+        <div className="mt-5 border-t border-border pt-4">
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold">
+            <GraduationCap className="size-4 text-brand" aria-hidden="true" /> Formación académica
+          </h4>
+          {hv.formacion.length ? (
+            <ul className="mt-3 space-y-3">
+              {hv.formacion.map((f, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-surface-muted text-muted-foreground">
+                    <GraduationCap className="size-4" aria-hidden="true" />
+                  </span>
+                  <p className="min-w-0 pt-1.5 font-medium">{item(f)}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">No registrada en el SIGEP.</p>
+          )}
+        </div>
+
+        {hv.cargos.length > 0 && (
+          <div className="mt-5 border-t border-border pt-4">
+            <h4 className="flex items-center gap-1.5 text-sm font-semibold">
+              <Landmark className="size-4 text-brand" aria-hidden="true" /> Cargos públicos (lista PEP)
+            </h4>
+            <ul className="mt-3 space-y-2">
+              {hv.cargos.map((c, i) => (
+                <li key={i} className="rounded-lg bg-surface-muted/60 px-3 py-2 text-sm">
+                  <p className="font-medium">{titulo(c.cargo)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {titulo(c.entidad)}
+                    {c.desde && ` · desde ${c.desde}`}
+                    {c.hasta && ` hasta ${c.hasta}`}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {hv.homonimos.length > 0 && (
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">
+              {hv.homonimos.length > 1
+                ? `En el SIGEP hay ${hv.homonimos.length} personas con este nombre y nada indica cuál es el candidato:`
+                : "En el SIGEP aparece una persona con este nombre, pero nada confirma que sea el candidato: puede ser un homónimo."}
+            </p>
+            <Homonimos personas={hv.homonimos} />
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+          <p className="text-[11px] text-muted-foreground">Fuente: {hv.fuente}.</p>
+          {!hv.enlace && <p className="text-xs">{buscarEnSigep}</p>}
+        </div>
+      </div>
     </div>
   );
 }
