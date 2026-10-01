@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   ExternalLink,
@@ -88,6 +89,120 @@ const atestacionesVacias = (): Atestaciones => ({
   certificadoProcuraduria: { ...ATESTACION_VACIA },
   certificadoContraloria: { ...ATESTACION_VACIA },
 });
+
+// ---------------------------------------------------------------- kpis ---
+
+/** Mismo estilo de tarjetas que Red Cabal y Votaciones. */
+const KPI_STYLES: { icon: LucideIcon; card: string; glow: string }[] = [
+  { icon: Gavel, card: "from-emerald-500 to-teal-600", glow: "shadow-emerald-500/30" },
+  { icon: Vote, card: "from-sky-500 to-indigo-600", glow: "shadow-sky-500/30" },
+  { icon: Newspaper, card: "from-amber-400 to-orange-600", glow: "shadow-orange-500/30" },
+];
+
+const VEREDICTO_KPI: Record<Veredicto, { icon: LucideIcon; card: string; glow: string; label: string }> = {
+  pendiente: { icon: ShieldQuestion, card: "from-slate-400 to-slate-600", glow: "shadow-slate-500/30", label: "Pendiente" },
+  aval_recomendado: {
+    icon: ShieldCheck,
+    card: "from-emerald-500 to-green-600",
+    glow: "shadow-emerald-500/30",
+    label: "Recomendado",
+  },
+  aval_no_recomendado: {
+    icon: ShieldAlert,
+    card: "from-rose-500 to-red-600",
+    glow: "shadow-rose-500/30",
+    label: "No recomendado",
+  },
+};
+
+function KpiCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  card,
+  glow,
+  delay,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  icon: LucideIcon;
+  card: string;
+  glow: string;
+  delay: number;
+}) {
+  return (
+    <div
+      className={`cabal-rise group relative overflow-hidden rounded-2xl bg-gradient-to-br ${card} p-4 text-white shadow-lg ${glow} transition-transform duration-300 hover:-translate-y-1`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div
+        aria-hidden="true"
+        className="absolute -right-6 -bottom-8 size-24 rounded-full bg-white/15 transition-transform duration-500 group-hover:scale-125"
+      />
+      <div className="relative flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-white/85">{label}</p>
+        <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white/20 backdrop-blur">
+          <Icon className="size-4" aria-hidden="true" />
+        </span>
+      </div>
+      <p className="relative mt-2 text-2xl font-bold">{value}</p>
+      <p className="relative text-[11px] text-white/80">{sub}</p>
+    </div>
+  );
+}
+
+function KpiRow({
+  datos,
+  internet,
+  veredicto,
+}: {
+  datos: Peticion<AvalesResult>;
+  internet: Peticion<PresenciaInternet>;
+  veredicto: Veredicto;
+}) {
+  const disciplinario =
+    datos.estado === "listo" && datos.data.disciplinario.ok ? datos.data.disciplinario.data.sanciones.length : null;
+  const electoral =
+    datos.estado === "listo" && datos.data.electoral.ok ? datos.data.electoral.data.coincidencias.length : null;
+  const noticias = internet.estado === "listo" ? internet.data.noticias.length : null;
+  const v = VEREDICTO_KPI[veredicto];
+  const valor = (n: number | null) => (n === null ? "…" : n.toLocaleString("es-CO"));
+
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <KpiCard
+        label="Antecedentes disciplinarios"
+        value={valor(disciplinario)}
+        sub={disciplinario === null ? "consultando SIRI…" : disciplinario === 0 ? "sin sanciones" : "sanciones encontradas"}
+        icon={KPI_STYLES[0].icon}
+        card={KPI_STYLES[0].card}
+        glow={KPI_STYLES[0].glow}
+        delay={0}
+      />
+      <KpiCard
+        label="Historial electoral"
+        value={valor(electoral)}
+        sub={electoral === null ? "revisando Senado y Presidencia…" : "coincidencias, 2018-2026"}
+        icon={KPI_STYLES[1].icon}
+        card={KPI_STYLES[1].card}
+        glow={KPI_STYLES[1].glow}
+        delay={80}
+      />
+      <KpiCard
+        label="Menciones en prensa"
+        value={valor(noticias)}
+        sub={noticias === null ? "buscando en Google Noticias…" : "en Google Noticias"}
+        icon={KPI_STYLES[2].icon}
+        card={KPI_STYLES[2].card}
+        glow={KPI_STYLES[2].glow}
+        delay={160}
+      />
+      <KpiCard label="Estado del aval" value={v.label} sub="según la revisión guardada" icon={v.icon} card={v.card} glow={v.glow} delay={240} />
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------- fetch ---
 
@@ -184,12 +299,17 @@ export function AvalesTab() {
 
 function FichaAval({ cedula, nombre }: { cedula: string; nombre: string }) {
   const datos = usePeticion<AvalesResult>(`/api/admin/avales?${new URLSearchParams({ cedula, nombre })}`);
+  const internet = usePeticion<PresenciaInternet>(`/api/admin/avales/internet?${new URLSearchParams({ nombre })}`);
   const revision = usePeticion<{ configured: boolean; revision: RevisionAval | null }>(
     `/api/admin/avales/revision?${new URLSearchParams({ cedula })}`
   );
+  const veredictoActual: Veredicto =
+    revision.estado === "listo" ? (revision.data.revision?.veredicto ?? "pendiente") : "pendiente";
 
   return (
     <div className="space-y-4">
+      <KpiRow datos={datos} internet={internet} veredicto={veredictoActual} />
+
       <SeccionDisciplinario datos={datos} />
 
       <div className={marco}>
@@ -198,7 +318,7 @@ function FichaAval({ cedula, nombre }: { cedula: string; nombre: string }) {
 
       <SeccionElectoral datos={datos} cedula={cedula} nombre={nombre} />
 
-      <SeccionInternet nombre={nombre} />
+      <SeccionInternet nombre={nombre} datos={internet} />
 
       {revision.estado === "cargando" ? (
         <div className={`${marco} flex items-center gap-2 text-sm text-muted-foreground`}>
@@ -335,8 +455,7 @@ type EstadoIa =
   | { estado: "listo"; data: ResumenIa }
   | { estado: "error"; error: string };
 
-function SeccionInternet({ nombre }: { nombre: string }) {
-  const datos = usePeticion<PresenciaInternet>(`/api/admin/avales/internet?${new URLSearchParams({ nombre })}`);
+function SeccionInternet({ nombre, datos }: { nombre: string; datos: Peticion<PresenciaInternet> }) {
   const [ia, setIa] = React.useState<EstadoIa>({ estado: "inicial" });
 
   const buscarConIa = () => {
