@@ -432,17 +432,17 @@ function HojaDeVidaLinkedIn({ cedula, nombre }: { cedula?: string; nombre: strin
     // que este es el caso más común en Avales, no una excepción: necesita la
     // misma tarjeta cuidada que el perfil encontrado, no un texto suelto.
     return (
-      <div className="cabal-rise overflow-hidden rounded-2xl border border-border shadow-sm">
-        <div className="flex items-center gap-4 bg-slate-800 px-5 py-5">
-          <span className="grid size-16 shrink-0 place-items-center rounded-full bg-white/10 text-white ring-4 ring-white/15">
-            <SearchX className="size-6" aria-hidden="true" />
+      <div className="cabal-rise overflow-visible rounded-2xl border border-border shadow-sm">
+        <div className="relative overflow-hidden rounded-t-2xl bg-slate-800 py-6 pr-5 pl-32 sm:pl-40">
+          <p className="truncate text-xl font-extrabold text-white sm:text-2xl">{titulo(nombre)}</p>
+          <p className="mt-1 truncate text-xs font-semibold tracking-widest text-white/70 uppercase">
+            Sin hoja de vida pública
+          </p>
+          <span className="absolute -bottom-10 left-5 grid size-28 shrink-0 place-items-center rounded-full bg-white/10 text-white ring-[6px] ring-surface shadow-lg sm:size-32">
+            <SearchX className="size-10 sm:size-12" aria-hidden="true" />
           </span>
-          <div className="min-w-0">
-            <p className="truncate text-xl font-bold text-white">{titulo(nombre)}</p>
-            <p className="mt-0.5 text-xs font-semibold tracking-wide text-white/70 uppercase">Sin hoja de vida pública</p>
-          </div>
         </div>
-        <div className="space-y-3 bg-surface p-5 text-sm">
+        <div className="space-y-3 rounded-b-2xl bg-surface p-5 pt-14 text-sm sm:pt-16">
           <p className="text-muted-foreground">
             {n > 1
               ? `Hay ${n} personas llamadas ${titulo(nombre)} en el SIGEP y nada indica cuál es el candidato. Revísalas:`
@@ -483,26 +483,26 @@ function HojaDeVidaLinkedIn({ cedula, nombre }: { cedula?: string; nombre: strin
   // Sin "Idiomas" ni "Herramientas" como en una CV genérica: no hay ese dato en
   // el SIGEP ni en la lista PEP, y no se inventa.
   return (
-    <div className="cabal-rise overflow-hidden rounded-2xl border border-border shadow-sm">
-      <div className="flex items-center gap-4 bg-slate-800 px-5 py-5">
-        <span className="grid size-16 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-lg font-bold text-white ring-4 ring-white/15">
+    <div className="cabal-rise overflow-visible rounded-2xl border border-border shadow-sm">
+      <div className="relative overflow-hidden rounded-t-2xl bg-slate-800 py-6 pr-5 pl-32 sm:pl-40">
+        <p className="truncate text-xl font-extrabold text-white sm:text-2xl">{nombreMostrado}</p>
+        {hv.cargoActual && (
+          <p className="mt-1 truncate text-xs font-semibold tracking-widest text-white/70 uppercase">
+            {[hv.cargoActual.cargo, hv.cargoActual.entidad].filter(Boolean).map(titulo).join(" · ")}
+          </p>
+        )}
+        <span className="absolute -bottom-10 left-5 grid size-28 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-2xl font-bold text-white ring-[6px] ring-surface shadow-lg sm:size-32 sm:text-3xl">
           {iniciales(nombreMostrado)}
         </span>
-        <div className="min-w-0">
-          <p className="truncate text-xl font-bold text-white">{nombreMostrado}</p>
-          {hv.cargoActual && (
-            <p className="mt-0.5 truncate text-xs font-semibold tracking-wide text-white/70 uppercase">
-              {[hv.cargoActual.cargo, hv.cargoActual.entidad].filter(Boolean).map(titulo).join(" · ")}
-            </p>
-          )}
-        </div>
       </div>
 
-      <div className="grid sm:grid-cols-[13rem_1fr]">
-        <aside className="space-y-5 bg-surface-muted/60 p-5 text-sm">
+      <div className="grid overflow-hidden rounded-b-2xl sm:grid-cols-[13rem_1fr]">
+        <aside className="space-y-5 bg-surface-muted/60 p-5 pt-14 text-sm sm:pt-16">
           <div>
-            <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">Ficha</p>
-            <ul className="mt-2 space-y-2">
+            <p className="rounded-md bg-surface px-3 py-1.5 text-xs font-bold tracking-wide text-foreground uppercase shadow-sm">
+              Ficha
+            </p>
+            <ul className="mt-3 space-y-2">
               {cedula && (
                 <li className="flex items-start gap-2">
                   <IdCard className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -534,8 +534,10 @@ function HojaDeVidaLinkedIn({ cedula, nombre }: { cedula?: string; nombre: strin
 
           {hv.cargos.length > 0 && (
             <div>
-              <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">Cargos públicos (PEP)</p>
-              <ul className="mt-2 space-y-3">
+              <p className="rounded-md bg-surface px-3 py-1.5 text-xs font-bold tracking-wide text-foreground uppercase shadow-sm">
+                Cargos públicos (PEP)
+              </p>
+              <ul className="mt-3 space-y-3">
                 {hv.cargos.map((c, i) => (
                   <li key={i}>
                     <p className="font-medium">{titulo(c.cargo)}</p>
@@ -553,7 +555,7 @@ function HojaDeVidaLinkedIn({ cedula, nombre }: { cedula?: string; nombre: strin
           )}
         </aside>
 
-        <div className="space-y-5 bg-surface p-5">
+        <div className="space-y-5 bg-surface p-5 pt-14 sm:pt-16">
           {motivoNombre}
 
           <section>
