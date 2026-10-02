@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AlertTriangle, ExternalLink, Globe, Loader2, MessageSquareQuote, Newspaper, ShieldAlert, Sparkles } from "lucide-react";
 
-import type { PresenciaInternet, Tema } from "@/lib/gov-data/avales/presencia-internet";
+import type { PresenciaInternet, Tema, TemaId } from "@/lib/gov-data/avales/presencia-internet";
 import type { Analisis, ResumenIa } from "@/lib/gov-data/avales/resumen-ia";
 import type { Noticia } from "@/lib/informe/fuentes";
 import { Markdown } from "./markdown-ia";
@@ -55,16 +55,26 @@ function Titulares({ lista, max = 8 }: { lista: Noticia[]; max?: number }) {
 }
 
 const ESCALA = ["izquierda", "centro-izquierda", "centro", "centro-derecha", "derecha"];
+const COLOR_ESCALA = ["bg-rose-500", "bg-orange-400", "bg-slate-400", "bg-sky-400", "bg-blue-600"];
+
+const COLOR_TEMA: Record<TemaId, string> = {
+  general: "from-emerald-500 to-teal-600",
+  cabal: "from-violet-500 to-purple-700",
+  izquierda: "from-rose-500 to-red-600",
+  derecha: "from-sky-500 to-blue-700",
+  polemicas: "from-amber-400 to-orange-600",
+  redes: "from-fuchsia-500 to-pink-600",
+};
 
 function Orientacion({ o }: { o: Analisis["orientacion"] }) {
   const i = ESCALA.indexOf(o.etiqueta.toLowerCase());
   return (
-    <div className="rounded-2xl border border-border p-4">
+    <div className="rounded-2xl border border-border border-t-4 border-t-sky-500 p-4">
       <p className={sub}>Orientación política (inferida)</p>
       <div className="mt-3 flex items-center gap-1">
         {ESCALA.map((e, k) => (
           <div key={e} className="flex-1 text-center">
-            <div className={`h-2 rounded-full ${i === k ? "bg-brand" : "bg-border"}`} />
+            <div className={`h-2.5 rounded-full ${i === k ? `${COLOR_ESCALA[k]} shadow-md` : "bg-border"}`} />
             <p className={`mt-1 text-[10px] ${i === k ? "font-bold text-foreground" : "text-muted-foreground"}`}>{e}</p>
           </div>
         ))}
@@ -90,14 +100,17 @@ const colorRiesgo: Record<string, string> = {
   alto: "bg-red-500/15 text-red-700 dark:text-red-300",
 };
 
+const bordeRiesgo: Record<string, string> = { bajo: "border-t-emerald-500", medio: "border-t-amber-500", alto: "border-t-red-500" };
+
 function Informe({ a }: { a: Analisis }) {
   const habla = a.cabal.hablaDeCabal.toLowerCase();
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl bg-surface-muted p-4">
-        <p className="text-sm">{a.resumen}</p>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-rose-500 p-4 text-white shadow-lg shadow-fuchsia-600/25">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-8 -bottom-12 size-40 rounded-full bg-white/10" />
+        <p className="relative text-sm">{a.resumen}</p>
         {a.homonimos && (
-          <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+          <p className="relative mt-2 flex items-start gap-1.5 rounded-lg bg-black/20 p-2 text-xs text-amber-100">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> {a.homonimos}
           </p>
         )}
@@ -106,7 +119,7 @@ function Informe({ a }: { a: Analisis }) {
       <div className="grid gap-3 lg:grid-cols-2">
         <Orientacion o={a.orientacion} />
 
-        <div className="rounded-2xl border border-border p-4">
+        <div className="rounded-2xl border border-border border-t-4 border-t-fuchsia-500 p-4">
           <p className={sub}>
             <MessageSquareQuote className="size-3.5" aria-hidden="true" /> ¿Ha hablado de María Fernanda Cabal?
           </p>
@@ -125,7 +138,7 @@ function Informe({ a }: { a: Analisis }) {
       </div>
 
       {a.redes.length > 0 && (
-        <div className="rounded-2xl border border-border p-4">
+        <div className="rounded-2xl border border-border border-t-4 border-t-emerald-500 p-4">
           <p className={sub}>Redes sociales encontradas por la IA</p>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -154,7 +167,7 @@ function Informe({ a }: { a: Analisis }) {
 
       <div className="grid gap-3 lg:grid-cols-2">
         {a.controversias.length > 0 && (
-          <div className="rounded-2xl border border-border p-4">
+          <div className="rounded-2xl border border-border border-t-4 border-t-amber-500 p-4">
             <p className={sub}>Controversias y denuncias</p>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
               {a.controversias.map((c, k) => (
@@ -164,14 +177,14 @@ function Informe({ a }: { a: Analisis }) {
           </div>
         )}
         {a.trayectoria && (
-          <div className="rounded-2xl border border-border p-4">
+          <div className="rounded-2xl border border-border border-t-4 border-t-teal-500 p-4">
             <p className={sub}>Trayectoria</p>
             <p className="mt-2 text-sm">{a.trayectoria}</p>
           </div>
         )}
       </div>
 
-      <div className="rounded-2xl border border-border p-4">
+      <div className={`rounded-2xl border border-border border-t-4 p-4 ${bordeRiesgo[a.riesgo.nivel.toLowerCase()] ?? bordeRiesgo.medio}`}>
         <p className={sub}>
           <ShieldAlert className="size-3.5" aria-hidden="true" /> Riesgo para la Fundación
         </p>
@@ -202,10 +215,13 @@ function Tarjetas({ temas }: { temas: Tema[] }) {
             key={t.id}
             type="button"
             onClick={() => setAbierto(abierto === t.id ? null : t.id)}
-            className={`rounded-xl border p-3 text-left transition ${abierto === t.id ? "border-brand bg-brand/10" : "border-border hover:border-brand/50"}`}
+            className={`group relative flex flex-col items-start justify-start overflow-hidden rounded-xl bg-gradient-to-br ${COLOR_TEMA[t.id]} p-3 text-left text-white shadow-md transition hover:-translate-y-0.5 ${
+              abierto === t.id ? "ring-2 ring-foreground/60 ring-offset-2 ring-offset-surface" : ""
+            }`}
           >
-            <span className="block text-xl font-bold">{t.error ? "—" : t.noticias.length}</span>
-            <span className="block text-[11px] leading-tight text-muted-foreground">{t.titulo}</span>
+            <span aria-hidden="true" className="absolute -right-3 -bottom-4 size-14 rounded-full bg-white/15 transition-transform duration-500 group-hover:scale-125" />
+            <span className="relative block text-2xl font-bold">{t.error ? "—" : t.noticias.length}</span>
+            <span className="relative block text-[11px] leading-tight text-white/90">{t.titulo}</span>
           </button>
         ))}
       </div>
@@ -248,9 +264,13 @@ export function InvestigacionAval({ nombre, datos }: { nombre: string; datos: Pe
         <Globe className="size-4 text-brand" aria-hidden="true" /> Investigación a fondo
       </h4>
 
-      <div className="mt-2 rounded-2xl border border-brand/30 bg-brand/5 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-xl text-sm">
+      <div className="relative mt-2 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-rose-500 p-4 text-white shadow-lg shadow-fuchsia-600/25">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <div className="absolute -right-8 -bottom-12 size-40 rounded-full bg-white/10" />
+          <div className="absolute right-24 -top-10 size-24 rounded-full bg-amber-300/25 blur-xl" />
+        </div>
+        <div className="relative flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-xl text-sm text-white/95">
             La IA busca en internet su discurso, su orientación política, si alguna vez habló de María Fernanda Cabal, sus redes y sus controversias,
             partiendo de los titulares reales de abajo.
           </p>
@@ -258,14 +278,14 @@ export function InvestigacionAval({ nombre, datos }: { nombre: string; datos: Pe
             type="button"
             onClick={investigar}
             disabled={ia.estado === "buscando"}
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-5 py-2 text-sm font-bold text-amber-950 shadow-md shadow-amber-900/20 transition hover:bg-amber-200 disabled:opacity-70"
           >
             {ia.estado === "buscando" ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
             {ia.estado === "buscando" ? "Investigando…" : ia.estado === "listo" ? "Investigar de nuevo" : "Investigar a fondo"}
           </button>
         </div>
-        {ia.estado === "buscando" && <p className="mt-2 text-xs text-muted-foreground">Puede tardar uno o dos minutos: hace varias búsquedas en la web.</p>}
-        {ia.estado === "error" && <p className="mt-2 text-sm text-red-700 dark:text-red-300">{ia.error}</p>}
+        {ia.estado === "buscando" && <p className="relative mt-2 text-xs text-white/85">Puede tardar uno o dos minutos: hace varias búsquedas en la web.</p>}
+        {ia.estado === "error" && <p className="relative mt-2 rounded-lg bg-black/25 p-2 text-sm text-white">{ia.error}</p>}
       </div>
 
       {ia.estado === "listo" && (
@@ -302,7 +322,7 @@ export function InvestigacionAval({ nombre, datos }: { nombre: string; datos: Pe
         <p className="mt-2 text-sm text-red-700 dark:text-red-300">{datos.error}</p>
       ) : (
         <>
-          <div className="mt-2 rounded-2xl border border-border p-4">
+          <div className="mt-2 rounded-2xl border border-violet-400/40 bg-gradient-to-r from-violet-500/10 via-surface to-fuchsia-500/10 p-4">
             <p className={sub}>
               <MessageSquareQuote className="size-3.5" aria-hidden="true" /> Titulares que nombran a esta persona y a Cabal
             </p>

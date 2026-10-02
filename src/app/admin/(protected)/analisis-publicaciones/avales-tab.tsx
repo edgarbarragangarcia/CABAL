@@ -8,7 +8,6 @@ import {
   Briefcase,
   ExternalLink,
   Gavel,
-  Globe,
   GraduationCap,
   IdCard,
   Loader2,
@@ -102,6 +101,14 @@ const KPI_STYLES: { icon: LucideIcon; card: string; glow: string }[] = [
   { icon: Gavel, card: "from-emerald-500 to-teal-600", glow: "shadow-emerald-500/30" },
   { icon: Vote, card: "from-sky-500 to-indigo-600", glow: "shadow-sky-500/30" },
   { icon: Newspaper, card: "from-amber-400 to-orange-600", glow: "shadow-orange-500/30" },
+];
+
+/** Lo que reúne la consulta: se muestra en colores vivos antes de buscar a alguien. */
+const QUE_INCLUYE: { label: string; value: string; sub: string; icon: LucideIcon; card: string; glow: string }[] = [
+  { label: "Antecedentes disciplinarios", value: "SIRI", sub: "Procuraduría · sanciones", icon: Gavel, card: "from-emerald-500 to-teal-600", glow: "shadow-emerald-500/30" },
+  { label: "Hoja de vida pública", value: "SIGEP", sub: "Función Pública · PEP", icon: IdCard, card: "from-sky-500 to-indigo-600", glow: "shadow-sky-500/30" },
+  { label: "Historial electoral", value: "2018‑2026", sub: "Registraduría · votos y cargos", icon: Vote, card: "from-amber-400 to-orange-600", glow: "shadow-orange-500/30" },
+  { label: "Investigación a fondo", value: "IA", sub: "prensa, redes, orientación y Cabal", icon: Sparkles, card: "from-violet-500 to-fuchsia-600", glow: "shadow-fuchsia-500/30" },
 ];
 
 const VEREDICTO_KPI: Record<Veredicto, { icon: LucideIcon; card: string; glow: string; label: string }> = {
@@ -254,48 +261,76 @@ export function AvalesTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className={marco}>
-        <p className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <ShieldCheck className="size-5 text-brand" aria-hidden="true" /> Avales
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Junta lo que se puede saber oficialmente de un aspirante a partir de su cédula —antecedentes disciplinarios, hoja
-          de vida pública e historial electoral— y deja constancia de la verificación manual y el veredicto final.
-        </p>
-        <p className="mt-3 flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          Esto no reemplaza el certificado oficial de la Procuraduría, la Contraloría ni la Policía Nacional, ni sustituye
-          el juicio legal de la Fundación.
-        </p>
-
-        <form onSubmit={enviar} className="mt-4 flex flex-wrap gap-2">
-          <input
-            value={cedulaInput}
-            onChange={(e) => setCedulaInput(e.target.value.replace(/\D/g, ""))}
-            inputMode="numeric"
-            placeholder="Número de cédula"
-            aria-label="Número de cédula"
-            className="w-44 rounded-full border border-border bg-transparent px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-brand/40"
-          />
-          <input
-            value={nombreInput}
-            onChange={(e) => setNombreInput(e.target.value)}
-            placeholder="Nombre completo"
-            aria-label="Nombre completo"
-            className="min-w-0 flex-1 rounded-full border border-border bg-transparent px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-brand/40"
-          />
-          <button
-            type="submit"
-            disabled={!cedulaValida || !nombreValido}
-            className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground disabled:opacity-50"
-          >
-            <Search className="size-4" aria-hidden="true" /> Consultar
-          </button>
-        </form>
+    <div className="relative overflow-hidden rounded-3xl border border-border bg-surface p-4 shadow-xl shadow-emerald-900/5 sm:p-6">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className="cabal-blob absolute -top-24 -left-16 size-72 rounded-full bg-emerald-400/20 blur-3xl" />
+        <div className="cabal-blob absolute -top-10 right-0 size-64 rounded-full bg-sky-400/20 blur-3xl [animation-delay:-4s]" />
+        <div className="cabal-blob absolute bottom-0 left-1/3 size-80 rounded-full bg-fuchsia-400/10 blur-3xl [animation-delay:-8s]" />
       </div>
 
-      {consulta && <FichaAval key={`${consulta.cedula}|${consulta.nombre}`} cedula={consulta.cedula} nombre={consulta.nombre} />}
+      <div className="relative space-y-4">
+        <div className="relative rounded-2xl bg-gradient-to-br from-emerald-700 via-teal-600 to-sky-600 p-5 text-white shadow-lg shadow-emerald-700/25">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+            <div className="absolute -right-10 -bottom-16 size-48 rounded-full bg-white/10" />
+            <div className="absolute right-24 -top-12 size-28 rounded-full bg-amber-300/25 blur-xl" />
+          </div>
+          <div className="relative">
+            <p className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide backdrop-blur">
+              <ShieldCheck className="size-3.5" aria-hidden="true" />
+              Verificación de avales · fuentes oficiales
+            </p>
+            <p className="mt-2 text-xl font-bold tracking-tight sm:text-2xl">
+              {consulta ? `Verificando a ${titulo(consulta.nombre)}` : "Avales"}
+            </p>
+            <p className="mt-1 max-w-3xl text-xs text-white/85 sm:text-sm">
+              {consulta
+                ? `C.C. ${consulta.cedula} · antecedentes disciplinarios, hoja de vida pública, historial electoral e investigación a fondo.`
+                : "Junta lo que se puede saber oficialmente de un aspirante a partir de su cédula —antecedentes disciplinarios, hoja de vida pública e historial electoral— y deja constancia de la verificación manual y el veredicto final."}
+            </p>
+
+            <form onSubmit={enviar} className="mt-4 flex flex-wrap gap-2">
+              <input
+                value={cedulaInput}
+                onChange={(e) => setCedulaInput(e.target.value.replace(/\D/g, ""))}
+                inputMode="numeric"
+                placeholder="Número de cédula"
+                aria-label="Número de cédula"
+                className="w-full rounded-full border border-white/30 bg-white/95 px-4 py-2 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-amber-300 sm:w-44"
+              />
+              <input
+                value={nombreInput}
+                onChange={(e) => setNombreInput(e.target.value)}
+                placeholder="Nombre completo"
+                aria-label="Nombre completo"
+                className="w-full rounded-full border border-white/30 bg-white/95 px-4 py-2 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-amber-300 sm:min-w-0 sm:flex-1"
+              />
+              <button
+                type="submit"
+                disabled={!cedulaValida || !nombreValido}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-amber-300 px-5 py-2 text-sm font-bold sm:w-auto text-amber-950 shadow-md shadow-amber-900/20 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-white/25 disabled:text-white/80 disabled:shadow-none"
+              >
+                <Search className="size-4" aria-hidden="true" /> Consultar
+              </button>
+            </form>
+
+            <p className="mt-3 flex items-start gap-2 rounded-xl bg-amber-300/20 p-2.5 text-[11px] text-amber-50 ring-1 ring-amber-200/30">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              Esto no reemplaza el certificado oficial de la Procuraduría, la Contraloría ni la Policía Nacional, ni
+              sustituye el juicio legal de la Fundación.
+            </p>
+          </div>
+        </div>
+
+        {consulta ? (
+          <FichaAval key={`${consulta.cedula}|${consulta.nombre}`} cedula={consulta.cedula} nombre={consulta.nombre} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {QUE_INCLUYE.map((c, i) => (
+              <KpiCard key={c.label} label={c.label} value={c.value} sub={c.sub} icon={c.icon} card={c.card} glow={c.glow} delay={i * 80} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
