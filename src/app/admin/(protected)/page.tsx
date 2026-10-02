@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
-import { BannerEnVivo, MonitoreoWidget, useMonitoreo } from "@/components/admin/monitoreo-panel";
+import { BannerEnVivo, MonitoreoWidget, RedesWidget, useMonitoreo, useRedes } from "@/components/admin/monitoreo-panel";
 import { ColombiaHeatmap } from "@/components/admin/colombia-heatmap";
 import {
   DashboardGrid,
@@ -366,6 +366,7 @@ export default function CentroDeControlPage() {
   );
 
   const monitoreo = useMonitoreo();
+  const redes = useRedes();
 
   const widgets: DashboardWidget[] = [
     {
@@ -374,6 +375,13 @@ export default function CentroDeControlPage() {
       icon: Radio,
       defaultWide: true,
       content: <MonitoreoWidget {...monitoreo} />,
+    },
+    {
+      id: "redes-reales",
+      title: "Redes sociales en vivo",
+      icon: Radio,
+      defaultWide: true,
+      content: <RedesWidget {...redes} />,
     },
     {
       id: "resumen",

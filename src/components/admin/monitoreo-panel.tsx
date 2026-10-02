@@ -5,6 +5,7 @@ import { ExternalLink, Loader2, Radio, RefreshCw, Sparkles } from "lucide-react"
 
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
 import type { Monitoreo } from "@/lib/monitoreo";
+import type { PublicacionRed, Redes } from "@/lib/monitoreo/redes";
 import type { Sentimiento } from "@/lib/monitoreo/sentimiento";
 
 type Estado = { datos: Monitoreo | null; cargando: boolean; error: string | null };
@@ -32,6 +33,32 @@ export function useMonitoreo() {
   }, [cargar]);
 
   return { ...estado, recargar: () => cargar(true) };
+}
+
+export function useRedes() {
+  const [redes, setRedes] = React.useState<Redes | null>(null);
+  const [cargando, setCargando] = React.useState(true);
+  const cargar = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/monitoreo/redes", { cache: "no-store" });
+      if (res.ok) setRedes((await res.json()) as Redes);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+  React.useEffect(() => {
+    void cargar();
+    const t = setInterval(() => void cargar(), 60_000);
+    return () => clearInterval(t);
+  }, [cargar]);
+  return {
+    redes,
+    cargando,
+    recargar: () => {
+      setCargando(true);
+      void cargar();
+    },
+  };
 }
 
 const fmt = new Intl.NumberFormat("es-CO");
@@ -141,6 +168,127 @@ function SentimientoCaja({ hay }: { hay: boolean }) {
   );
 }
 
+const hace = (iso: string) => {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  return m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
+};
+
+function Publicaciones({ lista, vacio }: { lista: PublicacionRed[]; vacio: string }) {
+  if (lista.length === 0) return <p className="text-xs text-muted-foreground">{vacio}</p>;
+  return (
+    <ul className="space-y-2.5">
+      {lista.map((p) => (
+        <li key={p.id} className="text-xs">
+          <a href={p.enlace} target="_blank" rel="noreferrer" className="line-clamp-3 font-medium hover:underline">
+            {p.texto}
+          </a>
+          <span className="text-muted-foreground">
+            {p.autor} · {hace(p.fecha)} · {fmt.format(p.me_gusta)} me gusta
+            {p.compartidos ? ` · ${fmt.format(p.compartidos)} compartidos` : ""}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SinConectar({ red, que }: { red: string; que: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border p-4 text-xs text-muted-foreground">
+      <p className="text-sm font-semibold text-foreground">{red}: sin conectar</p>
+      <p className="mt-1">{que}</p>
+      <a href="/admin/configuracion" className="mt-2 inline-block font-semibold text-brand hover:underline">
+        Conectar en Configuración →
+      </a>
+    </div>
+  );
+}
+
+function Fallo({ red, error }: { red: string; error: string }) {
+  return (
+    <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4 text-xs">
+      <p className="text-sm font-semibold">{red}: la credencial no funcionó</p>
+      <p className="mt-1 text-red-700 dark:text-red-300">{error}</p>
+    </div>
+  );
+}
+
+export function RedesWidget({ redes, cargando, recargar }: ReturnType<typeof useRedes>) {
+  const yt = redes?.youtube;
+  const x = redes?.x;
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+          Datos reales por API oficial — se actualiza cada minuto
+        </span>
+        <button
+          type="button"
+          onClick={recargar}
+          disabled={cargando}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60"
+        >
+          <RefreshCw className={`size-3 ${cargando ? "animate-spin" : ""}`} aria-hidden="true" />
+          Actualizar
+        </button>
+      </div>
+      {!redes && <p className="mt-4 text-sm text-muted-foreground">Consultando redes…</p>}
+      {redes && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {yt?.estado === "sin_clave" && <SinConectar red="YouTube" que="Con una clave API gratuita verás suscriptores, espectadores en vivo, comentarios al minuto y el rendimiento semanal de los últimos 50 videos." />}
+          {yt?.estado === "error" && <Fallo red="YouTube" error={yt.error} />}
+          {yt?.estado === "ok" && (
+            <>
+              <div className="rounded-2xl border border-border p-4">
+                <h4 className="text-sm font-semibold">YouTube — {yt.datos.canal.nombre}</h4>
+                <p className="mt-1 text-2xl font-bold">
+                  {yt.datos.canal.suscriptores === null ? "—" : fmt.format(yt.datos.canal.suscriptores)}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">suscriptores · {fmt.format(yt.datos.canal.vistas)} vistas totales</span>
+                </p>
+                {yt.datos.enVivo && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">
+                    En vivo ahora: {yt.datos.enVivo.espectadores === null ? "espectadores no disponibles" : `${fmt.format(yt.datos.enVivo.espectadores)} espectadores`}
+                  </p>
+                )}
+                <p className="mt-3 text-[11px] font-semibold text-muted-foreground">Vistas por semana de publicación (últimos 50 videos)</p>
+                <TrendArea data={yt.datos.porSemana.map((s) => ({ label: s.semana, value: s.vistas }))} />
+              </div>
+              <div className="rounded-2xl border border-border p-4">
+                <h4 className="mb-2 text-sm font-semibold">Comentarios más recientes en YouTube</h4>
+                <Publicaciones lista={yt.datos.comentarios.slice(0, 8)} vacio="Sin comentarios recientes." />
+              </div>
+            </>
+          )}
+          {x?.estado === "sin_clave" && <SinConectar red="X (Twitter)" que="Con un Bearer token de la API de X verás cuántas publicaciones mencionan a María Fernanda Cabal por día, las más recientes y las más populares." />}
+          {x?.estado === "error" && <Fallo red="X (Twitter)" error={x.error} />}
+          {x?.estado === "ok" && (
+            <>
+              <div className="rounded-2xl border border-border p-4">
+                <h4 className="text-sm font-semibold">X — menciones por día (7 días)</h4>
+                <p className="mt-1 text-2xl font-bold">
+                  {fmt.format(x.datos.total7d)} <span className="text-xs font-normal text-muted-foreground">publicaciones</span>
+                </p>
+                <TrendArea data={x.datos.porDia.map((d) => ({ label: d.fecha, value: d.publicaciones }))} />
+              </div>
+              <div className="rounded-2xl border border-border p-4">
+                <h4 className="mb-2 text-sm font-semibold">X — lo más reciente</h4>
+                <Publicaciones lista={x.datos.recientes.slice(0, 6)} vacio="Sin publicaciones recientes." />
+              </div>
+              <div className="rounded-2xl border border-border p-4 lg:col-span-2">
+                <h4 className="mb-2 text-sm font-semibold">X — lo más popular</h4>
+                <Publicaciones lista={x.datos.populares.slice(0, 5)} vacio="Sin publicaciones." />
+              </div>
+            </>
+          )}
+          <p className="rounded-xl bg-surface-muted p-3 text-[11px] text-muted-foreground lg:col-span-2">
+            Facebook e Instagram aún no están conectados: Meta solo entrega datos de páginas y cuentas profesionales que administras. TikTok no ofrece lectura pública por API.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MonitoreoWidget({ datos, cargando, error, recargar }: ReturnType<typeof useMonitoreo>) {
   return (
     <div>
@@ -232,10 +380,6 @@ export function MonitoreoWidget({ datos, cargando, error, recargar }: ReturnType
       {datos && datos.errores.length > 0 && (
         <p className="mt-3 text-[11px] text-muted-foreground">No respondieron: {datos.errores.join(", ")}.</p>
       )}
-      <p className="mt-4 rounded-xl bg-surface-muted p-3 text-[11px] text-muted-foreground">
-        X, Facebook e Instagram no se pueden leer sin las credenciales de la cuenta (sus APIs son de pago o exigen sesión);
-        por eso los widgets de redes de este tablero siguen siendo simulados hasta que se conecten.
-      </p>
     </div>
   );
 }

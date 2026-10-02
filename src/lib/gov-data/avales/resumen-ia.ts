@@ -49,10 +49,13 @@ const lista = (x: unknown): string[] => (Array.isArray(x) ? x.map(String).filter
 const cad = (x: unknown) => (typeof x === "string" ? x : "");
 
 export function leerAnalisis(texto: string): Analisis | null {
-  const m = texto.match(/\{[\s\S]*\}/);
-  if (!m) return null;
+  const ini = texto.indexOf("{");
+  const fin = texto.lastIndexOf("}");
+  if (ini < 0 || fin <= ini) return null;
+  // Saltos de línea sueltos dentro de las cadenas y comas finales invalidan el JSON aunque el contenido esté bien.
+  const limpio = texto.slice(ini, fin + 1).replace(/[\u0000-\u001F]+/g, " ").replace(/,\s*([}\]])/g, "$1");
   try {
-    const j = JSON.parse(m[0]) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const j = JSON.parse(limpio) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     return {
       resumen: cad(j.resumen),
       homonimos: cad(j.homonimos),
@@ -91,7 +94,7 @@ export async function buscarResumenIa(nombre: string, temas: Tema[]): Promise<Re
   const { texto, fuentes } = await generarConBusqueda({
     system: SYSTEM,
     user: `Persona a investigar: ${nombre}\n\nTitulares de prensa ya recolectados (Google Noticias):\n\n${titulares(temas)}`,
-    maxTokens: 4000,
+    maxTokens: 6000,
   });
   if (!texto.trim()) throw new Error("La búsqueda no devolvió resultados.");
   return { analisis: leerAnalisis(texto), texto, fuentes };

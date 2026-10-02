@@ -20,7 +20,9 @@ export const PROVEEDORES: Record<Proveedor, { nombre: string; modelo: string }> 
   openai: { nombre: "OpenAI", modelo: "gpt-5" },
 };
 
-type Guardada = { proveedor: Proveedor; modelo: string; claves: Partial<Record<Proveedor, string>> };
+export type Red = "youtube" | "x";
+
+type Guardada = { proveedor: Proveedor; modelo: string; claves: Partial<Record<Proveedor, string>>; redes?: Partial<Record<Red, string>> };
 
 const CLAVE_REDIS = "el-admin:ia-config";
 
@@ -99,6 +101,56 @@ export async function guardarConfig(proveedor: Proveedor, modelo: string, clave?
       maxAge: 60 * 60 * 24 * 365,
     });
   }
+}
+
+async function escribir(g: Guardada) {
+  const r = redis();
+  if (r) await r.set(CLAVE_REDIS, g);
+  else {
+    (await cookies()).set(COOKIE, await cifrar(JSON.stringify(g)), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/api/admin",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
+}
+
+const ENTORNO: Record<Red, string> = { youtube: "YOUTUBE_API_KEY", x: "X_BEARER_TOKEN" };
+
+/** Credencial de una red: la guardada en Configuración o la variable de entorno. */
+export async function claveRed(red: Red): Promise<string | undefined> {
+  const g = await leer();
+  if (g?.redes?.[red]) return descifrar(g.redes[red]!);
+  return process.env[ENTORNO[red]];
+}
+
+/** Qué redes tienen credencial (sin mostrarla, solo sus últimos 4 caracteres). */
+export async function resumenRedes(): Promise<Record<Red, string | null>> {
+  const out: Record<Red, string | null> = { youtube: null, x: null };
+  for (const red of ["youtube", "x"] as Red[]) {
+    try {
+      const c = await claveRed(red);
+      out[red] = c ? `••••${c.slice(-4)}` : null;
+    } catch {
+      out[red] = "no se pudo leer (cambió ADMIN_SESSION_SECRET)";
+    }
+  }
+  return out;
+}
+
+/** Guarda (o, con cadena vacía, borra) las credenciales de redes sociales. */
+export async function guardarRedes(valores: Partial<Record<Red, string>>) {
+  const g: Guardada = (await leer()) ?? { proveedor: "anthropic", modelo: PROVEEDORES.anthropic.modelo, claves: {} };
+  g.redes = { ...g.redes };
+  for (const red of ["youtube", "x"] as Red[]) {
+    const v = valores[red];
+    if (v === undefined) continue;
+    if (v.trim()) g.redes[red] = await cifrar(v.trim());
+    else delete g.redes[red];
+  }
+  await escribir(g);
 }
 
 /** Genera texto con el proveedor configurado. */
@@ -184,7 +236,7 @@ export async function generarConBusqueda({
       // Suficientes búsquedas para revisar cada red por separado (Twitter, Instagram, Facebook, LinkedIn, TikTok) y aun así noticias/controversias.
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 10 }],
     });
-    const texto = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
+    const texto = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
     const fuentes: FuenteWeb[] = res.content.flatMap((b) =>
       b.type === "web_search_tool_result" && Array.isArray(b.content)
         ? b.content.map((r) => ({ titulo: r.title, url: r.url }))

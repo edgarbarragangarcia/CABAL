@@ -1,6 +1,7 @@
 import { Settings } from "lucide-react";
 
 import { ConfiguracionIA } from "./configuracion-ia";
+import { ConfiguracionRedes } from "./configuracion-redes";
 import { InformeSemanal } from "./informe-semanal";
 
 export default function ConfiguracionPage() {
@@ -12,6 +13,7 @@ export default function ConfiguracionPage() {
       </h1>
       <p className="mt-1 text-sm text-muted-foreground">Modelo de inteligencia artificial de los análisis y el informe semanal.</p>
       <ConfiguracionIA />
+      <ConfiguracionRedes />
       <InformeSemanal />
     </div>
   );
