@@ -1,6 +1,7 @@
 import "server-only";
 
 import { generarConBusqueda, type FuenteWeb } from "@/lib/ia-config";
+import { aLista, aTexto } from "@/lib/texto-ia";
 import type { Tema } from "./presencia-internet";
 
 const SYSTEM = `Eres analista de inteligencia política para la Fundación Escuela Libertad (María Fernanda Cabal). Investigas a fondo el perfil público de una persona que pide un aval, para que la Fundación decida con evidencia. Usa tu herramienta de búsqueda web activamente (varias búsquedas distintas, no una sola) y apóyate también en los titulares de prensa que se te entregan.
@@ -29,7 +30,8 @@ Responde ÚNICAMENTE con un objeto JSON (sin texto antes ni después, sin bloque
  "trayectoria": "párrafo breve",
  "riesgo": {"nivel": "bajo|medio|alto", "motivos": ["..."]},
  "recomendacion": "una frase: qué conviene verificar o decidir antes de dar el aval"
-}`;
+}
+Todos los arreglos de strings (evidencia, citas, controversias, motivos) contienen strings simples, nunca objetos.`;
 
 export type Analisis = {
   resumen: string;
@@ -45,8 +47,8 @@ export type Analisis = {
 
 export type ResumenIa = { analisis: Analisis | null; texto: string; fuentes: FuenteWeb[] };
 
-const lista = (x: unknown): string[] => (Array.isArray(x) ? x.map(String).filter(Boolean) : []);
-const cad = (x: unknown) => (typeof x === "string" ? x : "");
+const lista = aLista;
+const cad = aTexto;
 
 export function leerAnalisis(texto: string): Analisis | null {
   const ini = texto.indexOf("{");

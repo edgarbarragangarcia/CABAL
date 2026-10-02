@@ -6,7 +6,7 @@ import { ExternalLink, Loader2, Radio, RefreshCw, Sparkles } from "lucide-react"
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
 import type { Monitoreo } from "@/lib/monitoreo";
 import type { PublicacionRed, Redes } from "@/lib/monitoreo/redes";
-import type { ResultadoReaccion } from "@/lib/monitoreo/reaccion";
+import type { ResultadoReaccion } from "@/lib/monitoreo/reaccion-lector";
 
 type Estado = { datos: Monitoreo | null; cargando: boolean; error: string | null };
 
@@ -149,7 +149,7 @@ function ReaccionPanel() {
 
   const a = estado.datos?.analisis;
   return (
-    <div className="rounded-2xl border border-brand/30 bg-brand/5 p-4 lg:col-span-2">
+    <div className="rounded-2xl border border-brand/30 bg-brand/5 p-4 @2xl:col-span-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="max-w-2xl">
           <h4 className="text-sm font-semibold">Reacción pública y tono — investigación con IA</h4>
@@ -174,8 +174,8 @@ function ReaccionPanel() {
       {estado.datos && !a && <p className="mt-3 whitespace-pre-wrap text-sm">{estado.datos.texto}</p>}
       {estado.datos && a && (
         <div className="mt-4 space-y-3">
-          <div className="grid gap-3 lg:grid-cols-[auto_1fr]">
-            <div className="flex items-center gap-4 rounded-2xl border border-border bg-background p-4">
+          <div className="grid gap-3 @xl:grid-cols-[auto_1fr]">
+            <div className={`items-center gap-4 rounded-2xl border border-border bg-background p-4 ${a.tono.positivo + a.tono.neutral + a.tono.negativo > 0 ? "flex" : "hidden"}`}>
               <DonutChart
                 slices={[
                   { label: "Positivo", value: a.tono.positivo, color: "#22c58a" },
@@ -214,7 +214,7 @@ function ReaccionPanel() {
           )}
 
           {a.reacciones.length > 0 && (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3 @xl:grid-cols-2">
               {a.reacciones.map((r, i) => (
                 <div key={i} className="rounded-2xl border border-border bg-background p-4">
                   <h4 className="text-sm font-semibold capitalize">{r.grupo}</h4>
@@ -244,7 +244,7 @@ function ReaccionPanel() {
             </div>
           )}
 
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 @xl:grid-cols-3">
             <Lista titulo="Riesgos" items={a.riesgos} />
             <Lista titulo="Oportunidades" items={a.oportunidades} />
             <Lista titulo="Qué hacer" items={a.recomendaciones} />
@@ -324,7 +324,7 @@ export function RedesWidget({ redes, cargando, recargar }: ReturnType<typeof use
   const yt = redes?.youtube;
   const x = redes?.x;
   return (
-    <div>
+    <div className="@container">
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
           Datos reales por API oficial — se actualiza cada minuto
@@ -341,7 +341,7 @@ export function RedesWidget({ redes, cargando, recargar }: ReturnType<typeof use
       </div>
       {!redes && <p className="mt-4 text-sm text-muted-foreground">Consultando redes…</p>}
       {redes && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="mt-4 grid gap-4 @2xl:grid-cols-2">
           {yt?.estado === "sin_clave" && <SinConectar red="YouTube" que="Con una clave API gratuita verás suscriptores, espectadores en vivo, comentarios al minuto y el rendimiento semanal de los últimos 50 videos." />}
           {yt?.estado === "error" && <Fallo red="YouTube" error={yt.error} />}
           {yt?.estado === "ok" && (
@@ -381,13 +381,13 @@ export function RedesWidget({ redes, cargando, recargar }: ReturnType<typeof use
                 <h4 className="mb-2 text-sm font-semibold">X — lo más reciente</h4>
                 <Publicaciones lista={x.datos.recientes.slice(0, 6)} vacio="Sin publicaciones recientes." />
               </div>
-              <div className="rounded-2xl border border-border p-4 lg:col-span-2">
+              <div className="rounded-2xl border border-border p-4 @2xl:col-span-2">
                 <h4 className="mb-2 text-sm font-semibold">X — lo más popular</h4>
                 <Publicaciones lista={x.datos.populares.slice(0, 5)} vacio="Sin publicaciones." />
               </div>
             </>
           )}
-          <p className="rounded-xl bg-surface-muted p-3 text-[11px] text-muted-foreground lg:col-span-2">
+          <p className="rounded-xl bg-surface-muted p-3 text-[11px] text-muted-foreground @2xl:col-span-2">
             Facebook e Instagram aún no están conectados: Meta solo entrega datos de páginas y cuentas profesionales que administras. TikTok no ofrece lectura pública por API.
           </p>
         </div>
@@ -398,7 +398,7 @@ export function RedesWidget({ redes, cargando, recargar }: ReturnType<typeof use
 
 export function MonitoreoWidget({ datos, cargando, error, recargar }: ReturnType<typeof useMonitoreo>) {
   return (
-    <div>
+    <div className="@container">
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
           Datos reales — YouTube, prensa, Wikipedia
@@ -423,7 +423,7 @@ export function MonitoreoWidget({ datos, cargando, error, recargar }: ReturnType
       {!datos && cargando && <p className="mt-6 text-sm text-muted-foreground">Consultando fuentes…</p>}
 
       {datos && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="mt-4 grid gap-4 @2xl:grid-cols-2">
           <div className="rounded-2xl border border-border p-4">
             <h4 className="text-sm font-semibold">Noticias por día (30 días)</h4>
             <p className="text-2xl font-bold">
@@ -461,7 +461,7 @@ export function MonitoreoWidget({ datos, cargando, error, recargar }: ReturnType
                     {v.titulo}
                   </a>
                   <span className="text-muted-foreground">
-                    {" "}· {fmt.format(v.vistas)} vistas · {fmt.format(v.likes)} me gusta · {fechaCorta(v.fecha)}
+                    {" "}· {v.aproximado ? "≈ " : ""}{fmt.format(v.vistas)} vistas{v.likes === null ? "" : ` · ${fmt.format(v.likes)} me gusta`} · {v.aproximado ? hace(v.fecha) : fechaCorta(v.fecha)}
                   </span>
                 </li>
               ))}

@@ -87,7 +87,7 @@ export function formatearInforme(d: DatosInforme, analisis?: string): string {
   partes.push(
     nuevos.length
       ? `▶️ <b>YouTube (SoyCabalTV):</b> ${nuevos.length} ${nuevos.length === 1 ? "video nuevo" : "videos nuevos"}.\n` +
-          nuevos.map((v) => `• <a href="${esc(v.enlace)}">${esc(v.titulo)}</a> — ${fmt(v.vistas)} vistas, ${fmt(v.likes)} me gusta`).join("\n")
+          nuevos.map((v) => `• <a href="${esc(v.enlace)}">${esc(v.titulo)}</a> — ${fmt(v.vistas)} vistas${v.likes === null ? "" : `, ${fmt(v.likes)} me gusta`}`).join("\n")
       : `▶️ <b>YouTube (SoyCabalTV):</b> sin videos nuevos esta semana.${d.videos[0] ? `\nEl último: <a href="${esc(d.videos[0].enlace)}">${esc(d.videos[0].titulo)}</a> (${fechaCorta(d.videos[0].fecha)}, ${fmt(d.videos[0].vistas)} vistas).` : ""}`
   );
 
@@ -115,7 +115,7 @@ export function promptAnalisis(d: DatosInforme) {
     `Noticias sobre María Fernanda Cabal: ${d.noticias.length}${cambio}.`,
     ...d.noticias.slice(0, 20).map((n) => `- ${n.titulo} (${n.medio}, ${n.fecha.slice(0, 10)})`),
     d.wikipedia ? `Visitas a Wikipedia: ${d.wikipedia.ultimos} (7 previos: ${d.wikipedia.previos}).` : "",
-    ...d.videos.slice(0, 5).map((v) => `Video: ${v.titulo} (${v.fecha.slice(0, 10)}), ${v.vistas} vistas, ${v.likes} me gusta.`),
+    ...d.videos.slice(0, 5).map((v) => `Video: ${v.titulo} (${v.fecha.slice(0, 10)}), ${v.vistas} vistas${v.likes === null ? "" : `, ${v.likes} me gusta`}.`),
   ]
     .filter(Boolean)
     .join("\n");
