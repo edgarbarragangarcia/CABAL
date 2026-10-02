@@ -6,7 +6,7 @@ import { ExternalLink, Loader2, Radio, RefreshCw, Sparkles } from "lucide-react"
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
 import type { Monitoreo } from "@/lib/monitoreo";
 import type { PublicacionRed, Redes } from "@/lib/monitoreo/redes";
-import type { Sentimiento } from "@/lib/monitoreo/sentimiento";
+import type { ResultadoReaccion } from "@/lib/monitoreo/reaccion";
 
 type Estado = { datos: Monitoreo | null; cargando: boolean; error: string | null };
 
@@ -111,57 +111,164 @@ export function BannerEnVivo({ datos }: { datos: Monitoreo | null }) {
   );
 }
 
-function SentimientoCaja({ hay }: { hay: boolean }) {
-  const [s, setS] = React.useState<Sentimiento | null>(null);
-  const [cargando, setCargando] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+const colorTono: Record<string, string> = {
+  positivo: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  negativo: "bg-red-500/15 text-red-700 dark:text-red-300",
+  neutral: "bg-slate-500/15 text-slate-600 dark:text-slate-300",
+  dividido: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+};
 
-  async function clasificar() {
-    setCargando(true);
-    setError(null);
+function Lista({ titulo, items }: { titulo: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-border bg-background p-4">
+      <h4 className="text-sm font-semibold">{titulo}</h4>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+        {items.map((x, i) => (
+          <li key={i}>{x}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReaccionPanel() {
+  const [estado, setEstado] = React.useState<{ cargando?: boolean; datos?: ResultadoReaccion; error?: string }>({});
+
+  async function investigar(forzar: boolean) {
+    setEstado((e) => ({ ...e, cargando: true, error: undefined }));
     try {
-      const res = await fetch("/api/admin/monitoreo", { method: "POST" });
-      const json = (await res.json()) as Sentimiento & { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "No fue posible clasificar.");
-      setS(json);
+      const res = await fetch("/api/admin/monitoreo/reaccion", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ forzar }) });
+      const json = (await res.json()) as ResultadoReaccion & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "No fue posible investigar.");
+      setEstado({ datos: json });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error de red.");
-    } finally {
-      setCargando(false);
+      setEstado((e) => ({ datos: e.datos, error: err instanceof Error ? err.message : "Error de red." }));
     }
   }
 
+  const a = estado.datos?.analisis;
   return (
-    <div className="rounded-2xl border border-border p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold">Tono de la prensa</h4>
-        <button
-          type="button"
-          disabled={cargando || !hay}
-          onClick={clasificar}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-50"
-        >
-          {cargando ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-          {s ? "Reclasificar" : "Clasificar con IA"}
-        </button>
-      </div>
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      {s ? (
-        <div className="mt-3 flex items-center gap-4">
-          <DonutChart
-            slices={[
-              { label: "Positivo", value: s.positivo, color: "#22c58a" },
-              { label: "Neutral", value: s.neutral, color: "#94a3b8" },
-              { label: "Negativo", value: s.negativo, color: "#ef4444" },
-            ]}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Clasificados {s.total} titulares recientes con la IA configurada. Mide el tono de los medios, no el de las redes.
+    <div className="rounded-2xl border border-brand/30 bg-brand/5 p-4 lg:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="max-w-2xl">
+          <h4 className="text-sm font-semibold">Reacción pública y tono — investigación con IA</h4>
+          <p className="mt-1 text-xs text-muted-foreground">
+            La IA busca en internet cómo están reaccionando la prensa y la gente (comentarios, redes, opinión) a lo que dice y hace María Fernanda Cabal en
+            las últimas 3 semanas, y mide el tono. Parte de titulares reales y, si conectaste YouTube o X, de sus comentarios y publicaciones.
           </p>
         </div>
-      ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
-          La IA lee los titulares reales más recientes y los clasifica como positivos, neutrales o negativos.
+        <button
+          type="button"
+          disabled={estado.cargando}
+          onClick={() => investigar(!!estado.datos)}
+          className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+        >
+          {estado.cargando ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+          {estado.cargando ? "Investigando…" : estado.datos ? "Investigar de nuevo" : "Investigar con IA"}
+        </button>
+      </div>
+      {estado.cargando && <p className="mt-2 text-xs text-muted-foreground">Hace varias búsquedas en la web: puede tardar uno o dos minutos.</p>}
+      {estado.error && <p className="mt-2 text-xs text-red-600">{estado.error}</p>}
+
+      {estado.datos && !a && <p className="mt-3 whitespace-pre-wrap text-sm">{estado.datos.texto}</p>}
+      {estado.datos && a && (
+        <div className="mt-4 space-y-3">
+          <div className="grid gap-3 lg:grid-cols-[auto_1fr]">
+            <div className="flex items-center gap-4 rounded-2xl border border-border bg-background p-4">
+              <DonutChart
+                slices={[
+                  { label: "Positivo", value: a.tono.positivo, color: "#22c58a" },
+                  { label: "Neutral", value: a.tono.neutral, color: "#94a3b8" },
+                  { label: "Negativo", value: a.tono.negativo, color: "#ef4444" },
+                ]}
+              />
+            </div>
+            <div className="rounded-2xl border border-border bg-background p-4 text-sm">
+              <p>{a.resumen}</p>
+              {a.tono.lectura && <p className="mt-2 text-xs font-semibold">{a.tono.lectura}</p>}
+              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                <p>
+                  <b>Prensa:</b> {a.tonoPrensa}
+                </p>
+                <p>
+                  <b>Gente y redes:</b> {a.tonoGente}
+                </p>
+              </div>
+              {a.muestra && <p className="mt-2 text-[11px] text-muted-foreground">Muestra: {a.muestra}</p>}
+            </div>
+          </div>
+
+          {a.temas.length > 0 && (
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <h4 className="text-sm font-semibold">De qué se habla y con qué tono</h4>
+              <ul className="mt-2 space-y-2">
+                {a.temas.map((t, i) => (
+                  <li key={i} className="text-xs">
+                    <span className={`mr-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${colorTono[t.tono.toLowerCase()] ?? colorTono.neutral}`}>{t.tono}</span>
+                    <b>{t.tema}</b> — {t.detalle}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {a.reacciones.length > 0 && (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {a.reacciones.map((r, i) => (
+                <div key={i} className="rounded-2xl border border-border bg-background p-4">
+                  <h4 className="text-sm font-semibold capitalize">{r.grupo}</h4>
+                  <p className="mt-1 text-xs">{r.reaccion}</p>
+                  {r.citas.length > 0 && (
+                    <ul className="mt-2 space-y-1 border-l-2 border-brand/40 pl-3 text-[11px] italic text-muted-foreground">
+                      {r.citas.map((c, k) => (
+                        <li key={k}>{c}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {a.momentos.length > 0 && (
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <h4 className="text-sm font-semibold">Línea de tiempo</h4>
+              <ul className="mt-2 space-y-2 text-xs">
+                {a.momentos.map((m, i) => (
+                  <li key={i}>
+                    <b>{m.fecha}</b> — {m.hecho}. <span className="text-muted-foreground">Reacción: {m.reaccion}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid gap-3 lg:grid-cols-3">
+            <Lista titulo="Riesgos" items={a.riesgos} />
+            <Lista titulo="Oportunidades" items={a.oportunidades} />
+            <Lista titulo="Qué hacer" items={a.recomendaciones} />
+          </div>
+        </div>
+      )}
+
+      {estado.datos && estado.datos.fuentes.length > 0 && (
+        <details className="mt-3 text-xs">
+          <summary className="cursor-pointer font-semibold text-muted-foreground">Fuentes consultadas por la IA ({estado.datos.fuentes.length})</summary>
+          <ul className="mt-2 space-y-1">
+            {estado.datos.fuentes.map((f, i) => (
+              <li key={i}>
+                <a href={f.url} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline dark:text-emerald-300">
+                  {f.titulo}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {estado.datos && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Estimación de IA sobre {estado.datos.titulares} titulares y lo que encontró en la web; no es una encuesta. Verifica las fuentes antes de decidir.
         </p>
       )}
     </div>
@@ -373,7 +480,7 @@ export function MonitoreoWidget({ datos, cargando, error, recargar }: ReturnType
             </div>
           )}
 
-          <SentimientoCaja hay={datos.ultimasNoticias.length > 0} />
+          <ReaccionPanel />
         </div>
       )}
 
