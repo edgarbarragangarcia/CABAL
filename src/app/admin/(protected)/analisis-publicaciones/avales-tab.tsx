@@ -26,11 +26,10 @@ import {
 
 import type { AvalesResult } from "@/lib/gov-data/avales";
 import type { PresenciaInternet } from "@/lib/gov-data/avales/presencia-internet";
-import type { ResumenIa } from "@/lib/gov-data/avales/resumen-ia";
 import type { Atestacion, Atestaciones, EstadoRevision, RevisionAval, Veredicto } from "@/lib/avales-store";
 import { AvalesTerritorioPanel } from "./avales-territorio-panel";
 import { Avatar, Homonimos, enlaceExterno, imagenUrl, item, useHojaDeVida } from "./candidato-ui";
-import { Markdown } from "./markdown-ia";
+import { InvestigacionAval } from "./avales-investigacion";
 import { titulo } from "./nombres";
 
 const marco = "rounded-2xl border border-border bg-surface p-4 shadow-sm";
@@ -450,7 +449,7 @@ function Dossier({
           <SeccionDisciplinario datos={datos} />
           <SeccionHojaDeVida estado={hvEstado} cedula={cedula} nombreMostrado={nombreMostrado} />
           <SeccionElectoral datos={datos} cedula={cedula} nombre={nombre} />
-          <SeccionInternet nombre={nombre} datos={internet} />
+          <InvestigacionAval nombre={nombre} datos={internet} />
 
           <p className="border-t border-border pt-3 text-[11px] text-muted-foreground">
             Fuentes: Función Pública (SIRI, SIGEP/PEP), Registraduría Nacional del Estado Civil, Google Noticias.
@@ -685,149 +684,6 @@ function SeccionElectoral({ datos, cedula, nombre }: { datos: Peticion<AvalesRes
         candidato a uno de esos cargos.
       </p>
       <AvalesTerritorioPanel cedula={cedula} nombre={nombre} />
-    </section>
-  );
-}
-
-// ------------------------------------------------------------- internet ---
-
-/** Ninguna plataforma ofrece búsqueda por nombre vía API pública; son solo enlaces para que el revisor entre a mirar. */
-function enlacesRedes(nombre: string) {
-  const q = encodeURIComponent(nombre);
-  return [
-    { plataforma: "Google", url: `https://www.google.com/search?q=${q}` },
-    { plataforma: "X / Twitter", url: `https://twitter.com/search?q=${q}&f=live` },
-    { plataforma: "Facebook", url: `https://www.facebook.com/search/top?q=${q}` },
-    { plataforma: "Instagram", url: `https://www.instagram.com/explore/search/keyword/?q=${q}` },
-    { plataforma: "LinkedIn", url: `https://www.linkedin.com/search/results/all/?keywords=${q}` },
-    { plataforma: "TikTok", url: `https://www.tiktok.com/search?q=${q}` },
-  ];
-}
-
-type EstadoIa =
-  | { estado: "inicial" }
-  | { estado: "buscando" }
-  | { estado: "listo"; data: ResumenIa }
-  | { estado: "error"; error: string };
-
-function SeccionInternet({ nombre, datos }: { nombre: string; datos: Peticion<PresenciaInternet> }) {
-  const [ia, setIa] = React.useState<EstadoIa>({ estado: "inicial" });
-
-  const buscarConIa = () => {
-    setIa({ estado: "buscando" });
-    fetch("/api/admin/avales/ia", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre }) })
-      .then(async (res) => {
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
-        return body as ResumenIa;
-      })
-      .then((data) => setIa({ estado: "listo", data }))
-      .catch((err: Error) => setIa({ estado: "error", error: err.message }));
-  };
-
-  return (
-    <section>
-      <h4 className={tituloSeccion}>
-        <Globe className="size-4 text-brand" aria-hidden="true" /> Presencia en internet y redes sociales
-      </h4>
-
-      <div className="mt-2 flex flex-wrap gap-2">
-        {enlacesRedes(nombre).map((e) => (
-          <a
-            key={e.plataforma}
-            href={e.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-3 py-1 text-xs font-semibold ring-1 ring-border transition hover:ring-emerald-500/50"
-          >
-            {e.plataforma} <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
-          </a>
-        ))}
-      </div>
-      <p className="mt-1.5 text-xs text-muted-foreground">
-        Ninguna red social ofrece búsqueda por nombre vía API pública: son enlaces para revisar a mano.
-      </p>
-
-      <p className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-        <Newspaper className="size-3.5" aria-hidden="true" /> Menciones en Google Noticias
-      </p>
-      {datos.estado === "cargando" ? (
-        <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Buscando menciones recientes…
-        </p>
-      ) : datos.estado === "error" ? (
-        <p className="mt-2 text-sm text-red-700 dark:text-red-300">{datos.error}</p>
-      ) : datos.data.noticias.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">Sin menciones recientes en Google Noticias.</p>
-      ) : (
-        <ul className="mt-2 space-y-1.5 text-sm">
-          {datos.data.noticias.map((n, i) => (
-            <li key={i}>
-              <a
-                href={n.enlace}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-emerald-700 hover:underline dark:text-emerald-300"
-              >
-                {n.titulo}
-              </a>
-              <span className="block text-xs text-muted-foreground">
-                {n.medio} · {new Date(n.fecha).toLocaleDateString("es-CO")}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="mt-4 border-t border-border pt-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <Sparkles className="size-3.5" aria-hidden="true" /> Búsqueda con IA
-          </p>
-          <button
-            type="button"
-            onClick={buscarConIa}
-            disabled={ia.estado === "buscando"}
-            className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1.5 text-xs font-semibold ring-1 ring-border transition hover:ring-emerald-500/50 disabled:opacity-50"
-          >
-            {ia.estado === "buscando" ? (
-              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-            ) : (
-              <Sparkles className="size-3.5" aria-hidden="true" />
-            )}
-            Buscar con IA
-          </button>
-        </div>
-
-        {ia.estado === "inicial" && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            El proveedor de IA elegido en Configuración busca por su cuenta en internet (redes sociales, noticias,
-            controversias) y resume lo que encuentre, con sus fuentes. Cada clic consume una llamada a esa API.
-          </p>
-        )}
-        {ia.estado === "error" && <p className="mt-2 text-sm text-red-700 dark:text-red-300">{ia.error}</p>}
-        {ia.estado === "listo" && (
-          <div className="mt-2">
-            <Markdown texto={ia.data.texto} />
-            {ia.data.fuentes.length > 0 && (
-              <ul className="mt-3 space-y-1 border-t border-border pt-2 text-xs">
-                {ia.data.fuentes.map((f, i) => (
-                  <li key={i}>
-                    <a
-                      href={f.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-700 hover:underline dark:text-emerald-300"
-                    >
-                      {f.titulo}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
     </section>
   );
 }
