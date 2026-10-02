@@ -17,6 +17,7 @@ import {
   MapPin,
   MessagesSquare,
   Plus,
+  Radio,
   Sparkles,
   SlidersHorizontal,
   TrendingDown,
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 
 import { BarList, DonutChart, TrendArea } from "@/components/admin/charts";
+import { BannerEnVivo, MonitoreoWidget, useMonitoreo } from "@/components/admin/monitoreo-panel";
 import { ColombiaHeatmap } from "@/components/admin/colombia-heatmap";
 import {
   DashboardGrid,
@@ -363,7 +365,16 @@ export default function CentroDeControlPage() {
       (messageFilter === "todos" || p.excerpt === messageFilter),
   );
 
+  const monitoreo = useMonitoreo();
+
   const widgets: DashboardWidget[] = [
+    {
+      id: "monitoreo-real",
+      title: "Monitoreo real",
+      icon: Radio,
+      defaultWide: true,
+      content: <MonitoreoWidget {...monitoreo} />,
+    },
     {
       id: "resumen",
       title: "Resumen y filtros",
@@ -429,7 +440,7 @@ export default function CentroDeControlPage() {
             </select>
             <span className="ml-auto flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent-ink">
               <FlaskConical className="size-3" aria-hidden="true" />
-              Datos simulados — vista previa
+              Redes sociales: datos simulados
             </span>
           </div>
           {platforms.length > 1 && (
@@ -789,6 +800,8 @@ export default function CentroDeControlPage() {
           <ExternalLink className="size-3.5" aria-hidden="true" />
         </Link>
       </div>
+
+      <BannerEnVivo datos={monitoreo.datos} />
 
       <div className="mt-6">
         <DashboardGrid
