@@ -10,6 +10,7 @@ import {
   Gavel,
   GraduationCap,
   IdCard,
+  Landmark,
   Loader2,
   MapPin,
   Newspaper,
@@ -24,11 +25,15 @@ import {
 } from "lucide-react";
 
 import type { AvalesResult } from "@/lib/gov-data/avales";
+import type { RespuestaBusqueda } from "@/lib/gov-data/secop/tipos";
 import type { PresenciaInternet } from "@/lib/gov-data/avales/presencia-internet";
 import type { Atestacion, Atestaciones, EstadoRevision, RevisionAval, Veredicto } from "@/lib/avales-store";
 import { AvalesTerritorioPanel } from "./avales-territorio-panel";
 import { Avatar, Homonimos, enlaceExterno, imagenUrl, item, useHojaDeVida } from "./candidato-ui";
 import { InvestigacionAval } from "./avales-investigacion";
+import { SeccionContratosAval, fichaDeSecop } from "./contratos-aval";
+import { KpiCard } from "./kpi-card";
+import { usePeticion, type Peticion } from "./peticion";
 import { titulo } from "./nombres";
 
 const marco = "rounded-2xl border border-border bg-surface p-4 shadow-sm";
@@ -109,7 +114,11 @@ const QUE_INCLUYE: { label: string; value: string; sub: string; icon: LucideIcon
   { label: "Hoja de vida pública", value: "SIGEP", sub: "Función Pública · PEP", icon: IdCard, card: "from-sky-500 to-indigo-600", glow: "shadow-sky-500/30" },
   { label: "Historial electoral", value: "2018‑2026", sub: "Registraduría · votos y cargos", icon: Vote, card: "from-amber-400 to-orange-600", glow: "shadow-orange-500/30" },
   { label: "Investigación a fondo", value: "IA", sub: "prensa, redes, orientación y Cabal", icon: Sparkles, card: "from-violet-500 to-fuchsia-600", glow: "shadow-fuchsia-500/30" },
+  { label: "Contratación pública", value: "SECOP", sub: "I y II · contratos y relaciones", icon: Landmark, card: "from-rose-500 to-pink-600", glow: "shadow-rose-500/30" },
 ];
+
+/** Cinco tarjetas: en el celular la última ocupa las dos columnas para no dejar un hueco. */
+const REJILLA_5 = "grid grid-cols-2 gap-3 lg:grid-cols-5 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1";
 
 const VEREDICTO_KPI: Record<Veredicto, { icon: LucideIcon; card: string; glow: string; label: string }> = {
   pendiente: { icon: ShieldQuestion, card: "from-slate-400 to-slate-600", glow: "shadow-slate-500/30", label: "Pendiente" },
@@ -127,51 +136,15 @@ const VEREDICTO_KPI: Record<Veredicto, { icon: LucideIcon; card: string; glow: s
   },
 };
 
-function KpiCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  card,
-  glow,
-  delay,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  icon: LucideIcon;
-  card: string;
-  glow: string;
-  delay: number;
-}) {
-  return (
-    <div
-      className={`cabal-rise group relative overflow-hidden rounded-2xl bg-gradient-to-br ${card} p-4 text-white shadow-lg ${glow} transition-transform duration-300 hover:-translate-y-1`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div
-        aria-hidden="true"
-        className="absolute -right-6 -bottom-8 size-24 rounded-full bg-white/15 transition-transform duration-500 group-hover:scale-125"
-      />
-      <div className="relative flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-white/85">{label}</p>
-        <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white/20 backdrop-blur">
-          <Icon className="size-4" aria-hidden="true" />
-        </span>
-      </div>
-      <p className="relative mt-2 text-2xl font-bold">{value}</p>
-      <p className="relative text-[11px] text-white/80">{sub}</p>
-    </div>
-  );
-}
-
 function KpiRow({
   datos,
   internet,
+  secop,
   veredicto,
 }: {
   datos: Peticion<AvalesResult>;
   internet: Peticion<PresenciaInternet>;
+  secop: Peticion<RespuestaBusqueda>;
   veredicto: Veredicto;
 }) {
   const disciplinario =
@@ -179,11 +152,14 @@ function KpiRow({
   const electoral =
     datos.estado === "listo" && datos.data.electoral.ok ? datos.data.electoral.data.coincidencias.length : null;
   const noticias = internet.estado === "listo" ? internet.data.noticias.length : null;
+  const ficha = fichaDeSecop(secop);
+  const contratos = ficha ? ficha.resumen.contratista.n + ficha.resumen.representante.n : null;
+  const vigentes = ficha ? ficha.resumen.contratista.vigentes + ficha.resumen.representante.vigentes : 0;
   const v = VEREDICTO_KPI[veredicto];
   const valor = (n: number | null) => (n === null ? "…" : n.toLocaleString("es-CO"));
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className={REJILLA_5}>
       <KpiCard
         label="Antecedentes disciplinarios"
         value={valor(disciplinario)}
@@ -211,38 +187,21 @@ function KpiRow({
         glow={KPI_STYLES[2].glow}
         delay={160}
       />
-      <KpiCard label="Estado del aval" value={v.label} sub="según la revisión guardada" icon={v.icon} card={v.card} glow={v.glow} delay={240} />
+      <KpiCard
+        label="Contratos públicos"
+        value={valor(contratos)}
+        sub={secop.estado === "error" ? "no se pudo consultar el SECOP" : contratos === null ? "consultando SECOP I y II…" : ficha?.fuentes.some((s) => !s.ok) ? "consulta incompleta: reintenta" : vigentes > 0 ? `${vigentes} vigente${vigentes === 1 ? "" : "s"} hoy` : "SECOP I y II"}
+        icon={Landmark}
+        card="from-rose-500 to-pink-600"
+        glow="shadow-rose-500/30"
+        delay={240}
+      />
+      <KpiCard label="Estado del aval" value={v.label} sub="según la revisión guardada" icon={v.icon} card={v.card} glow={v.glow} delay={320} />
     </div>
   );
 }
 
 // ---------------------------------------------------------------- fetch ---
-
-type Cargando = { estado: "cargando" };
-type Fallo = { estado: "error"; error: string };
-type Listo<T> = { estado: "listo"; data: T };
-type Peticion<T> = Cargando | Fallo | Listo<T>;
-
-function usePeticion<T>(url: string | null): Peticion<T> {
-  const [estado, setEstado] = React.useState<{ url: string; r: Peticion<T> }>({ url: "", r: { estado: "cargando" } });
-  React.useEffect(() => {
-    if (!url) return;
-    let cancelled = false;
-    setEstado({ url, r: { estado: "cargando" } });
-    fetch(url)
-      .then(async (res) => {
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
-        return body as T;
-      })
-      .then((data) => !cancelled && setEstado({ url, r: { estado: "listo", data } }))
-      .catch((err: Error) => !cancelled && setEstado({ url, r: { estado: "error", error: err.message } }));
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
-  return url && estado.url === url ? estado.r : { estado: "cargando" };
-}
 
 // ----------------------------------------------------------------- tab ---
 
@@ -284,8 +243,8 @@ export function AvalesTab() {
             </p>
             <p className="mt-1 max-w-3xl text-xs text-white/85 sm:text-sm">
               {consulta
-                ? `C.C. ${consulta.cedula} · antecedentes disciplinarios, hoja de vida pública, historial electoral e investigación a fondo.`
-                : "Junta lo que se puede saber oficialmente de un aspirante a partir de su cédula —antecedentes disciplinarios, hoja de vida pública e historial electoral— y deja constancia de la verificación manual y el veredicto final."}
+                ? `C.C. ${consulta.cedula} · antecedentes disciplinarios, hoja de vida pública, historial electoral, contratación pública e investigación a fondo.`
+                : "Junta lo que se puede saber oficialmente de un aspirante a partir de su cédula —antecedentes disciplinarios, hoja de vida pública, historial electoral y contratos con el Estado— y deja constancia de la verificación manual y el veredicto final."}
             </p>
 
             <form onSubmit={enviar} className="mt-4 flex flex-wrap gap-2">
@@ -324,7 +283,7 @@ export function AvalesTab() {
         {consulta ? (
           <FichaAval key={`${consulta.cedula}|${consulta.nombre}`} cedula={consulta.cedula} nombre={consulta.nombre} />
         ) : (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className={REJILLA_5}>
             {QUE_INCLUYE.map((c, i) => (
               <KpiCard key={c.label} label={c.label} value={c.value} sub={c.sub} icon={c.icon} card={c.card} glow={c.glow} delay={i * 80} />
             ))}
@@ -340,6 +299,7 @@ export function AvalesTab() {
 function FichaAval({ cedula, nombre }: { cedula: string; nombre: string }) {
   const datos = usePeticion<AvalesResult>(`/api/admin/avales?${new URLSearchParams({ cedula, nombre })}`);
   const internet = usePeticion<PresenciaInternet>(`/api/admin/avales/internet?${new URLSearchParams({ nombre })}`);
+  const secop = usePeticion<RespuestaBusqueda>(`/api/admin/secop?${new URLSearchParams({ modo: "cedula", q: cedula, nombre, compacto: "1" })}`);
   const revision = usePeticion<{ configured: boolean; revision: RevisionAval | null }>(
     `/api/admin/avales/revision?${new URLSearchParams({ cedula })}`
   );
@@ -348,9 +308,9 @@ function FichaAval({ cedula, nombre }: { cedula: string; nombre: string }) {
 
   return (
     <div className="space-y-4">
-      <KpiRow datos={datos} internet={internet} veredicto={veredictoActual} />
+      <KpiRow datos={datos} internet={internet} secop={secop} veredicto={veredictoActual} />
 
-      <Dossier cedula={cedula} nombre={nombre} datos={datos} internet={internet} />
+      <Dossier cedula={cedula} nombre={nombre} datos={datos} internet={internet} secop={secop} />
 
       {revision.estado === "cargando" ? (
         <div className={`${marco} flex items-center gap-2 text-sm text-muted-foreground`}>
@@ -382,11 +342,13 @@ function Dossier({
   nombre,
   datos,
   internet,
+  secop,
 }: {
   cedula: string;
   nombre: string;
   datos: Peticion<AvalesResult>;
   internet: Peticion<PresenciaInternet>;
+  secop: Peticion<RespuestaBusqueda>;
 }) {
   const hvEstado = useHojaDeVida(cedula, nombre);
   const hv = hvEstado.estado === "listo" ? hvEstado.hv : null;
@@ -413,7 +375,8 @@ function Dossier({
 
   return (
     <div className="cabal-rise overflow-visible rounded-2xl border border-border shadow-sm">
-      <div className="relative overflow-hidden rounded-t-2xl bg-slate-800 py-6 pr-5 pl-32 sm:pl-40">
+      {/* [contain:inline-size]: el nombre va en una sola línea (truncate); sin esto, un nombre largo ensanchaba toda la página en el celular. */}
+      <div className="relative overflow-hidden rounded-t-2xl bg-slate-800 py-6 pr-5 pl-32 [contain:inline-size] sm:pl-40">
         <p className="truncate text-xl font-extrabold text-white sm:text-2xl">{nombreMostrado}</p>
         <p className="mt-1 truncate text-xs font-semibold tracking-widest text-white/70 uppercase">{subtitulo}</p>
         <span className="absolute -bottom-10 left-5 size-28 overflow-hidden rounded-full text-3xl ring-[6px] ring-surface shadow-lg sm:size-32 sm:text-4xl">
@@ -484,10 +447,11 @@ function Dossier({
           <SeccionDisciplinario datos={datos} />
           <SeccionHojaDeVida estado={hvEstado} cedula={cedula} nombreMostrado={nombreMostrado} />
           <SeccionElectoral datos={datos} cedula={cedula} nombre={nombre} />
+          <SeccionContratosAval secop={secop} cedula={cedula} nombre={nombre} />
           <InvestigacionAval nombre={nombre} datos={internet} />
 
           <p className="border-t border-border pt-3 text-[11px] text-muted-foreground">
-            Fuentes: Función Pública (SIRI, SIGEP/PEP), Registraduría Nacional del Estado Civil, Google Noticias.
+            Fuentes: Función Pública (SIRI, SIGEP/PEP), Registraduría Nacional del Estado Civil, Colombia Compra Eficiente (SECOP I y II), Google Noticias.
           </p>
         </div>
       </div>
@@ -715,7 +679,7 @@ function SeccionElectoral({ datos, cedula, nombre }: { datos: Peticion<AvalesRes
       )}
       <p className="mt-2 text-xs text-muted-foreground">
         Se revisó automáticamente Senado y Presidencia, 2018 a 2026. Cámara, Gobernación, Alcaldía, Asamblea, Concejo y JAL
-        no se buscan solos —hay miles de territorios—: "sin coincidencias" arriba no significa que nunca haya sido
+        no se buscan solos —hay miles de territorios—: &quot;sin coincidencias&quot; arriba no significa que nunca haya sido
         candidato a uno de esos cargos.
       </p>
       <AvalesTerritorioPanel cedula={cedula} nombre={nombre} />

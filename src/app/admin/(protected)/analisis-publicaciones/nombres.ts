@@ -1,6 +1,11 @@
 /** Palabras que van en minúscula dentro de un nombre propio. */
 const MINUSCULAS = new Set(["de", "del", "la", "las", "los", "el", "y", "e", "por", "en", "con", "para", "a", "al"]);
-const SIGLAS = new Set(["MIRA", "AICO", "MAIS", "ASI", "PIC", "ADA", "GSC", "CITREP", "ONIC", "MOIR", "UP", "II", "III"]);
+const SIGLAS = new Set([
+  "MIRA", "AICO", "MAIS", "ASI", "PIC", "ADA", "GSC", "CITREP", "ONIC", "MOIR", "UP", "II", "III", "IV",
+  // Contratación pública: entidades y sufijos societarios que se escriben en mayúsculas.
+  "SAS", "SA", "ESP", "ESE", "LTDA", "SENA", "ICA", "DIAN", "DANE", "ICBF", "INVIAS", "ANI", "UNGRD", "ETB", "EPM", "IDU", "DNP",
+  "ESAP", "UT", "IPS", "EPS", "USPEC", "INPEC", "UARIV", "DPS", "MINTIC", "MINSALUD", "IED", "FDL", "SDA", "TIC", "ICFES", "UAESP", "IDRD",
+]);
 
 /** "IVÁN CEPEDA CASTRO" → "Iván Cepeda Castro"; siglas ("MIRA", "P.I.C", "D.C.") se conservan. */
 export function titulo(s: string) {

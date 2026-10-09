@@ -18,6 +18,16 @@ export type SoqlParams = {
   $group?: string;
   $order?: string;
   $limit?: number;
+  $offset?: number;
+  /** Búsqueda de texto completo (ordenada por relevancia, sin distinguir tildes). */
+  $q?: string;
+};
+
+export type OpcionesConsulta = {
+  /** Corta la consulta si Socrata tarda más (por omisión, sin límite propio). */
+  timeoutMs?: number;
+  /** Segundos de caché de Next; por omisión 1 hora. */
+  revalidate?: number;
 };
 
 /**
@@ -27,7 +37,8 @@ export type SoqlParams = {
  */
 export async function querySocrataDataset<T>(
   datasetId: string,
-  params: SoqlParams
+  params: SoqlParams,
+  opciones: OpcionesConsulta = {}
 ): Promise<T[]> {
   const url = new URL(`${DATOS_GOV_CO_BASE}/${datasetId}.json`);
   for (const [key, value] of Object.entries(params)) {
@@ -36,7 +47,8 @@ export async function querySocrataDataset<T>(
 
   const res = await fetch(url.toString(), {
     headers: APP_TOKEN ? { "X-App-Token": APP_TOKEN } : undefined,
-    next: { revalidate: 3600 },
+    next: { revalidate: opciones.revalidate ?? 3600 },
+    signal: opciones.timeoutMs ? AbortSignal.timeout(opciones.timeoutMs) : undefined,
   });
 
   if (!res.ok) {
