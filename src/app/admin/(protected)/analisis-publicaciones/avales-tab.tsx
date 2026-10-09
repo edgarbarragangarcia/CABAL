@@ -545,7 +545,8 @@ function SeccionHojaDeVida({ estado, cedula, nombreMostrado }: { estado: EstadoH
   if (estado.estado === "error") {
     return (
       <p className="flex flex-wrap items-center gap-2 text-xs text-red-700 dark:text-red-300">
-        {estado.error}
+        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-amber-800 uppercase dark:text-amber-300">Revisión manual</span>
+        No se pudo conectar con Función Pública: revisa la hoja de vida a mano en el SIGEP. ({estado.error})
         <button
           type="button"
           onClick={estado.reintentar}
@@ -564,6 +565,7 @@ function SeccionHojaDeVida({ estado, cedula, nombreMostrado }: { estado: EstadoH
       <section>
         <h4 className={tituloSeccion}>
           <Briefcase className="size-4 text-brand" aria-hidden="true" /> Hoja de vida pública
+          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-amber-800 uppercase dark:text-amber-300">Revisión manual</span>
         </h4>
         <p className="mt-2 text-xs text-muted-foreground">
           {n > 1
