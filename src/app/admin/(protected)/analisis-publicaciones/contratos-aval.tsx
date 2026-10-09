@@ -22,30 +22,49 @@ function Resumen({ f, onAbrir }: { f: Ficha; onAbrir: () => void }) {
   const masC = f.tope.contratista ? "al menos " : "";
   const masR = f.tope.representante ? "al menos " : "";
   const empresas = f.relaciones.empresas.slice(0, 4);
-  const recientes = f.contratos.slice(0, 4);
+  const recientes = f.contratos.slice(0, 3);
+  const entidades = f.relaciones.entidades.slice(0, 4);
+  const maxEntidad = Math.max(1, ...entidades.map((e) => e.n));
 
   return (
     <div className="mt-2 space-y-3">
       {/* Sin contratos no se muestra una palomita verde: no haber contratado en el SECOP no es un certificado; la señal de abajo lo explica. */}
       {hay && (
-        <p className="text-sm">
-          {c.n > 0 ? (
-            <>
-              <b>{masC}{c.n}</b> contrato{c.n === 1 ? "" : "s"} como contratista por <b>{pesosCorto(c.valor)}</b> (SECOP II {c.porFuente["SECOP II"]} · SECOP I {c.porFuente["SECOP I"]}), <b>{c.vigentes}</b> vigente{c.vigentes === 1 ? "" : "s"}.
-            </>
-          ) : (
-            "Sin contratos como contratista."
-          )}
-          {r.n > 0 && (
-            <>
-              {" "}
-              Además, <b>{masR}{r.n}</b> como representante legal de otras empresas por <b>{pesosCorto(r.valor)}</b>.
-            </>
-          )}
-        </p>
+        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            [`${masC ? "≥ " : ""}${c.n}`, "contratos propios"],
+            [pesosCorto(c.valor), "valor total"],
+            [String(c.vigentes), "vigentes hoy"],
+            [r.n > 0 ? `${masR ? "≥ " : ""}${r.n}` : "0", "como representante de empresas"],
+          ].map(([valor, rotulo]) => (
+            <div key={rotulo} className="rounded-xl bg-surface-muted/70 px-3 py-2 ring-1 ring-border">
+              <dd className="text-base font-bold tabular-nums">{valor}</dd>
+              <dt className="text-[11px] leading-tight text-muted-foreground">{rotulo}</dt>
+            </div>
+          ))}
+        </dl>
       )}
 
       <Senales lista={f.senales} max={4} />
+
+      {entidades.length > 0 && (
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Con quién contrata</p>
+          <ul className="mt-1 space-y-1.5">
+            {entidades.map((e) => (
+              <li key={e.clave} className="text-xs">
+                <div className="flex justify-between gap-2">
+                  <span className="min-w-0 truncate">{titulo(e.nombre)}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">{e.n} · {pesosCorto(e.valor)}</span>
+                </div>
+                <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" style={{ width: `${Math.max(6, (e.n / maxEntidad) * 100)}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {empresas.length > 0 && (
         <div>

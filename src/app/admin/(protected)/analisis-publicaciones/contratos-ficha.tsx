@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Building2, CircleAlert, CircleCheck, ExternalLink, FileText, Info, Landmark, Search, TriangleAlert, User, Users } from "lucide-react";
+import { Building2, ChevronDown, CircleAlert, CircleCheck, ExternalLink, FileText, Info, Landmark, Search, TriangleAlert, User, Users } from "lucide-react";
 
 import { formatoDocumento } from "@/lib/gov-data/secop/documento";
 import { fechaCorta, pesos, pesosCorto } from "@/lib/gov-data/secop/formato";
@@ -117,18 +117,22 @@ const NIVEL: Record<Senal["nivel"], { Icono: LucideIcon; caja: string; texto: st
 
 export function Senales({ lista, max }: { lista: Senal[]; max?: number }) {
   if (lista.length === 0) return null;
+  // Solo el título a la vista: el detalle se despliega al tocar (las alertas vienen abiertas).
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-1.5">
       {lista.slice(0, max).map((s) => {
         const { Icono, caja, texto, etiqueta } = NIVEL[s.nivel];
         return (
-          <li key={s.titulo} className={`rounded-xl px-3 py-2.5 ring-1 ${caja}`}>
-            <p className={`flex items-center gap-1.5 text-sm font-semibold ${texto}`}>
-              <Icono className="size-4 shrink-0" aria-hidden="true" />
-              {s.titulo}
-              <span className="ml-1 rounded-full bg-surface/70 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide">{etiqueta}</span>
-            </p>
-            <p className="mt-0.5 text-xs text-foreground/80">{s.detalle}</p>
+          <li key={s.titulo} className={`rounded-xl ring-1 ${caja}`}>
+            <details className="group" open={s.nivel === "alerta"}>
+              <summary className={`flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden ${texto}`}>
+                <Icono className="size-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1">{s.titulo}</span>
+                <span className="rounded-full bg-surface/70 px-1.5 py-px text-[10px] font-bold tracking-wide uppercase">{etiqueta}</span>
+                <ChevronDown className="size-4 shrink-0 transition group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <p className="px-3 pb-2.5 text-xs text-foreground/80">{s.detalle}</p>
+            </details>
           </li>
         );
       })}
@@ -349,6 +353,7 @@ function Chip({ activo, onClick, children }: { activo: boolean; onClick: () => v
 }
 
 const POR_PAGINA = 12;
+const VISTAS = [["resumen", "Resumen"], ["relaciones", "Relaciones"], ["contratos", "Contratos"]] as const;
 
 const SIN_CONTRATOS: ContratoSecop[] = [];
 const listaDe = (f: Ficha, v: Vista): ContratoSecop[] => (v === "contratista" ? f.contratos : v === "representante" ? f.comoRepresentante : f.comoFuncionario);
@@ -449,13 +454,28 @@ function ListaContratos({ f }: { f: Ficha }) {
 
 /** `sinCabecera`: en el expediente del aspirante su nombre ya está arriba. */
 export function FichaContratos({ f, navegar, sinCabecera = false }: { f: Ficha; navegar: Navegar; sinCabecera?: boolean }) {
+  const [vista, setVista] = React.useState<"resumen" | "relaciones" | "contratos">("resumen");
+  const nRel = Object.values(f.relaciones).reduce((n, l) => n + l.length, 0) + (f.comoEntidad ? 1 : 0);
+  const nCont = f.contratos.length + f.comoRepresentante.length + f.comoFuncionario.length;
   return (
     <div className="space-y-4">
       {!sinCabecera && <Cabecera f={f} />}
-      <Indicadores f={f} />
-      <Senales lista={f.senales} />
-      <Relaciones_ f={f} navegar={navegar} />
-      <ListaContratos f={f} />
+      <div role="tablist" aria-label="Qué ver" className="flex flex-wrap gap-2">
+        {VISTAS.map(([id, rotulo]) => (
+          <Chip key={id} activo={vista === id} onClick={() => setVista(id)}>
+            {rotulo}
+            {id === "relaciones" ? ` (${nRel})` : id === "contratos" ? ` (${nCont})` : ""}
+          </Chip>
+        ))}
+      </div>
+      {vista === "resumen" && (
+        <div className="space-y-4">
+          <Indicadores f={f} />
+          <Senales lista={f.senales} />
+        </div>
+      )}
+      {vista === "relaciones" && (nRel > 0 ? <Relaciones_ f={f} navegar={navegar} /> : <p className="rounded-xl bg-surface-muted p-3 text-xs text-muted-foreground">No hay relaciones registradas para este documento.</p>)}
+      {vista === "contratos" && (nCont > 0 ? <ListaContratos f={f} /> : <p className="rounded-xl bg-surface-muted p-3 text-xs text-muted-foreground">No hay contratos registrados para este documento.</p>)}
 
       <details className="rounded-2xl border border-border p-3 text-xs">
         <summary className="cursor-pointer font-semibold text-muted-foreground">Fuentes consultadas ({f.fuentes.length})</summary>
