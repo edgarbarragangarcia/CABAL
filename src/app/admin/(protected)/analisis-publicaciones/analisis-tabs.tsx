@@ -2,23 +2,20 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Landmark, MessageSquareText, Network, ShieldCheck, Vote } from "lucide-react";
+import { MessageSquareText, Network, ShieldCheck, Vote } from "lucide-react";
 
 import { AvalesTab } from "./avales-tab";
 import { CabalResultados } from "./cabal-resultados";
-import { AbrirContratosContext, type Consulta } from "./contratos-comun";
-import { ContratosTab } from "./contratos-tab";
 import { ExploradorElectoral } from "./explorador-electoral";
 import { PrediccionesTab } from "./predicciones-tab";
 import { PreguntasTab } from "./preguntas-tab";
 
-type TabId = "votaciones" | "predicciones" | "avales" | "contratos" | "preguntas";
+type TabId = "votaciones" | "predicciones" | "avales" | "preguntas";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Red Cabal", icon: Network },
   { id: "avales", label: "Avales", icon: ShieldCheck },
-  { id: "contratos", label: "Contratos", icon: Landmark },
   { id: "preguntas", label: "Preguntar", icon: MessageSquareText },
 ];
 
@@ -54,13 +51,6 @@ function Votaciones() {
 
 export function AnalisisTabs({ header }: { header: React.ReactNode }) {
   const [tab, setTab] = React.useState<TabId>("votaciones");
-  // Consulta con la que Avales abre la pestaña de contratos; `clave` reinicia la pestaña aunque se repita la misma.
-  const [contratos, setContratos] = React.useState<{ consulta: Consulta; clave: number } | null>(null);
-
-  const abrirContratos = React.useCallback((consulta: Consulta) => {
-    setContratos((c) => ({ consulta, clave: (c?.clave ?? 0) + 1 }));
-    setTab("contratos");
-  }, []);
 
   return (
     <div>
@@ -80,11 +70,7 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
               <button
                 key={t.id}
                 type="button"
-                onClick={() => {
-                  setTab(t.id);
-                  // Entrar por la barra abre la búsqueda en blanco; solo «ver todo» desde Avales la trae cargada.
-                  if (t.id === "contratos") setContratos(null);
-                }}
+                onClick={() => setTab(t.id)}
                 className={
                   active
                     ? "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 border-brand px-4 py-2.5 text-sm font-semibold text-brand"
@@ -99,15 +85,12 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
         </div>
       </div>
 
-      <AbrirContratosContext.Provider value={abrirContratos}>
-        <div className="mt-6">
-          {tab === "votaciones" && <Votaciones />}
-          {tab === "predicciones" && <PrediccionesTab />}
-          {tab === "avales" && <AvalesTab />}
-          {tab === "contratos" && <ContratosTab key={contratos?.clave ?? 0} inicial={contratos?.consulta ?? null} />}
-          {tab === "preguntas" && <PreguntasTab />}
-        </div>
-      </AbrirContratosContext.Provider>
+      <div className="mt-6">
+        {tab === "votaciones" && <Votaciones />}
+        {tab === "predicciones" && <PrediccionesTab />}
+        {tab === "avales" && <AvalesTab />}
+        {tab === "preguntas" && <PreguntasTab />}
+      </div>
     </div>
   );
 }

@@ -64,7 +64,8 @@ export function ContratosGrafo({ f, navegar }: { f: Ficha; navegar: Navegar }) {
   );
 
   return (
-    <div className="hidden rounded-2xl border border-border bg-surface p-2 shadow-sm md:block">
+    // `@2xl`: según el ancho del espacio donde está (la columna del expediente), no el de la pantalla; más angosto, las letras se harían ilegibles.
+    <div className="hidden rounded-2xl border border-border bg-surface p-2 shadow-sm @2xl:block">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Red de relaciones de ${nombre}: ${total} vínculos. Las listas de abajo tienen el mismo detalle.`} className="h-auto max-h-[30rem] w-full">
         {nodos.map((n) => {
           const peso = n.v.n > 0 ? 1.2 + 3.6 * Math.sqrt(n.v.n / maxN) : 1;

@@ -66,7 +66,7 @@ export function Indicadores({ f }: { f: Ficha }) {
   const vigentes = c.vigentes + r.vigentes;
   const valorVigente = c.valorVigente + r.valorVigente;
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
       <KpiCard
         label="Como contratista"
         value={`${c.n}${mas(c.n, tope.contratista)}`}
@@ -231,7 +231,7 @@ function Relaciones_({ f, navegar }: { f: Ficha; navegar: Navegar }) {
           )}
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 @3xl:grid-cols-2">
         {listas.map((l) => (
           <TarjetaLista key={l.clave} l={l} items={f.relaciones[l.clave]} navegar={navegar} />
         ))}
@@ -292,7 +292,7 @@ function FilaContrato({ c }: { c: ContratoSecop }) {
       <p className="mt-1 text-[11px] text-muted-foreground">{[titulo(c.entidad), c.ubicacion].filter(Boolean).join(" · ")}</p>
       <details className="mt-1.5 text-xs">
         <summary className="cursor-pointer font-semibold text-muted-foreground hover:text-foreground">Detalle</summary>
-        <div className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+        <div className="mt-2 grid gap-x-6 gap-y-1 @xl:grid-cols-2">
           <p>
             <span className="text-muted-foreground">Contratista: </span>
             {titulo(c.contratista.nombre) || "—"}
@@ -415,7 +415,7 @@ function ListaContratos({ f }: { f: Ficha }) {
           onChange={(e) => cambiar(setBusqueda)(e.target.value)}
           placeholder="Buscar en objeto, entidad o contratista"
           aria-label="Buscar en los contratos"
-          className="min-w-0 flex-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500/40 sm:max-w-xs"
+          className="min-w-0 flex-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500/40 @xl:max-w-xs"
         />
         <select
           value={orden}
@@ -447,10 +447,11 @@ function ListaContratos({ f }: { f: Ficha }) {
 
 /* ----------------------------------------------------------------------- ficha */
 
-export function FichaContratos({ f, navegar }: { f: Ficha; navegar: Navegar }) {
+/** `sinCabecera`: en el expediente del aspirante su nombre ya está arriba. */
+export function FichaContratos({ f, navegar, sinCabecera = false }: { f: Ficha; navegar: Navegar; sinCabecera?: boolean }) {
   return (
     <div className="space-y-4">
-      <Cabecera f={f} />
+      {!sinCabecera && <Cabecera f={f} />}
       <Indicadores f={f} />
       <Senales lista={f.senales} />
       <Relaciones_ f={f} navegar={navegar} />
