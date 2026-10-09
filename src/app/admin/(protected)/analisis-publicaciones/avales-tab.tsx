@@ -337,6 +337,21 @@ function FichaAval({ cedula, nombre }: { cedula: string; nombre: string }) {
  * imagen que usa el Explorador, vía `/api/admin/elecciones/imagen`); si no,
  * iniciales — nunca un retrato inventado. El SIGEP no publica fotos.
  */
+const ACENTOS = {
+  emerald: "border-l-emerald-500 [&_h4]:text-emerald-700 dark:[&_h4]:text-emerald-300",
+  sky: "border-l-sky-500 [&_h4]:text-sky-700 dark:[&_h4]:text-sky-300",
+  amber: "border-l-amber-500 [&_h4]:text-amber-700 dark:[&_h4]:text-amber-300",
+  rose: "border-l-rose-500 [&_h4]:text-rose-700 dark:[&_h4]:text-rose-300",
+  violet: "border-l-violet-500 [&_h4]:text-violet-700 dark:[&_h4]:text-violet-300",
+} as const;
+
+/** Cada fuente del expediente en su propia tarjeta, con el color de su tarjeta de resumen de arriba. */
+function TarjetaFuente({ acento, children }: { acento: keyof typeof ACENTOS; children: React.ReactNode }) {
+  return (
+    <div className={`rounded-2xl border border-l-4 border-border bg-surface p-4 shadow-sm sm:p-5 [&_h4]:mb-2 [&_h4]:text-base ${ACENTOS[acento]}`}>{children}</div>
+  );
+}
+
 function Dossier({
   cedula,
   nombre,
@@ -444,11 +459,21 @@ function Dossier({
         </aside>
 
         <div className="space-y-6 bg-surface p-5 pt-14 sm:pt-16">
-          <SeccionDisciplinario datos={datos} />
-          <SeccionHojaDeVida estado={hvEstado} cedula={cedula} nombreMostrado={nombreMostrado} />
-          <SeccionElectoral datos={datos} cedula={cedula} nombre={nombre} />
-          <SeccionContratosAval secop={secop} cedula={cedula} nombre={nombre} />
-          <InvestigacionAval nombre={nombre} datos={internet} />
+          <TarjetaFuente acento="emerald">
+            <SeccionDisciplinario datos={datos} />
+          </TarjetaFuente>
+          <TarjetaFuente acento="sky">
+            <SeccionHojaDeVida estado={hvEstado} cedula={cedula} nombreMostrado={nombreMostrado} />
+          </TarjetaFuente>
+          <TarjetaFuente acento="amber">
+            <SeccionElectoral datos={datos} cedula={cedula} nombre={nombre} />
+          </TarjetaFuente>
+          <TarjetaFuente acento="rose">
+            <SeccionContratosAval secop={secop} cedula={cedula} nombre={nombre} />
+          </TarjetaFuente>
+          <TarjetaFuente acento="violet">
+            <InvestigacionAval nombre={nombre} datos={internet} />
+          </TarjetaFuente>
 
           <p className="border-t border-border pt-3 text-[11px] text-muted-foreground">
             Fuentes: Función Pública (SIRI, SIGEP/PEP), Registraduría Nacional del Estado Civil, Colombia Compra Eficiente (SECOP I y II), Google Noticias.
