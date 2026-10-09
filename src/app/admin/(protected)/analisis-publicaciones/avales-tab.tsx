@@ -8,6 +8,7 @@ import {
   Briefcase,
   ExternalLink,
   Gavel,
+  Globe,
   GraduationCap,
   IdCard,
   Landmark,
@@ -25,10 +26,10 @@ import {
 } from "lucide-react";
 
 import type { AvalesResult } from "@/lib/gov-data/avales";
+import type { Trayectoria } from "@/lib/gov-data/avales/trayectoria-ia";
 import type { RespuestaBusqueda } from "@/lib/gov-data/secop/tipos";
 import type { PresenciaInternet } from "@/lib/gov-data/avales/presencia-internet";
 import type { Atestacion, Atestaciones, EstadoRevision, RevisionAval, Veredicto } from "@/lib/avales-store";
-import { AvalesTerritorioPanel } from "./avales-territorio-panel";
 import { Avatar, Homonimos, enlaceExterno, imagenUrl, item, useHojaDeVida } from "./candidato-ui";
 import { InvestigacionAval } from "./avales-investigacion";
 import { SeccionContratosAval, fichaDeSecop } from "./contratos-aval";
@@ -662,6 +663,81 @@ function SeccionHojaDeVida({ estado, cedula, nombreMostrado }: { estado: EstadoH
 
 // ----------------------------------------------------------- electoral ---
 
+type EstadoTray = { estado: "buscando" } | { estado: "error"; error: string } | { estado: "listo"; data: Trayectoria };
+
+/** Investiga en toda la web los cargos y candidaturas de cualquier año o lugar (la Registraduría solo cubre 2018-2026 en Senado y Presidencia). */
+function TrayectoriaWeb({ cedula, nombre }: { cedula: string; nombre: string }) {
+  const [e, setE] = React.useState<EstadoTray>({ estado: "buscando" });
+  const [intento, setIntento] = React.useState(0);
+  React.useEffect(() => {
+    let cancelado = false;
+    fetch("/api/admin/avales/trayectoria", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre, cedula }) })
+      .then(async (r) => {
+        const b = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(b?.error ?? `Error ${r.status}`);
+        return b as Trayectoria;
+      })
+      .then((data) => !cancelado && setE({ estado: "listo", data }))
+      .catch((err: unknown) => !cancelado && setE({ estado: "error", error: err instanceof Error ? err.message : "No se pudo buscar." }));
+    return () => {
+      cancelado = true;
+    };
+  }, [nombre, cedula, intento]);
+  const reintentar = () => {
+    setE({ estado: "buscando" });
+    setIntento((n) => n + 1);
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl border border-border bg-surface-muted/40 p-3">
+      <p className="flex items-center gap-1.5 text-xs font-bold tracking-wide uppercase">
+        <Globe className="size-3.5 text-brand" aria-hidden="true" /> Trayectoria política en la web
+        <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">IA + búsqueda</span>
+      </p>
+      {e.estado === "buscando" ? (
+        <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Buscando cargos y candidaturas en toda la web (puede tardar hasta un minuto)…
+        </p>
+      ) : e.estado === "error" ? (
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-700 dark:text-red-300">
+          {e.error}
+          <button type="button" onClick={reintentar} className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-semibold text-foreground ring-1 ring-border">Reintentar</button>
+        </p>
+      ) : (
+        <div className="mt-2 space-y-2 text-sm">
+          {e.data.resumen && <p>{e.data.resumen}</p>}
+          {e.data.homonimos && <p className="rounded-lg bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-300">{e.data.homonimos}</p>}
+          {e.data.cargos.length > 0 ? (
+            <ul className="space-y-2 border-l-2 border-amber-500/40 pl-4">
+              {e.data.cargos.map((c, i) => (
+                <li key={i} className="relative">
+                  <span className="absolute -left-[1.4rem] top-1.5 size-2.5 rounded-full bg-amber-500 ring-4 ring-surface" />
+                  <p className="font-semibold">{c.cargo}{c.periodo && <span className="ml-1.5 text-xs font-medium text-muted-foreground">{c.periodo}</span>}</p>
+                  <p className="text-xs text-muted-foreground">{[c.lugar, c.partido, c.detalle].filter(Boolean).join(" · ")}{c.fuente && ` — ${c.fuente}`}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">{e.data.sinEstructura ?? "No se encontraron cargos en la web."}</p>
+          )}
+          {e.data.fuentes.length > 0 && (
+            <details className="text-xs">
+              <summary className="cursor-pointer font-semibold text-muted-foreground">Fuentes consultadas ({e.data.fuentes.length})</summary>
+              <ul className="mt-1 space-y-0.5">
+                {e.data.fuentes.slice(0, 12).map((f, i) => (
+                  <li key={i}><a href={f.url} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline dark:text-emerald-300">{f.titulo}</a></li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <p className="text-[11px] text-muted-foreground">Lo encontró una IA en fuentes públicas: verifica cada cargo antes de decidir.</p>
+          <button type="button" onClick={reintentar} className="text-xs font-semibold text-brand hover:underline">Volver a buscar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SeccionElectoral({ datos, cedula, nombre }: { datos: Peticion<AvalesResult>; cedula: string; nombre: string }) {
   return (
     <section>
@@ -704,12 +780,8 @@ function SeccionElectoral({ datos, cedula, nombre }: { datos: Peticion<AvalesRes
           No se pudo revisar: {datos.data.electoral.data.noConsultadas.map((n) => `${n.eleccionNombre} (${n.corporacion})`).join(", ")}.
         </p>
       )}
-      <p className="mt-2 text-xs text-muted-foreground">
-        Se revisó automáticamente Senado y Presidencia, 2018 a 2026. Cámara, Gobernación, Alcaldía, Asamblea, Concejo y JAL
-        no se buscan solos —hay miles de territorios—: &quot;sin coincidencias&quot; arriba no significa que nunca haya sido
-        candidato a uno de esos cargos.
-      </p>
-      <AvalesTerritorioPanel cedula={cedula} nombre={nombre} />
+      <p className="mt-2 text-[11px] text-muted-foreground">Confirmado en los resultados de la Registraduría (Senado y Presidencia, 2018 a 2026). Para todo lo demás, la búsqueda en la web de abajo.</p>
+      <TrayectoriaWeb cedula={cedula} nombre={nombre} />
     </section>
   );
 }

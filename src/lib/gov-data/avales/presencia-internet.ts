@@ -9,24 +9,16 @@ import { buscarNoticias, type Noticia } from "@/lib/informe/fuentes";
  * credenciales (X/Facebook/Instagram exigen sesión y prohíben la automatización),
  * así que lo automático y verificable es Google Noticias (RSS público), que
  * además indexa notas que citan trinos y publicaciones. Cada tema es una
- * consulta distinta sobre el mismo nombre exacto.
+ * consulta distinta sobre el mismo nombre exacto. No hay temas de «cercanía con la izquierda/derecha»:
+ * una búsqueda con nombres de partidos trae también las notas donde la persona los critica, y contarlas como cercanía era engañoso;
+ * la orientación la infiere el análisis de IA con evidencia.
  */
 
-export type TemaId = "general" | "cabal" | "izquierda" | "derecha" | "polemicas" | "redes";
+export type TemaId = "general" | "cabal" | "polemicas" | "redes";
 
 export const TEMAS: { id: TemaId; titulo: string; consulta: (n: string) => string }[] = [
   { id: "general", titulo: "Menciones generales", consulta: (n) => `"${n}"` },
   { id: "cabal", titulo: "Relación con María Fernanda Cabal", consulta: (n) => `"${n}" ("María Fernanda Cabal" OR Cabal)` },
-  {
-    id: "izquierda",
-    titulo: "Cercanía con la izquierda",
-    consulta: (n) => `"${n}" (Petro OR "Pacto Histórico" OR "Colombia Humana" OR "Polo Democrático" OR izquierda OR "Alianza Verde")`,
-  },
-  {
-    id: "derecha",
-    titulo: "Cercanía con la derecha",
-    consulta: (n) => `"${n}" (Uribe OR "Centro Democrático" OR "Cambio Radical" OR "Partido Conservador" OR derecha OR "Partido de la U")`,
-  },
   {
     id: "polemicas",
     titulo: "Denuncias y polémicas",
@@ -73,4 +65,4 @@ async function buscar(nombre: string): Promise<PresenciaInternet> {
   };
 }
 
-export const getPresenciaInternet = unstable_cache(buscar, ["presencia-internet-v2"], { revalidate: 3600 });
+export const getPresenciaInternet = unstable_cache(buscar, ["presencia-internet-v3"], { revalidate: 3600 });

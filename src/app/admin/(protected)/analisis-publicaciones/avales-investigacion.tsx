@@ -60,8 +60,6 @@ const COLOR_ESCALA = ["bg-rose-500", "bg-orange-400", "bg-slate-400", "bg-sky-40
 const COLOR_TEMA: Record<TemaId, string> = {
   general: "from-emerald-500 to-teal-600",
   cabal: "from-violet-500 to-purple-700",
-  izquierda: "from-rose-500 to-red-600",
-  derecha: "from-sky-500 to-blue-700",
   polemicas: "from-amber-400 to-orange-600",
   redes: "from-fuchsia-500 to-pink-600",
 };
