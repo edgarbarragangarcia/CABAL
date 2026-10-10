@@ -16,12 +16,11 @@ import { cn } from "@/lib/utils";
 export function MobileBottomNav() {
   const pathname = usePathname();
   const [secciones, setSecciones] = React.useState(false);
-  React.useEffect(() => setSecciones(false), [pathname]);
 
   const activo = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const item = (href: string, texto: string, Icono: typeof Home) => (
     <li key={href}>
-      <Link href={href} aria-current={activo(href) ? "page" : undefined} className={cn("flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium", activo(href) ? "text-brand" : "text-muted-foreground")}>
+      <Link href={href} onClick={() => setSecciones(false)} aria-current={activo(href) ? "page" : undefined} className={cn("flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium", activo(href) ? "text-brand" : "text-muted-foreground")}>
         <Icono className="size-6" aria-hidden="true" />
         {texto}
       </Link>
@@ -40,7 +39,7 @@ export function MobileBottomNav() {
             </div>
             <ul className="grid grid-cols-2 gap-2">
               {mainNav.flatMap((n) => (n.children ? n.children.map((c) => ({ label: c.label, href: c.href })) : [{ label: n.label, href: n.href }])).map((n) => (
-                <li key={n.href}><Link href={n.href} className="block rounded-2xl bg-surface-muted px-4 py-3.5 text-sm font-semibold active:scale-[0.98]">{n.label}</Link></li>
+                <li key={n.href}><Link href={n.href} onClick={() => setSecciones(false)} className="block rounded-2xl bg-surface-muted px-4 py-3.5 text-sm font-semibold active:scale-[0.98]">{n.label}</Link></li>
               ))}
             </ul>
           </div>
