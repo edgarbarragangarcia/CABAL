@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { SiteAuroraBackground } from "@/components/layout/site-aurora-background";
 
 /**
@@ -12,11 +13,12 @@ export default function PublicLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative isolate flex min-h-full flex-col">
+    <div className="relative isolate flex min-h-full flex-col pb-20 md:pb-0">
       <SiteAuroraBackground />
       <Navbar />
       <main className="flex-1">{children}</main>
       <Footer />
+      <MobileBottomNav />
     </div>
   );
 }

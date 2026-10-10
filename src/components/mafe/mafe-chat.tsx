@@ -87,6 +87,13 @@ function MafeChatInterno() {
   const listRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
+  // La barra inferior del celular abre el chat con este evento.
+  React.useEffect(() => {
+    const abrir = () => setOpen(true);
+    window.addEventListener("mafe:abrir", abrir);
+    return () => window.removeEventListener("mafe:abrir", abrir);
+  }, []);
+
   // Burbuja de saludo una vez por sesión, un par de segundos después de cargar.
   React.useEffect(() => {
     let dismissed = false;
@@ -326,7 +333,7 @@ function MafeChatInterno() {
       </AnimatePresence>
 
       {/* Lanzador */}
-      <div className={cn("fixed bottom-5 right-5 z-[60] flex items-end gap-3 sm:right-6", open && "max-sm:hidden")}>
+      <div className={cn("fixed bottom-5 right-5 z-[60] flex items-end gap-3 max-md:hidden sm:right-6", open && "max-sm:hidden")}>
         <AnimatePresence>
           {showIntro && !open && (
             <motion.div
