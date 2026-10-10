@@ -34,7 +34,7 @@ export type Grupo = { id: string; slug: string; nombre: string; tipo: "municipio
 export class ErrorComunidad extends Error {}
 
 export const comunidadConfigurada = () => getSupabaseServerClient() !== null;
-function db() {
+export function db() {
   const c = getSupabaseServerClient();
   if (!c) throw new ErrorComunidad("La comunidad todavía no está conectada a la base de datos.");
   return c;
@@ -47,9 +47,9 @@ const nombreCorto = (f: Fila) => `${primero(f.nombres)} ${primero(f.apellidos)}`
 const sinTildes = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 const slug = (s: string) => sinTildes(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
-const autorDe = (f: Fila): Autor => ({ id: f.id, usuario: f.usuario, nombre: f.es_oficial ? `${f.nombres} ${f.apellidos}` : nombreCorto(f), municipio: f.municipio, barrio: f.barrio, esOficial: !!f.es_oficial });
+export const autorDe = (f: Fila): Autor => ({ id: f.id, usuario: f.usuario, nombre: f.es_oficial ? `${f.nombres} ${f.apellidos}` : nombreCorto(f), municipio: f.municipio, barrio: f.barrio, esOficial: !!f.es_oficial });
 const miembroDe = (f: Fila): Miembro => ({ ...autorDe(f), departamento: f.departamento, bio: f.bio ?? "" });
-const COLS_AUTOR = "id,usuario,nombres,apellidos,municipio,barrio,es_oficial";
+export const COLS_AUTOR = "id,usuario,nombres,apellidos,municipio,barrio,es_oficial";
 const COLS_MIEMBRO = `${COLS_AUTOR},departamento,bio`;
 
 /* ------------------------------------------------------------------ cuentas */
@@ -166,7 +166,7 @@ export async function misGrupos(yo: string): Promise<Grupo[]> {
 
 /* ----------------------------------------------------------------- muro */
 
-export type Ambito = "seguidos" | "todos" | `grupo:${string}` | `perfil:${string}`;
+export type Ambito = "seguidos" | "todos" | `grupo:${string}` | `perfil:${string}` | `tema:${string}`;
 
 export async function feed(yo: string, ambito: Ambito, antes?: string, limite = 15): Promise<Publicacion[]> {
   const c = db();
@@ -187,6 +187,11 @@ export async function feed(yo: string, ambito: Ambito, antes?: string, limite = 
     const { data: g } = await c.from("grupos").select("id").eq("slug", ambito.slice(6)).maybeSingle();
     if (!g) return [];
     q = q.eq("grupo_id", g.id);
+  } else if (ambito.startsWith("tema:")) {
+    // Solo letras, números y # (la ruta ya lo valida): nada de comodines de LIKE.
+    const tema = ambito.slice(5).replace(/[^\p{L}\p{N}#]/gu, "");
+    if (tema.length < 3) return [];
+    q = q.ilike("texto", `%${tema}%`);
   } else if (ambito.startsWith("perfil:")) {
     const { data: p } = await c.from("miembros").select("id").eq("usuario", ambito.slice(7)).maybeSingle();
     if (!p) return [];

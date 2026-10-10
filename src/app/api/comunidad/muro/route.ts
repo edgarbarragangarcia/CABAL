@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   if (yo instanceof NextResponse) return yo;
   const u = new URL(req.url).searchParams;
   const ambito = (u.get("ambito") ?? "seguidos").slice(0, 100);
-  if (!/^(seguidos|todos|grupo:[a-z0-9-]+|perfil:[a-z0-9_]+)$/.test(ambito)) return NextResponse.json({ error: "Ámbito no válido." }, { status: 400 });
+  if (!/^(seguidos|todos|grupo:[a-z0-9-]+|perfil:[a-z0-9_]+|tema:[\p{L}\p{N}#]{3,30})$/u.test(ambito)) return NextResponse.json({ error: "Ámbito no válido." }, { status: 400 });
   const antes = u.get("antes");
   try {
     return NextResponse.json({ publicaciones: await feed(yo.id, ambito as Ambito, antes && !Number.isNaN(Date.parse(antes)) ? antes : undefined) });

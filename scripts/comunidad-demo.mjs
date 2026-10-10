@@ -22,7 +22,6 @@ const c = createClient(url, llave, { auth: { persistSession: false } });
 
 const sinTildes = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 const slug = (s) => sinTildes(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-const primero = (s) => s.trim().split(/\s+/)[0] ?? "";
 const hace = (minutos) => new Date(Date.now() - minutos * 60_000).toISOString();
 
 /** Generador pseudoaleatorio con semilla: cada ejecución produce exactamente los mismos datos. */
@@ -84,17 +83,17 @@ const REAL_LO_SIGUEN = ["lauragomez", "marcelaortiz", "jorgebarrera", "sofiamend
 
 // g: "barrio" | "municipio" | null (null = publicación general, sin grupo). hace = minutos. Comentarios: [autor, texto, minutos después].
 const PUBLICACIONES = [
-  { a: "carlosrincon", g: "barrio", hace: 35, likes: 7, t: "Vecinos de Santa Bárbara: este sábado a las 9 a. m. nos encontramos en el parque para hablar del alumbrado y la seguridad de la cuadra. Si pueden ayudar a convocar, mejor. 🙌",
+  { a: "carlosrincon", g: "barrio", hace: 35, likes: 7, t: "Vecinos de Santa Bárbara: este sábado a las 9 a. m. nos encontramos en el parque para hablar del alumbrado y la seguridad de la cuadra. Si pueden ayudar a convocar, mejor. 🙌 #seguridad",
     c: [["lauragomez", "Yo llevo tinto y ayudo a pasar la voz en los chats del edificio.", 12], ["marcelaortiz", "Cuenten conmigo. ¿Alguien tiene parlante o megáfono?", 20]] },
   { a: "sofiamendoza", g: null, hace: 70, likes: 3, t: "Acabo de leer el boletín de la semana: claro, corto y con la fuente a la vista. Justo lo que necesitaba para ponerme al día.",
     c: [["danielapardo", "Lo leí esta mañana, muy bueno el resumen.", 25]] },
-  { a: "santiagorestrepo", g: "municipio", hace: 240, likes: 9, t: "Medellín presente. Este domingo caminata por El Poblado y charla sobre emprendimiento local. Los esperamos, vengan con ganas de conversar.",
+  { a: "santiagorestrepo", g: "municipio", hace: 240, likes: 9, t: "Medellín presente. Este domingo caminata por El Poblado y charla sobre emprendimiento local. Los esperamos, vengan con ganas de conversar. #emprendimiento",
     c: [["manuelavelez", "Yo llego con mi socia. Gracias por organizar.", 40], ["mateozapata", "Allí estaremos.", 55]] },
-  { a: "lauragomez", g: "municipio", hace: 300, likes: 8, t: "¿Alguien más piensa hacer el curso de liderazgo público de la Fundación? Me gustaría ir acompañada y estudiar en grupo.",
+  { a: "lauragomez", g: "municipio", hace: 300, likes: 8, t: "¿Alguien más piensa hacer el curso de liderazgo público de la Fundación? Me gustaría ir acompañada y estudiar en grupo. #formación",
     c: [["ximenabeltran", "Yo estaba mirando el mismo curso. Armemos el grupo de estudio.", 30], ["danielapardo", "Cuenten conmigo, puedo compartir mis apuntes.", 75]] },
-  { a: "marcelaortiz", g: "barrio", hace: 180, likes: 4, t: "¿Alguien recomienda un colegio cerca de la 116 con buen inglés? Mi hija entra a quinto el año que viene.",
+  { a: "marcelaortiz", g: "barrio", hace: 180, likes: 4, t: "¿Alguien recomienda un colegio cerca de la 116 con buen inglés? Mi hija entra a quinto el año que viene. #educación",
     c: [["paolacifuentes", "Pregunta en el de la 118, a varios vecinos les ha ido bien.", 22], ["andresquintero", "Conozco otro por la 119. Te cuento el sábado en la reunión.", 50]] },
-  { a: "camilotorres", g: "municipio", hace: 480, likes: 5, t: "Propuesta para la comunidad: que cada mes rote quién modera las conversaciones de la ciudad, para que todos participemos. ¿Les parece?",
+  { a: "camilotorres", g: "municipio", hace: 480, likes: 5, t: "Propuesta para la comunidad: que cada mes rote quién modera las conversaciones de la ciudad, para que todos participemos. ¿Les parece? #participación",
     c: [["sofiamendoza", "Me gusta la idea, así nadie se cansa.", 18], ["estebanrios", "Apoyado. Armemos un calendario.", 40]] },
   { a: "nicolascaicedo", g: "municipio", hace: 420, likes: 2, t: "Cali: ¿alguien sabe si habrá curso presencial en la ciudad el próximo mes?",
     c: [["julianaescobar", "Yo también pregunto desde hace días. Si se enteran, avisen.", 35]] },
@@ -102,15 +101,15 @@ const PUBLICACIONES = [
     c: [["karenbarros", "Aquí estoy, cuenta conmigo.", 45]] },
   { a: "mateozapata", g: "barrio", hace: 360, likes: 3, t: "Si alguien de El Poblado quiere sumarse a la caminata del domingo, avise aquí abajo en los comentarios.",
     c: [["santiagorestrepo", "Aquí estamos, bienvenido.", 15]] },
-  { a: "danielapardo", g: null, hace: 720, likes: 10, t: "Compartir es poder: si saben de una beca, un curso o una convocatoria, publíquenla aquí para que llegue a más gente.",
+  { a: "danielapardo", g: null, hace: 720, likes: 10, t: "Compartir es poder: si saben de una beca, un curso o una convocatoria, publíquenla aquí para que llegue a más gente. #becas",
     c: [["sebastianlasso", "Buena idea. Voy a pasar las que me lleguen.", 90]] },
-  { a: "andresquintero", g: "barrio", hace: 1440, likes: 9, t: "Gracias a todos los que vinieron al conversatorio de ayer. Quedó pendiente armar un grupo de lectura para jóvenes del barrio; ¿quién se anima a coordinar?",
+  { a: "andresquintero", g: "barrio", hace: 1440, likes: 9, t: "Gracias a todos los que vinieron al conversatorio de ayer. Quedó pendiente armar un grupo de lectura para jóvenes del barrio; ¿quién se anima a coordinar? #lectura",
     c: [["jorgebarrera", "Yo me apunto, tengo varios libros para empezar.", 60], ["lauragomez", "Podemos usar el salón comunal los jueves por la tarde.", 120]] },
-  { a: "ximenabeltran", g: null, hace: 1560, likes: 12, t: "Idea para el observatorio: una versión resumida de cada proyecto de ley, en lenguaje sencillo, para que todos podamos entenderlo y opinar.",
+  { a: "ximenabeltran", g: null, hace: 1560, likes: 12, t: "Idea para el observatorio: una versión resumida de cada proyecto de ley, en lenguaje sencillo, para que todos podamos entenderlo y opinar. #transparencia",
     c: [["camilotorres", "Totalmente de acuerdo, eso acerca a la gente.", 40], ["lauragomez", "Yo ayudo a redactar los resúmenes si hace falta.", 95]] },
-  { a: "nataliaserrano", g: "municipio", hace: 1700, likes: 14, t: "Buscamos voluntarios para dictar talleres de lectura a niños de escuelas rurales cerca de Bucaramanga este semestre. ¿Quién se anima?",
+  { a: "nataliaserrano", g: "municipio", hace: 1700, likes: 14, t: "Buscamos voluntarios para dictar talleres de lectura a niños de escuelas rurales cerca de Bucaramanga este semestre. ¿Quién se anima? #voluntariado #educación",
     c: [["diegoherrera", "Yo me apunto, tengo experiencia con grupos de primaria.", 50]] },
-  { a: "valeriamontoya", g: "municipio", hace: 2880, likes: 11, t: "Primera vez que escribo por aquí. Soy ingeniera y quiero aportar con talleres de herramientas digitales para microempresarios del barrio.",
+  { a: "valeriamontoya", g: "municipio", hace: 2880, likes: 11, t: "Primera vez que escribo por aquí. Soy ingeniera y quiero aportar con talleres de herramientas digitales para microempresarios del barrio. #emprendimiento",
     c: [["felipeacosta", "Excelente, esa necesidad es real. Te ayudo a conseguir un salón.", 70]] },
   { a: "manuelavelez", g: "barrio", hace: 2900, likes: 4, t: "¿Alguien de Laureles interesado en armar el grupo del barrio? Ya somos dos.",
     c: [["isabelagiraldo", "Soy de Belén pero con gusto me sumo a los encuentros.", 120]] },
@@ -120,10 +119,10 @@ const PUBLICACIONES = [
   { a: "karenbarros", g: "barrio", hace: 3000, likes: 5, t: "Alto Prado: ¿quién se anima a coordinar una jornada de limpieza del parque?",
     c: [["luisperez", "Yo puedo conseguir bolsas y guantes.", 100]] },
   { a: "julianaescobar", g: "barrio", hace: 4200, likes: 6, t: "Granada: encuentro de vecinos el viernes para hablar de los espacios públicos del sector. Todos bienvenidos.", c: [] },
-  { a: "juliancardenas", g: "municipio", hace: 4320, likes: 6, t: "Soy docente de matemáticas en Suba. Si hay profesores en la red, armemos un espacio para compartir material de clase.",
+  { a: "juliancardenas", g: "municipio", hace: 4320, likes: 6, t: "Soy docente de matemáticas en Suba. Si hay profesores en la red, armemos un espacio para compartir material de clase. #educación",
     c: [["andresquintero", "Soy profesor de historia, me interesa. Hagámoslo.", 80]] },
   { a: "isabelagiraldo", g: "barrio", hace: 4300, likes: 3, t: "Belén: ¿hay vecinos interesados en reunirnos una vez al mes? Podemos empezar con un café.", c: [] },
-  { a: "estebanrios", g: null, hace: 600, likes: 5, t: "Estoy armando mi hoja de vida desde cero y quiero consejos de quienes ya pasaron por procesos de selección. ¿Alguien me ayuda?",
+  { a: "estebanrios", g: null, hace: 600, likes: 5, t: "Estoy armando mi hoja de vida desde cero y quiero consejos de quienes ya pasaron por procesos de selección. ¿Alguien me ayuda? #empleo",
     c: [["ximenabeltran", "Con gusto te reviso el borrador.", 30], ["valeriamontoya", "Yo también te puedo orientar con el perfil profesional.", 65]] },
   { a: "jorgebarrera", g: "barrio", hace: 5760, likes: 5, t: "¿Alguien más sale a caminar por el sendero del parque en las mañanas? Podríamos armar un grupo de trote suave a las 6 a. m.",
     c: [["lauragomez", "Cuenten conmigo los sábados.", 200]] },

@@ -384,9 +384,9 @@ function MafeChatInterno() {
   );
 }
 
-/** La comunidad se ve como una app propia: allí no va la burbuja del asistente (taparía la barra de navegación). */
+/** La comunidad se ve como una app propia y los portales (/p/…) son sitios aparte: allí no va la burbuja del asistente. */
 export function MafeChat() {
   const pathname = usePathname();
-  if (pathname === "/unete" || pathname.startsWith("/comunidad")) return null;
+  if (pathname === "/unete" || pathname.startsWith("/comunidad") || pathname.startsWith("/p/")) return null;
   return <MafeChatInterno />;
 }
