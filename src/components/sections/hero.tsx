@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowRight, PlayCircle } from "lucide-react";
+import { ArrowDown, ArrowRight, PlayCircle, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -72,13 +72,17 @@ export function Hero() {
 
           <motion.div
             variants={fadeUp}
-            className="mt-10 flex flex-col gap-3 sm:flex-row"
+            className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap"
           >
             <Button asChild size="lg" className="shadow-elev-2">
-              <Link href="/donar">
-                Donar / Apoyar
+              <Link href="/unete">
+                <Users className="size-4" aria-hidden="true" />
+                Únete a la comunidad
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Link>
+            </Button>
+            <Button asChild size="lg" variant="glass">
+              <Link href="/donar">Donar / Apoyar</Link>
             </Button>
             <Button asChild size="lg" variant="glass">
               <Link href="/proyectos">

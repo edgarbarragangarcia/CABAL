@@ -72,6 +72,7 @@ export const mainNav: NavItem[] = [
   { label: "Opinión", href: "/opinion" },
   { label: "Eventos", href: "/eventos" },
   { label: "Tienda", href: "/tienda" },
+  { label: "Únete", href: "/unete" },
   { label: "Contacto", href: "/contacto" },
 ];
 
@@ -84,6 +85,7 @@ export const footerNav = {
     { label: "Eventos", href: "/eventos" },
   ],
   ayuda: [
+    { label: "Únete a la comunidad", href: "/unete" },
     { label: "Donar ahora", href: "/donar" },
     { label: "Tienda", href: "/tienda" },
     { label: "Contacto", href: "/contacto" },
