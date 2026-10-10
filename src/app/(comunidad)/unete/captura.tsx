@@ -3,7 +3,9 @@
 import * as React from "react";
 import { Camera, ImageIcon, Keyboard, Loader2, ShieldCheck, X } from "lucide-react";
 
-export type DatosCedula = { cedula: string; apellidos: string; nombres: string; fechaNacimiento: string | null };
+import type { DatosCedula } from "@/lib/comunidad/cedula-ocr";
+
+export type { DatosCedula };
 
 /** Reduce la foto (la cámara entrega 12 MP) a un JPEG ligero: se lee igual y viaja rápido. */
 async function reducir(archivo: File): Promise<string> {
@@ -21,6 +23,7 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
   const camara = React.useRef<HTMLInputElement>(null);
   const galeria = React.useRef<HTMLInputElement>(null);
   const [leyendo, setLeyendo] = React.useState(false);
+  const [avance, setAvance] = React.useState("Leyendo tu cédula…");
   const [vista, setVista] = React.useState<string | null>(null);
   const [error, setError] = React.useState("");
 
@@ -31,12 +34,26 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
     setError("");
     setLeyendo(true);
     try {
+      setAvance("Leyendo tu cédula…");
       const imagen = await reducir(f);
       setVista(imagen);
-      const res = await fetch("/api/comunidad/leer-cedula", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imagen }) });
-      const b = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(b.error ?? "No pude leer la cédula.");
-      onLeida(b as DatosCedula);
+
+      // 1) El lector inteligente del servidor (el más preciso). 2) Si no está disponible o falla, se lee en el propio teléfono.
+      let datos: DatosCedula | null = null;
+      try {
+        const res = await fetch("/api/comunidad/leer-cedula", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imagen }) });
+        const b = await res.json().catch(() => ({}));
+        if (res.ok) datos = b as DatosCedula;
+        else if (b.codigo === "ilegible") throw new Error(b.error);
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith("No pude leer la cédula en esa foto")) throw err;
+      }
+      if (!datos) {
+        setAvance("Preparando el lector (solo la primera vez)…");
+        datos = await (await import("./ocr-local")).leerCedulaLocal(imagen, setAvance);
+      }
+      if (!datos) throw new Error("No pude leer la cédula en esa foto. Acércate, con buena luz y sin reflejos, o escribe tus datos.");
+      onLeida(datos);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pude leer la foto.");
       setLeyendo(false);
@@ -57,7 +74,7 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
           <span className="grid size-24 place-items-center rounded-3xl bg-brand-soft text-brand"><Camera className="size-12" /></span>
         )}
         {leyendo ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" /> Leyendo tu cédula…</p>
+          <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" /> {avance}</p>
         ) : (
           <>
             <div>
@@ -73,7 +90,7 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
           </>
         )}
       </div>
-      <p className="flex items-start gap-2 border-t border-border p-4 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand" /> La foto solo se usa para leer tus datos: se envía a un servicio de inteligencia artificial para reconocer el texto y se descarta; no la guardamos.</p>
+      <p className="flex items-start gap-2 border-t border-border p-4 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand" /> La foto solo se usa para leer tus datos y no se guarda. Se lee con un servicio de inteligencia artificial o, si no está disponible, dentro de tu propio teléfono.</p>
     </div>
   );
 }

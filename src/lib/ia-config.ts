@@ -202,39 +202,66 @@ export async function generarTexto({ system, user, maxTokens }: { system: string
   return body.choices?.[0]?.message?.content ?? "";
 }
 
-/** Como `generarTexto`, pero con una imagen (JPEG/PNG en base64) para que el modelo la lea. Claude y Gemini; OpenAI no. */
-export async function generarConImagen({ system, user, imagenBase64, mime, maxTokens }: { system: string; user: string; imagenBase64: string; mime: "image/jpeg" | "image/png"; maxTokens: number }) {
-  const g = await leer();
-  const proveedor = g?.proveedor ?? "anthropic";
-  const modelo = g?.modelo || PROVEEDORES[proveedor].modelo;
-  const guardada = g?.claves[proveedor] ? await descifrar(g.claves[proveedor]!) : undefined;
-  const clave = guardada ?? (proveedor === "anthropic" ? process.env.ANTHROPIC_API_KEY : undefined);
-  if (!clave) throw new Error("El lector de cédula no está disponible por ahora.");
-
-  if (proveedor === "anthropic") {
-    const res = await new Anthropic({ apiKey: clave }).messages.create({
-      model: modelo,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: mime, data: imagenBase64 } }, { type: "text", text: user }] }],
-    });
-    return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
+/** Falla del lector de imágenes: `sin_clave` (el servidor no tiene una clave de IA) o `ia_error` (el proveedor respondió mal). */
+export class ErrorIa extends Error {
+  constructor(public codigo: "sin_clave" | "ia_error", mensaje: string) {
+    super(mensaje);
   }
-  if (proveedor === "gemini") {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+}
+
+/**
+ * Proveedor y clave para funciones PÚBLICAS (p. ej. leer la cédula de quien se afilia). La configuración de
+ * /admin/configuracion solo es visible desde el panel cuando vive en una cookie del navegador (ruta /api/admin), así
+ * que aquí también se aceptan variables de entorno del servidor: ANTHROPIC_API_KEY o GEMINI_API_KEY (GOOGLE_API_KEY).
+ */
+async function configPublica(): Promise<{ proveedor: "anthropic" | "gemini"; modelo: string; clave: string } | null> {
+  const g = await leer().catch(() => null);
+  if (g) {
+    for (const p of [g.proveedor, "anthropic", "gemini"] as Proveedor[]) {
+      if ((p === "anthropic" || p === "gemini") && g.claves[p]) {
+        const clave = await descifrar(g.claves[p]!).catch(() => undefined);
+        if (clave) return { proveedor: p, modelo: p === g.proveedor && g.modelo ? g.modelo : PROVEEDORES[p].modelo, clave };
+      }
+    }
+  }
+  if (process.env.ANTHROPIC_API_KEY) return { proveedor: "anthropic", modelo: process.env.IA_MODELO_VISION ?? PROVEEDORES.anthropic.modelo, clave: process.env.ANTHROPIC_API_KEY };
+  const gem = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+  if (gem) return { proveedor: "gemini", modelo: process.env.IA_MODELO_VISION ?? PROVEEDORES.gemini.modelo, clave: gem };
+  return null;
+}
+
+/** Como `generarTexto`, pero con una imagen (JPEG/PNG en base64) para que el modelo la lea, y respuesta en JSON. Claude y Gemini. */
+export async function generarConImagen({ system, user, imagenBase64, mime, maxTokens }: { system: string; user: string; imagenBase64: string; mime: "image/jpeg" | "image/png"; maxTokens: number }) {
+  const cfg = await configPublica();
+  if (!cfg) throw new ErrorIa("sin_clave", "El servidor no tiene una clave de IA para leer imágenes (ANTHROPIC_API_KEY o GEMINI_API_KEY).");
+  try {
+    if (cfg.proveedor === "anthropic") {
+      const res = await new Anthropic({ apiKey: cfg.clave }).messages.create({
+        model: cfg.modelo,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: mime, data: imagenBase64 } }, { type: "text", text: user }] }],
+      });
+      return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
+    }
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.modelo)}:generateContent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": clave },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": cfg.clave },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ inlineData: { mimeType: mime, data: imagenBase64 } }, { text: user }] }],
-        generationConfig: { maxOutputTokens: maxTokens },
+        // Los modelos «pro» gastan parte del límite pensando: con un tope bajo la respuesta llega vacía o cortada.
+        generationConfig: { maxOutputTokens: Math.max(maxTokens, 8192), responseMimeType: "application/json" },
       }),
     });
     const body = await res.json();
-    if (!res.ok) throw new Error("El lector de cédula no pudo procesar la imagen.");
-    return (body.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("\n");
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${body.error?.message ?? "sin detalle"}`);
+    const texto = (body.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("\n");
+    if (!texto.trim()) throw new Error(`Gemini devolvió vacío (${body.candidates?.[0]?.finishReason ?? "sin motivo"})`);
+    return texto;
+  } catch (e) {
+    throw new ErrorIa("ia_error", e instanceof Error ? e.message : "Falló el lector de imágenes.");
   }
-  throw new Error("El lector de cédula no está disponible por ahora.");
 }
 
 export type FuenteWeb = { titulo: string; url: string };

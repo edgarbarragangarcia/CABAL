@@ -49,7 +49,7 @@ export function FormularioAfiliacion() {
   const [v, setV] = React.useState<Campos>(VACIO);
   const [errores, setErrores] = React.useState<Record<string, string>>({});
   const [escaneando, setEscaneando] = React.useState(false);
-  const [leidaDeCedula, setLeidaDeCedula] = React.useState(false);
+  const [leidaDeCedula, setLeidaDeCedula] = React.useState<"" | "completa" | "parcial">("");
   const [enviando, setEnviando] = React.useState(false);
   const [errorGeneral, setErrorGeneral] = React.useState("");
 
@@ -60,7 +60,7 @@ export function FormularioAfiliacion() {
 
   const alLeer = React.useCallback((d: DatosCedula) => {
     setV((p) => ({ ...p, cedula: d.cedula, nombres: d.nombres || p.nombres, apellidos: d.apellidos || p.apellidos, fechaNacimiento: d.fechaNacimiento ?? p.fechaNacimiento }));
-    setLeidaDeCedula(true);
+    setLeidaDeCedula(d.nombres && d.apellidos ? "completa" : "parcial");
     setEscaneando(false);
     setPaso(1);
   }, []);
@@ -160,7 +160,7 @@ export function FormularioAfiliacion() {
 
         {paso === 1 && (
           <div className="space-y-4">
-            {leidaDeCedula && <p className="flex items-center gap-2 rounded-2xl bg-brand-soft px-4 py-3 text-sm text-brand"><Check className="size-4" /> Leímos tu foto. Confirma que todo esté bien.</p>}
+            {leidaDeCedula && <p className="flex items-center gap-2 rounded-2xl bg-brand-soft px-4 py-3 text-sm text-brand"><Check className="size-4 shrink-0" /> {leidaDeCedula === "completa" ? "Leímos tu foto. Confirma que todo esté bien." : "Leímos parte de tu foto. Completa lo que falte."}</p>}
             <Campo etiqueta="Nombres" error={errores.nombres}><input className={entrada} autoComplete="given-name" value={v.nombres} onChange={(e) => set("nombres", e.target.value)} /></Campo>
             <Campo etiqueta="Apellidos" error={errores.apellidos}><input className={entrada} autoComplete="family-name" value={v.apellidos} onChange={(e) => set("apellidos", e.target.value)} /></Campo>
             <Campo etiqueta="Número de cédula" error={errores.cedula}><input className={entrada} inputMode="numeric" value={v.cedula} onChange={(e) => set("cedula", e.target.value.replace(/\D/g, "").slice(0, 10))} /></Campo>

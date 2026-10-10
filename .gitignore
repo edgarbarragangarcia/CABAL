@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Lector de cédula en el teléfono: se genera con scripts/copiar-ocr.mjs
+/public/ocr/
