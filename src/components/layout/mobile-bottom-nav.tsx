@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HandHeart, Home, LayoutGrid, Users, X } from "lucide-react";
+import { HandHeart, House, SquaresFour, UsersThree, X, type Icon } from "@phosphor-icons/react";
 
 import { mainNav } from "@/config/site";
 import { MafeAvatar } from "@/components/mafe/mafe-avatar";
@@ -18,10 +18,10 @@ export function MobileBottomNav() {
   const [secciones, setSecciones] = React.useState(false);
 
   const activo = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
-  const item = (href: string, texto: string, Icono: typeof Home) => (
+  const item = (href: string, texto: string, Icono: Icon) => (
     <li key={href}>
       <Link href={href} onClick={() => setSecciones(false)} aria-current={activo(href) ? "page" : undefined} className={cn("flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium", activo(href) ? "text-brand" : "text-muted-foreground")}>
-        <Icono className="size-6" aria-hidden="true" />
+        <Icono weight={activo(href) ? "fill" : "duotone"} className="size-6" aria-hidden="true" />
         {texto}
       </Link>
     </li>
@@ -35,7 +35,7 @@ export function MobileBottomNav() {
           <div className="absolute inset-x-0 bottom-0 max-h-[75dvh] overflow-y-auto rounded-t-3xl bg-surface p-5 pb-28 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
               <p className="font-display text-xl font-semibold">Secciones</p>
-              <button type="button" onClick={() => setSecciones(false)} aria-label="Cerrar" className="grid size-9 place-items-center rounded-full bg-surface-muted"><X className="size-5" /></button>
+              <button type="button" onClick={() => setSecciones(false)} aria-label="Cerrar" className="grid size-9 place-items-center rounded-full bg-surface-muted"><X weight="bold" className="size-5" /></button>
             </div>
             <ul className="grid grid-cols-2 gap-2">
               {mainNav.flatMap((n) => (n.children ? n.children.map((c) => ({ label: c.label, href: c.href })) : [{ label: n.label, href: n.href }])).map((n) => (
@@ -48,10 +48,10 @@ export function MobileBottomNav() {
 
       <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         <ul className="mx-auto grid max-w-md grid-cols-5 items-end">
-          {item("/", "Inicio", Home)}
+          {item("/", "Inicio", House)}
           <li>
             <button type="button" onClick={() => setSecciones((v) => !v)} aria-expanded={secciones} className={cn("flex w-full flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium", secciones ? "text-brand" : "text-muted-foreground")}>
-              <LayoutGrid className="size-6" aria-hidden="true" />
+              <SquaresFour weight={secciones ? "fill" : "duotone"} className="size-6" aria-hidden="true" />
               Secciones
             </button>
           </li>
@@ -61,7 +61,7 @@ export function MobileBottomNav() {
             </button>
             <span className="text-[11px] font-medium text-muted-foreground">MaFe</span>
           </li>
-          {item("/unete", "Únete", Users)}
+          {item("/unete", "Únete", UsersThree)}
           {item("/donar", "Donar", HandHeart)}
         </ul>
       </nav>

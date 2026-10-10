@@ -3,7 +3,10 @@
 import * as React from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 
+import { Buildings, Scales, Smiley, UsersThree, type Icon } from "@phosphor-icons/react";
+
 import { Container } from "@/components/ui/container";
+import { IconChip } from "@/components/fx/icon-chip";
 import { Reveal } from "@/components/animations/reveal";
 import { AnimatedCounter } from "@/components/animations/animated-counter";
 
@@ -17,6 +20,7 @@ import { AnimatedCounter } from "@/components/animations/animated-counter";
  * `note`; el contador y el formato se encargan solos.
  */
 type Figure = {
+  icono: Icon;
   value: number | null;
   suffix: string;
   label: string;
@@ -24,10 +28,10 @@ type Figure = {
 };
 
 const FIGURES: Figure[] = [
-  { value: null, suffix: "+", label: "Estudiantes formados", note: "Academia y talleres presenciales" },
-  { value: null, suffix: "", label: "Proyectos de ley analizados", note: "Observatorio legislativo, 2024–2025" },
-  { value: null, suffix: "", label: "Departamentos con cobertura", note: "Programas y aliados en territorio" },
-  { value: null, suffix: "%", label: "Satisfacción de egresados", note: "Encuesta de cierre de cohorte" },
+  { icono: UsersThree, value: null, suffix: "+", label: "Estudiantes formados", note: "Academia y talleres presenciales" },
+  { icono: Scales, value: null, suffix: "", label: "Proyectos de ley analizados", note: "Observatorio legislativo, 2024–2025" },
+  { icono: Buildings, value: null, suffix: "", label: "Departamentos con cobertura", note: "Programas y aliados en territorio" },
+  { icono: Smiley, value: null, suffix: "%", label: "Satisfacción de egresados", note: "Encuesta de cierre de cohorte" },
 ];
 
 /**
@@ -69,7 +73,9 @@ export function ImpactBand() {
         <dl className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
           {FIGURES.map((f, i) => (
             <Reveal key={f.label} delay={i * 0.08}>
-              <div className="group h-full bg-[#0a0c0b]/80 p-7 backdrop-blur-sm transition-colors duration-500 hover:bg-[#0a0c0b]/40">
+              <div className="group relative h-full bg-[#0a0c0b]/80 p-7 backdrop-blur-sm transition-colors duration-500 hover:bg-[#0a0c0b]/40">
+                <span aria-hidden className="absolute inset-x-7 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-[#e0bd7c] to-transparent transition-transform duration-700 group-hover:scale-x-100" />
+                <IconChip icono={f.icono} tono="oro" className="mb-6 size-12 border-[#e0bd7c]/25 from-white/10 to-white/[0.02] text-[#e0bd7c] shadow-none" iconClass="size-6" />
                 <dd className="tabular font-display text-5xl font-normal tracking-tight text-[#f1efe9] sm:text-6xl">
                   {f.value === null ? (
                     <span className="text-[#f1efe9]/35" aria-label="Dato pendiente">

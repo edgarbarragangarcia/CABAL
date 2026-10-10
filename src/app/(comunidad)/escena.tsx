@@ -9,14 +9,7 @@ import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } fro
  * que siguen suavemente al puntero (paralaje). Todo en CSS/Framer Motion: sin librerías 3D pesadas, y quieto si la
  * persona pidió menos movimiento.
  */
-const ORBES = [
-  { x: "8%", y: "14%", t: 120, c: "#34d399", d: 7, retraso: 0 },
-  { x: "84%", y: "10%", t: 84, c: "#fbbf24", d: 9, retraso: 1 },
-  { x: "90%", y: "46%", t: 150, c: "#2dd4bf", d: 8, retraso: 2 },
-  { x: "-3%", y: "52%", t: 96, c: "#a3e635", d: 10, retraso: 0.5 },
-  { x: "70%", y: "78%", t: 64, c: "#f59e0b", d: 6, retraso: 1.5 },
-  { x: "18%", y: "84%", t: 110, c: "#10b981", d: 8, retraso: 2.5 },
-];
+const ORBES: { x: string; y: string; t: number; c: string; d: number; retraso: number }[] = [];
 
 export function Escena() {
   const quieto = useReducedMotion();

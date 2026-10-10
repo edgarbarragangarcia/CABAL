@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Camera, ImageIcon, Keyboard, Loader2, ShieldCheck, X } from "lucide-react";
+import { Camera, ImageIcon, Keyboard, Loader2, ScanLine, ShieldCheck, X } from "lucide-react";
 
 import type { DatosCedula } from "@/lib/comunidad/cedula-ocr";
+import { EscanerBarras } from "./escaner";
 
 export type { DatosCedula };
 /** Cómo se leyó: del código de barras (exacto), con IA, o con el OCR del teléfono (el menos fiable). */
@@ -21,6 +22,9 @@ function reducir(foto: ImageBitmap): string {
 
 /** Foto de la cédula (frente o reverso) leída por IA con visión; no se guarda. Se puede escribir a mano en cualquier momento. */
 export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula, via: Via) => void; onCerrar: () => void }) {
+  // Primero el escáner en vivo del código de barras (recuadro que se pone verde y captura solo); la foto queda como alternativa.
+  const [modo, setModo] = React.useState<"escaner" | "foto">("escaner");
+  const alEscanear = React.useCallback((d: DatosCedula) => onLeida(d, "barras"), [onLeida]);
   const camara = React.useRef<HTMLInputElement>(null);
   const galeria = React.useRef<HTMLInputElement>(null);
   const [leyendo, setLeyendo] = React.useState(false);
@@ -64,6 +68,8 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula,
     }
   }
 
+  if (modo === "escaner") return <EscanerBarras onLeida={alEscanear} onFoto={() => setModo("foto")} onManual={onCerrar} />;
+
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-surface" role="dialog" aria-label="Foto de la cédula">
       <div className="flex items-center justify-between border-b border-border p-4">
@@ -90,6 +96,7 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula,
             <input ref={galeria} type="file" accept="image/*" onChange={procesar} className="hidden" />
             <button type="button" onClick={() => camara.current?.click()} className="flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0a4f37] to-[#14825c] px-5 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-900/25"><Camera className="size-5" /> {error ? "Tomar otra foto" : "Tomar foto"}</button>
             <button type="button" onClick={() => galeria.current?.click()} className="flex items-center gap-2 text-sm font-semibold text-brand"><ImageIcon className="size-4" /> Elegir una foto de mi galería</button>
+            <button type="button" onClick={() => setModo("escaner")} className="flex items-center gap-2 text-sm font-semibold text-brand"><ScanLine className="size-4" /> Volver al escáner del código de barras</button>
             <button type="button" onClick={onCerrar} className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"><Keyboard className="size-4" /> Prefiero escribir mis datos</button>
           </>
         )}
