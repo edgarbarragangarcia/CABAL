@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, RotateCcw, X } from "lucide-react";
@@ -76,7 +77,7 @@ function TypingDots() {
   );
 }
 
-export function MafeChat() {
+function MafeChatInterno() {
   const [open, setOpen] = React.useState(false);
   const [showIntro, setShowIntro] = React.useState(false);
   const [messages, setMessages] = React.useState<ChatMessage[]>([GREETING]);
@@ -374,4 +375,11 @@ export function MafeChat() {
       </div>
     </>
   );
+}
+
+/** La comunidad se ve como una app propia: allí no va la burbuja del asistente (taparía la barra de navegación). */
+export function MafeChat() {
+  const pathname = usePathname();
+  if (pathname === "/unete" || pathname.startsWith("/comunidad")) return null;
+  return <MafeChatInterno />;
 }

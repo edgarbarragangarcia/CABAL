@@ -18,6 +18,8 @@ export type Atestaciones = {
   antecedentesJudiciales: Atestacion;
   certificadoProcuraduria: Atestacion;
   certificadoContraloria: Atestacion;
+  /** Hoja de vida pública (SIGEP) cuando no se ubicó sola. */
+  hojaDeVida: Atestacion;
 };
 export type Veredicto = "pendiente" | "aval_recomendado" | "aval_no_recomendado";
 
@@ -49,6 +51,7 @@ const atestacionesVacias = (): Atestaciones => ({
   antecedentesJudiciales: { ...ATESTACION_VACIA },
   certificadoProcuraduria: { ...ATESTACION_VACIA },
   certificadoContraloria: { ...ATESTACION_VACIA },
+  hojaDeVida: { ...ATESTACION_VACIA },
 });
 
 function desdeFila(fila: FilaRevision): RevisionAval {
@@ -61,6 +64,7 @@ function desdeFila(fila: FilaRevision): RevisionAval {
       antecedentesJudiciales: { ...base.antecedentesJudiciales, ...guardadas.antecedentesJudiciales },
       certificadoProcuraduria: { ...base.certificadoProcuraduria, ...guardadas.certificadoProcuraduria },
       certificadoContraloria: { ...base.certificadoContraloria, ...guardadas.certificadoContraloria },
+      hojaDeVida: { ...base.hojaDeVida, ...guardadas.hojaDeVida },
     },
     veredicto: fila.veredicto ?? "pendiente",
     notaVeredicto: fila.nota_veredicto ?? "",

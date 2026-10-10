@@ -56,6 +56,8 @@ export async function POST(req: Request) {
     antecedentesJudiciales: parseAtestacion(entradas.antecedentesJudiciales) ?? undefined,
     certificadoProcuraduria: parseAtestacion(entradas.certificadoProcuraduria) ?? undefined,
     certificadoContraloria: parseAtestacion(entradas.certificadoContraloria) ?? undefined,
+    // Agregada después: las revisiones viejas no la traen.
+    hojaDeVida: parseAtestacion(entradas.hojaDeVida) ?? { estado: "no_revisado", nota: "", url: "" },
   };
   if (!atestaciones.antecedentesJudiciales || !atestaciones.certificadoProcuraduria || !atestaciones.certificadoContraloria) {
     return NextResponse.json({ error: "Faltan las atestaciones del checklist." }, { status: 400 });

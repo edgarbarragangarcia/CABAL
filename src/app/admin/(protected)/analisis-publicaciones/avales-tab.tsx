@@ -50,6 +50,13 @@ const FILAS_MANUALES: {
   enlaceTexto: string;
 }[] = [
   {
+    id: "hojaDeVida",
+    titulo: "Hoja de vida pública (SIGEP)",
+    motivo: "Solo existe para quien hoy trabaja para el Estado (servidor o contratista); si no apareció sola, búscala en el directorio y confirma que sea la misma persona.",
+    enlace: "https://www.funcionpublica.gov.co/dafpIndexerBHV/hvSigep/index",
+    enlaceTexto: "Directorio del SIGEP",
+  },
+  {
     id: "antecedentesJudiciales",
     titulo: "Antecedentes judiciales (Policía Nacional)",
     motivo:
@@ -98,6 +105,7 @@ const atestacionesVacias = (): Atestaciones => ({
   antecedentesJudiciales: { ...ATESTACION_VACIA },
   certificadoProcuraduria: { ...ATESTACION_VACIA },
   certificadoContraloria: { ...ATESTACION_VACIA },
+  hojaDeVida: { ...ATESTACION_VACIA },
 });
 
 // ---------------------------------------------------------------- kpis ---
@@ -463,9 +471,12 @@ function Dossier({
           <TarjetaFuente acento="emerald">
             <SeccionDisciplinario datos={datos} />
           </TarjetaFuente>
-          <TarjetaFuente acento="sky">
-            <SeccionHojaDeVida estado={hvEstado} cedula={cedula} nombreMostrado={nombreMostrado} />
-          </TarjetaFuente>
+          {/* Sin hoja de vida (o sin conexión) no hay nada que mostrar aquí: pasa a la revisión manual de abajo. */}
+          {(hvEstado.estado === "cargando" || hv?.encontrada) && (
+            <TarjetaFuente acento="sky">
+              <SeccionHojaDeVida estado={hvEstado} cedula={cedula} nombreMostrado={nombreMostrado} />
+            </TarjetaFuente>
+          )}
           <TarjetaFuente acento="amber">
             <SeccionElectoral datos={datos} cedula={cedula} nombre={nombre} />
           </TarjetaFuente>
@@ -851,7 +862,7 @@ function ChecklistYVeredicto({
                   <p className="text-sm font-medium">{fila.titulo}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{fila.motivo}</p>
                 </div>
-                <a href={fila.enlace} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300">
+                <a href={fila.id === "hojaDeVida" ? `${fila.enlace}?${new URLSearchParams({ find: "FindNext", query: nombre })}` : fila.enlace} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300">
                   {fila.enlaceTexto} <ExternalLink className="size-3.5" aria-hidden="true" />
                 </a>
               </div>
