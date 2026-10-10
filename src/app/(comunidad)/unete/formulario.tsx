@@ -6,10 +6,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Loader2, ScanLine, ShieldCheck, Users } from "lucide-react";
 
-import type { DatosCedula } from "@/lib/comunidad/cedula-pdf417";
 import { registroSchema } from "@/lib/comunidad/esquemas";
 import { ELECTORAL_DEPARTMENTS } from "@/lib/electoral-places";
-import { EscanerCedula } from "./escaner";
+import { CapturaCedula, type DatosCedula } from "./captura";
 
 type Campos = {
   nombres: string; apellidos: string; cedula: string; fechaNacimiento: string;
@@ -97,7 +96,7 @@ export function FormularioAfiliacion() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-surface shadow-2xl sm:my-6 sm:min-h-0 sm:overflow-hidden sm:rounded-[2rem] sm:border sm:border-border">
-      {escaneando && <EscanerCedula onLeida={alLeer} onCerrar={() => setEscaneando(false)} />}
+      {escaneando && <CapturaCedula onLeida={alLeer} onCerrar={() => setEscaneando(false)} />}
 
       <header className="relative overflow-hidden bg-gradient-to-br from-[#0a4f37] via-[#0f6b4c] to-[#14825c] px-5 pt-6 pb-8 text-white">
         <div aria-hidden className="absolute -top-10 -right-10 size-44 rounded-full bg-white/10" />
@@ -135,7 +134,7 @@ export function FormularioAfiliacion() {
               })}
             </ul>
             <button type="button" onClick={() => setEscaneando(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0a4f37] to-[#14825c] px-5 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-900/25 active:scale-[0.99]">
-              <ScanLine className="size-5" /> Escanear mi cédula
+              <ScanLine className="size-5" /> Tomar foto de mi cédula
             </button>
             <button type="button" onClick={() => setPaso(1)} className="w-full rounded-2xl border border-border px-5 py-3.5 text-base font-semibold">Escribir mis datos</button>
             <p className="text-center text-sm text-muted-foreground">¿Ya eres afiliado? <Link href="/comunidad/ingresar" className="font-semibold text-brand">Inicia sesión</Link></p>
@@ -144,7 +143,7 @@ export function FormularioAfiliacion() {
 
         {paso === 1 && (
           <div className="space-y-4">
-            {leidaDeCedula && <p className="flex items-center gap-2 rounded-2xl bg-brand-soft px-4 py-3 text-sm text-brand"><Check className="size-4" /> Leímos tu cédula. Confirma que todo esté bien.</p>}
+            {leidaDeCedula && <p className="flex items-center gap-2 rounded-2xl bg-brand-soft px-4 py-3 text-sm text-brand"><Check className="size-4" /> Leímos tu foto. Confirma que todo esté bien.</p>}
             <Campo etiqueta="Nombres" error={errores.nombres}><input className={entrada} autoComplete="given-name" value={v.nombres} onChange={(e) => set("nombres", e.target.value)} /></Campo>
             <Campo etiqueta="Apellidos" error={errores.apellidos}><input className={entrada} autoComplete="family-name" value={v.apellidos} onChange={(e) => set("apellidos", e.target.value)} /></Campo>
             <Campo etiqueta="Número de cédula" error={errores.cedula}><input className={entrada} inputMode="numeric" value={v.cedula} onChange={(e) => set("cedula", e.target.value.replace(/\D/g, "").slice(0, 10))} /></Campo>

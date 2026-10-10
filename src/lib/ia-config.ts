@@ -202,6 +202,41 @@ export async function generarTexto({ system, user, maxTokens }: { system: string
   return body.choices?.[0]?.message?.content ?? "";
 }
 
+/** Como `generarTexto`, pero con una imagen (JPEG/PNG en base64) para que el modelo la lea. Claude y Gemini; OpenAI no. */
+export async function generarConImagen({ system, user, imagenBase64, mime, maxTokens }: { system: string; user: string; imagenBase64: string; mime: "image/jpeg" | "image/png"; maxTokens: number }) {
+  const g = await leer();
+  const proveedor = g?.proveedor ?? "anthropic";
+  const modelo = g?.modelo || PROVEEDORES[proveedor].modelo;
+  const guardada = g?.claves[proveedor] ? await descifrar(g.claves[proveedor]!) : undefined;
+  const clave = guardada ?? (proveedor === "anthropic" ? process.env.ANTHROPIC_API_KEY : undefined);
+  if (!clave) throw new Error("El lector de cédula no está disponible por ahora.");
+
+  if (proveedor === "anthropic") {
+    const res = await new Anthropic({ apiKey: clave }).messages.create({
+      model: modelo,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: mime, data: imagenBase64 } }, { type: "text", text: user }] }],
+    });
+    return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
+  }
+  if (proveedor === "gemini") {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": clave },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ inlineData: { mimeType: mime, data: imagenBase64 } }, { text: user }] }],
+        generationConfig: { maxOutputTokens: maxTokens },
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error("El lector de cédula no pudo procesar la imagen.");
+    return (body.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("\n");
+  }
+  throw new Error("El lector de cédula no está disponible por ahora.");
+}
+
 export type FuenteWeb = { titulo: string; url: string };
 
 /**
