@@ -10,7 +10,7 @@ import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } fro
 import { registroSchema } from "@/lib/comunidad/esquemas";
 import { ELECTORAL_DEPARTMENTS } from "@/lib/electoral-places";
 import { Cedula3D, Escena } from "../escena";
-import { CapturaCedula, type DatosCedula } from "./captura";
+import { CapturaCedula, type DatosCedula, type Via } from "./captura";
 
 type Campos = {
   nombres: string; apellidos: string; cedula: string; fechaNacimiento: string;
@@ -49,7 +49,7 @@ export function FormularioAfiliacion() {
   const [v, setV] = React.useState<Campos>(VACIO);
   const [errores, setErrores] = React.useState<Record<string, string>>({});
   const [escaneando, setEscaneando] = React.useState(false);
-  const [leidaDeCedula, setLeidaDeCedula] = React.useState<"" | "completa" | "parcial">("");
+  const [leidaDeCedula, setLeidaDeCedula] = React.useState<Via | "">("");
   const [enviando, setEnviando] = React.useState(false);
   const [errorGeneral, setErrorGeneral] = React.useState("");
 
@@ -58,9 +58,9 @@ export function FormularioAfiliacion() {
     setErrores((e) => (e[k] ? { ...e, [k]: "" } : e));
   };
 
-  const alLeer = React.useCallback((d: DatosCedula) => {
+  const alLeer = React.useCallback((d: DatosCedula, via: Via) => {
     setV((p) => ({ ...p, cedula: d.cedula, nombres: d.nombres || p.nombres, apellidos: d.apellidos || p.apellidos, fechaNacimiento: d.fechaNacimiento ?? p.fechaNacimiento }));
-    setLeidaDeCedula(d.nombres && d.apellidos ? "completa" : "parcial");
+    setLeidaDeCedula(via);
     setEscaneando(false);
     setPaso(1);
   }, []);
@@ -160,7 +160,12 @@ export function FormularioAfiliacion() {
 
         {paso === 1 && (
           <div className="space-y-4">
-            {leidaDeCedula && <p className="flex items-center gap-2 rounded-2xl bg-brand-soft px-4 py-3 text-sm text-brand"><Check className="size-4 shrink-0" /> {leidaDeCedula === "completa" ? "Leímos tu foto. Confirma que todo esté bien." : "Leímos parte de tu foto. Completa lo que falte."}</p>}
+            {leidaDeCedula && (
+              <p className={`flex items-start gap-2 rounded-2xl px-4 py-3 text-sm ${leidaDeCedula === "telefono" ? "bg-amber-500/15 text-amber-800 dark:text-amber-300" : "bg-brand-soft text-brand"}`}>
+                <Check className="mt-0.5 size-4 shrink-0" />
+                {leidaDeCedula === "barras" ? "Leímos el código de barras de tu cédula. Confirma que todo esté bien." : leidaDeCedula === "ia" ? "Leímos tu foto con inteligencia artificial. Revisa cada dato." : "Leímos tu foto en el teléfono y puede tener errores: revisa cada dato y completa lo que falte."}
+              </p>
+            )}
             <Campo etiqueta="Nombres" error={errores.nombres}><input className={entrada} autoComplete="given-name" value={v.nombres} onChange={(e) => set("nombres", e.target.value)} /></Campo>
             <Campo etiqueta="Apellidos" error={errores.apellidos}><input className={entrada} autoComplete="family-name" value={v.apellidos} onChange={(e) => set("apellidos", e.target.value)} /></Campo>
             <Campo etiqueta="Número de cédula" error={errores.cedula}><input className={entrada} inputMode="numeric" value={v.cedula} onChange={(e) => set("cedula", e.target.value.replace(/\D/g, "").slice(0, 10))} /></Campo>

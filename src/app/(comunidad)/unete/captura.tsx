@@ -6,20 +6,21 @@ import { Camera, ImageIcon, Keyboard, Loader2, ShieldCheck, X } from "lucide-rea
 import type { DatosCedula } from "@/lib/comunidad/cedula-ocr";
 
 export type { DatosCedula };
+/** Cómo se leyó: del código de barras (exacto), con IA, o con el OCR del teléfono (el menos fiable). */
+export type Via = "barras" | "ia" | "telefono";
 
-/** Reduce la foto (la cámara entrega 12 MP) a un JPEG ligero: se lee igual y viaja rápido. */
-async function reducir(archivo: File): Promise<string> {
-  const bmp = await createImageBitmap(archivo);
-  const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+/** Reduce la foto (la cámara entrega 12 MP) a un JPEG ligero para el lector de IA: se lee igual y viaja rápido. */
+function reducir(foto: ImageBitmap): string {
+  const k = Math.min(1, 1600 / Math.max(foto.width, foto.height));
   const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * k);
-  c.height = Math.round(bmp.height * k);
-  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  c.width = Math.round(foto.width * k);
+  c.height = Math.round(foto.height * k);
+  c.getContext("2d")!.drawImage(foto, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.85);
 }
 
 /** Foto de la cédula (frente o reverso) leída por IA con visión; no se guarda. Se puede escribir a mano en cualquier momento. */
-export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula) => void; onCerrar: () => void }) {
+export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula, via: Via) => void; onCerrar: () => void }) {
   const camara = React.useRef<HTMLInputElement>(null);
   const galeria = React.useRef<HTMLInputElement>(null);
   const [leyendo, setLeyendo] = React.useState(false);
@@ -34,26 +35,29 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
     setError("");
     setLeyendo(true);
     try {
-      setAvance("Leyendo tu cédula…");
-      const imagen = await reducir(f);
-      setVista(imagen);
+      const foto = await createImageBitmap(f); // a resolución completa: el código de barras es muy fino
 
-      // 1) El lector inteligente del servidor (el más preciso). 2) Si no está disponible o falla, se lee en el propio teléfono.
-      let datos: DatosCedula | null = null;
+      // 1) El código de barras del reverso: datos exactos, sin errores de lectura.
+      setAvance("Buscando el código de barras…");
+      const barras = await (await import("./barras")).leerBarras(foto).catch(() => null);
+      if (barras) return void onLeida(barras, "barras");
+
+      // 2) Lector de IA del servidor (el más preciso con el frente). 3) Si no está disponible, el OCR del teléfono.
+      setAvance("Leyendo tu cédula…");
+      const imagen = reducir(foto);
+      setVista(imagen);
       try {
         const res = await fetch("/api/comunidad/leer-cedula", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imagen }) });
         const b = await res.json().catch(() => ({}));
-        if (res.ok) datos = b as DatosCedula;
-        else if (b.codigo === "ilegible") throw new Error(b.error);
+        if (res.ok) return void onLeida(b as DatosCedula, "ia");
+        if (b.codigo === "ilegible") throw new Error(b.error);
       } catch (err) {
         if (err instanceof Error && err.message.startsWith("No pude leer la cédula en esa foto")) throw err;
       }
-      if (!datos) {
-        setAvance("Preparando el lector (solo la primera vez)…");
-        datos = await (await import("./ocr-local")).leerCedulaLocal(imagen, setAvance);
-      }
-      if (!datos) throw new Error("No pude leer la cédula en esa foto. Acércate, con buena luz y sin reflejos, o escribe tus datos.");
-      onLeida(datos);
+      setAvance("Preparando el lector (solo la primera vez)…");
+      const local = await (await import("./ocr-local")).leerCedulaLocal(foto, setAvance);
+      if (!local) throw new Error("No pude leer tu cédula con seguridad. Prueba con la foto del REVERSO (código de barras), de cerca y con buena luz, o escribe tus datos.");
+      onLeida(local, "telefono");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pude leer la foto.");
       setLeyendo(false);
@@ -78,8 +82,8 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
         ) : (
           <>
             <div>
-              <p className="text-lg font-semibold">Toma una foto del frente</p>
-              <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">Con buena luz, sin reflejos y con toda la cédula dentro de la foto. Rellenamos tus datos solos y tú los confirmas.</p>
+              <p className="text-lg font-semibold">Toma una foto de tu cédula</p>
+              <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">Lo mejor es el <b>reverso</b>: si el código de barras sale nítido, leemos tus datos exactos. También sirve el frente. Con buena luz, sin reflejos y de cerca.</p>
             </div>
             {error && <p role="alert" className="max-w-xs rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
             <input ref={camara} type="file" accept="image/*" capture="environment" onChange={procesar} className="hidden" />
@@ -90,7 +94,7 @@ export function CapturaCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
           </>
         )}
       </div>
-      <p className="flex items-start gap-2 border-t border-border p-4 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand" /> La foto solo se usa para leer tus datos y no se guarda. Se lee con un servicio de inteligencia artificial o, si no está disponible, dentro de tu propio teléfono.</p>
+      <p className="flex items-start gap-2 border-t border-border p-4 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand" /> La foto solo se usa para leer tus datos y no se guarda. El código de barras se lee dentro de tu teléfono; el frente, con inteligencia artificial o, si no está disponible, también en tu teléfono.</p>
     </div>
   );
 }
