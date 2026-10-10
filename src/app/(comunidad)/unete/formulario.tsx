@@ -4,13 +4,12 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, Loader2, ScanLine, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2, ShieldCheck, Users } from "lucide-react";
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 
 import { registroSchema } from "@/lib/comunidad/esquemas";
 import { ELECTORAL_DEPARTMENTS } from "@/lib/electoral-places";
 import { Cedula3D, Escena } from "../escena";
-import { CapturaCedula, type DatosCedula, type Via } from "./captura";
 
 type Campos = {
   nombres: string; apellidos: string; cedula: string; fechaNacimiento: string;
@@ -25,7 +24,7 @@ const DEPARTAMENTOS = Object.values(ELECTORAL_DEPARTMENTS).map((d) => d.display)
 /** Qué campos valida cada paso (el esquema del servidor es el mismo). */
 const PASOS: { titulo: string; sub: string; campos: (keyof Campos)[] }[] = [
   { titulo: "Bienvenido", sub: "Súmate a la comunidad", campos: [] },
-  { titulo: "¿Quién eres?", sub: "Revisa que tus datos estén bien", campos: ["nombres", "apellidos", "cedula", "fechaNacimiento"] },
+  { titulo: "¿Quién eres?", sub: "Escríbelos como aparecen en tu cédula", campos: ["nombres", "apellidos", "cedula", "fechaNacimiento"] },
   { titulo: "¿Cómo te contactamos?", sub: "Solo para tu cuenta y avisos de la comunidad", campos: ["telefono", "email"] },
   { titulo: "¿Dónde vives?", sub: "Te unimos a los grupos de tu municipio y tu barrio", campos: ["departamento", "municipio", "barrio", "direccion"] },
   { titulo: "Crea tu cuenta", sub: "Último paso", campos: ["password", "consentimiento"] },
@@ -48,8 +47,6 @@ export function FormularioAfiliacion() {
   const [paso, setPaso] = React.useState(0);
   const [v, setV] = React.useState<Campos>(VACIO);
   const [errores, setErrores] = React.useState<Record<string, string>>({});
-  const [escaneando, setEscaneando] = React.useState(false);
-  const [leidaDeCedula, setLeidaDeCedula] = React.useState<Via | "">("");
   const [enviando, setEnviando] = React.useState(false);
   const [errorGeneral, setErrorGeneral] = React.useState("");
 
@@ -57,13 +54,6 @@ export function FormularioAfiliacion() {
     setV((p) => ({ ...p, [k]: valor }));
     setErrores((e) => (e[k] ? { ...e, [k]: "" } : e));
   };
-
-  const alLeer = React.useCallback((d: DatosCedula, via: Via) => {
-    setV((p) => ({ ...p, cedula: d.cedula, nombres: d.nombres || p.nombres, apellidos: d.apellidos || p.apellidos, fechaNacimiento: d.fechaNacimiento ?? p.fechaNacimiento }));
-    setLeidaDeCedula(via);
-    setEscaneando(false);
-    setPaso(1);
-  }, []);
 
   /** Valida solo los campos del paso con el mismo esquema que usa el servidor. */
   function validar(campos: (keyof Campos)[]) {
@@ -112,7 +102,6 @@ export function FormularioAfiliacion() {
   return (
     <div className="relative isolate min-h-dvh sm:py-8">
       <Escena />
-      {escaneando && <CapturaCedula onLeida={alLeer} onCerrar={() => setEscaneando(false)} />}
       <div className="relative mx-auto max-w-md [perspective:1400px] sm:pt-2" onPointerMove={inclinar} onPointerLeave={soltar}>
        <motion.div style={{ rotateX: rotX, rotateY: rotY }} className="flex min-h-dvh flex-col sm:min-h-0 sm:overflow-hidden sm:rounded-[2.25rem] sm:border sm:border-white/20 sm:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)] sm:backdrop-blur-sm [transform-style:preserve-3d]">
 
@@ -150,22 +139,15 @@ export function FormularioAfiliacion() {
                 return <li key={i} className="flex gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><I className="size-5" /></span><span className="pt-1.5">{texto as string}</span></li>;
               })}
             </ul>
-            <button type="button" onClick={() => setEscaneando(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0a4f37] to-[#14825c] px-5 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-900/25 active:scale-[0.99]">
-              <ScanLine className="size-5" /> Tomar foto de mi cédula
+            <button type="button" onClick={() => setPaso(1)} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0a4f37] to-[#14825c] px-5 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-900/25 active:scale-[0.99]">
+              Comenzar <ArrowRight className="size-5" />
             </button>
-            <button type="button" onClick={() => setPaso(1)} className="w-full rounded-2xl border border-border px-5 py-3.5 text-base font-semibold">Escribir mis datos</button>
             <p className="text-center text-sm text-muted-foreground">¿Ya eres afiliado? <Link href="/comunidad/ingresar" className="font-semibold text-brand">Inicia sesión</Link></p>
           </div>
         )}
 
         {paso === 1 && (
           <div className="space-y-4">
-            {leidaDeCedula && (
-              <p className={`flex items-start gap-2 rounded-2xl px-4 py-3 text-sm ${leidaDeCedula === "telefono" ? "bg-amber-500/15 text-amber-800 dark:text-amber-300" : "bg-brand-soft text-brand"}`}>
-                <Check className="mt-0.5 size-4 shrink-0" />
-                {leidaDeCedula === "barras" ? "Leímos el código de barras de tu cédula. Confirma que todo esté bien." : leidaDeCedula === "ia" ? "Leímos tu foto con inteligencia artificial. Revisa cada dato." : "Leímos tu foto en el teléfono y puede tener errores: revisa cada dato y completa lo que falte."}
-              </p>
-            )}
             <Campo etiqueta="Nombres" error={errores.nombres}><input className={entrada} autoComplete="given-name" value={v.nombres} onChange={(e) => set("nombres", e.target.value)} /></Campo>
             <Campo etiqueta="Apellidos" error={errores.apellidos}><input className={entrada} autoComplete="family-name" value={v.apellidos} onChange={(e) => set("apellidos", e.target.value)} /></Campo>
             <Campo etiqueta="Número de cédula" error={errores.cedula}><input className={entrada} inputMode="numeric" value={v.cedula} onChange={(e) => set("cedula", e.target.value.replace(/\D/g, "").slice(0, 10))} /></Campo>

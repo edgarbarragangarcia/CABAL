@@ -95,7 +95,7 @@ export function Navbar() {
               "relative hidden flex-1 items-center justify-between rounded-full border px-2 py-1.5 transition-all duration-300 md:flex",
               scrolled
                 ? "hairline-gold border-border/70 bg-surface/75 shadow-elev-2 backdrop-blur-2xl backdrop-saturate-150"
-                : "border-transparent bg-surface/25 backdrop-blur-md",
+                : "border-transparent bg-surface/80 backdrop-blur-xl",
             )}
           >
             <nav

@@ -441,6 +441,8 @@
         var(--background) 55%
       )
       var(--background);
+    /* Sin repetir: si no, el degradado se vuelve a pintar cada 70 % del alto y deja una costura clara al bajar por la página. */
+    background-repeat: no-repeat;
     color: var(--foreground);
   }
 

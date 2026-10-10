@@ -3,24 +3,19 @@
 import * as React from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 
-import { Buildings, Scales, Smiley, UsersThree, type Icon } from "@phosphor-icons/react";
-
 import { Container } from "@/components/ui/container";
-import { IconChip } from "@/components/fx/icon-chip";
 import { Reveal } from "@/components/animations/reveal";
 import { AnimatedCounter } from "@/components/animations/animated-counter";
 
 /**
  * Cifras de impacto de la fundación.
  *
- * `value: null` = dato aún no verificado: la celda muestra un guion y una
- * marca de "pendiente" en vez de un número. Mismo criterio que
- * `config/maria-fernanda-cabal.ts` — aquí no se publican estimaciones ni
- * cifras de relleno. Para activar una, pon el número y su fuente en
- * `note`; el contador y el formato se encargan solos.
+ * `value: null` = dato aún no verificado. Mismo criterio que `config/maria-fernanda-cabal.ts`: aquí no se publican
+ * estimaciones ni cifras de relleno, y tampoco guiones: mientras ninguna cifra esté verificada la franja no se pinta
+ * (cuatro «—» en pantalla parecían una página a medias). Para activar una, pon el número y su fuente en `note`; la
+ * franja aparece sola con las cifras que sí tengan valor.
  */
 type Figure = {
-  icono: Icon;
   value: number | null;
   suffix: string;
   label: string;
@@ -28,26 +23,23 @@ type Figure = {
 };
 
 const FIGURES: Figure[] = [
-  { icono: UsersThree, value: null, suffix: "+", label: "Estudiantes formados", note: "Academia y talleres presenciales" },
-  { icono: Scales, value: null, suffix: "", label: "Proyectos de ley analizados", note: "Observatorio legislativo, 2024–2025" },
-  { icono: Buildings, value: null, suffix: "", label: "Departamentos con cobertura", note: "Programas y aliados en territorio" },
-  { icono: Smiley, value: null, suffix: "%", label: "Satisfacción de egresados", note: "Encuesta de cierre de cohorte" },
+  { value: null, suffix: "+", label: "Estudiantes formados", note: "Academia y talleres presenciales" },
+  { value: null, suffix: "", label: "Proyectos de ley analizados", note: "Observatorio legislativo, 2024–2025" },
+  { value: null, suffix: "", label: "Departamentos con cobertura", note: "Programas y aliados en territorio" },
+  { value: null, suffix: "%", label: "Satisfacción de egresados", note: "Encuesta de cierre de cohorte" },
 ];
 
+type Verificada = Figure & { value: number };
+
 /**
- * Franja de cifras a sangre en oscuro. El corte de luminosidad contra las
- * secciones claras es lo que le da ritmo a la página: sin él, todo se lee
- * como un solo bloque largo.
+ * Franja de cifras a sangre en oscuro. El corte de luminosidad contra las secciones claras es lo que le da ritmo a la
+ * página: sin él, todo se lee como un solo bloque largo.
  */
-export function ImpactBand() {
+function Franja({ cifras }: { cifras: Verificada[] }) {
   const ref = React.useRef<HTMLElement>(null);
   const reduce = useReducedMotion();
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "end start"],
-  });
-  // Paralaje suave del resplandor de fondo, no del contenido: mover el
-  // texto con el scroll cansa la vista y rompe la línea de lectura.
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
+  // Paralaje suave del resplandor de fondo, no del contenido: mover el texto con el scroll cansa la vista.
   const glowY = useTransform(scrollYProgress, [0, 1], ["-18%", "18%"]);
 
   return (
@@ -61,39 +53,31 @@ export function ImpactBand() {
 
       <Container className="relative">
         <Reveal className="max-w-2xl">
-          <span className="eyebrow inline-flex items-center gap-2.5 text-[#e0bd7c]">
+          <span className="eyebrow inline-flex items-center gap-2.5 !text-[#e0bd7c]">
             <span className="h-px w-8 bg-[#e0bd7c]/60" aria-hidden="true" />
             Impacto
           </span>
-          <h2 className="mt-5 text-balance font-display text-4xl font-normal leading-[1.08] text-[#f1efe9] sm:text-5xl">
-            Lo que se mide, se sostiene
-          </h2>
+          <h2 className="mt-5 text-balance font-display text-4xl font-normal leading-[1.08] text-[#f1efe9] sm:text-5xl">Lo que se mide, se sostiene</h2>
         </Reveal>
 
-        <dl className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
-          {FIGURES.map((f, i) => (
-            <Reveal key={f.label} delay={i * 0.08}>
-              <div className="group relative h-full bg-[#0a0c0b]/80 p-7 backdrop-blur-sm transition-colors duration-500 hover:bg-[#0a0c0b]/40">
-                <span aria-hidden className="absolute inset-x-7 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-[#e0bd7c] to-transparent transition-transform duration-700 group-hover:scale-x-100" />
-                <IconChip icono={f.icono} tono="oro" className="mb-6 size-12 border-[#e0bd7c]/25 from-white/10 to-white/[0.02] text-[#e0bd7c] shadow-none" iconClass="size-6" />
-                <dd className="tabular font-display text-5xl font-normal tracking-tight text-[#f1efe9] sm:text-6xl">
-                  {f.value === null ? (
-                    <span className="text-[#f1efe9]/35" aria-label="Dato pendiente">
-                      —
-                    </span>
-                  ) : (
-                    <AnimatedCounter value={f.value} suffix={f.suffix} />
-                  )}
-                </dd>
-                <dt className="mt-4 text-sm font-medium text-[#f1efe9]">{f.label}</dt>
-                <p className="mt-1.5 text-xs leading-relaxed text-[#f1efe9]/55">
-                  {f.value === null ? "Cifra pendiente de verificación" : f.note}
-                </p>
-              </div>
+        <dl className="mt-16 grid sm:grid-cols-2 lg:grid-flow-col lg:auto-cols-fr">
+          {cifras.map((f, i) => (
+            <Reveal key={f.label} delay={i * 0.08} className="border-t border-white/12 py-9 sm:px-8 sm:odd:pl-0 lg:border-l lg:px-8 lg:first:border-l-0 lg:first:pl-0">
+              <dd className="tabular font-display text-6xl font-normal tracking-tight text-[#f1efe9] sm:text-7xl">
+                <AnimatedCounter value={f.value} suffix={f.suffix} />
+              </dd>
+              <dt className="mt-4 text-sm font-medium text-[#f1efe9]">{f.label}</dt>
+              <p className="mt-1.5 text-xs leading-relaxed text-[#f1efe9]/55">{f.note}</p>
             </Reveal>
           ))}
         </dl>
       </Container>
     </section>
   );
+}
+
+export function ImpactBand() {
+  const cifras = FIGURES.filter((f): f is Verificada => f.value !== null);
+  if (cifras.length === 0) return null;
+  return <Franja cifras={cifras} />;
 }
