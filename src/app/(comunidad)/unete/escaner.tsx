@@ -32,7 +32,7 @@ export function EscanerCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
         const nativo = Detector && (await (Detector as unknown as { getSupportedFormats?: () => Promise<string[]> }).getSupportedFormats?.())?.includes("pdf417");
 
         if (nativo && Detector) {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
           if (!video.current) return;
           video.current.srcObject = stream;
           await video.current.play();
@@ -48,13 +48,13 @@ export function EscanerCedula({ onLeida, onCerrar }: { onLeida: (d: DatosCedula)
           };
         } else {
           const { BrowserPDF417Reader } = await import("@zxing/browser");
-          const controles = await new BrowserPDF417Reader().decodeFromVideoDevice(undefined, video.current!, (res) => {
+          const controles = await new BrowserPDF417Reader().decodeFromConstraints({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } }, video.current!, (res) => {
             if (res) alLeer(res.getText());
           });
           parar = () => controles.stop();
         }
       } catch (e) {
-        if (activo) setError(e instanceof Error ? e.message : "No se pudo abrir la cámara.");
+        if (activo) setError(e instanceof DOMException && e.name === "NotAllowedError" ? "No diste permiso a la cámara. Actívalo en los ajustes del navegador para este sitio, o escribe tus datos a mano." : e instanceof Error ? e.message : "No se pudo abrir la cámara.");
       }
     })();
 

@@ -54,7 +54,7 @@ export const securityHeaders = [
   {
     key: "Permissions-Policy",
     value:
-      "camera=(), microphone=(), geolocation=(), interest-cohort=(), browsing-topics=()",
+      "camera=(self), microphone=(), geolocation=(), interest-cohort=(), browsing-topics=()",
   },
   {
     key: "X-DNS-Prefetch-Control",
