@@ -5,9 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Loader2, ScanLine, ShieldCheck, Users } from "lucide-react";
+import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 
 import { registroSchema } from "@/lib/comunidad/esquemas";
 import { ELECTORAL_DEPARTMENTS } from "@/lib/electoral-places";
+import { Cedula3D, Escena } from "../escena";
 import { CapturaCedula, type DatosCedula } from "./captura";
 
 type Campos = {
@@ -29,7 +31,7 @@ const PASOS: { titulo: string; sub: string; campos: (keyof Campos)[] }[] = [
   { titulo: "Crea tu cuenta", sub: "Último paso", campos: ["password", "consentimiento"] },
 ];
 
-const entrada = "w-full rounded-2xl border border-border bg-surface px-4 py-3.5 text-base outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/15";
+const entrada = "w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3.5 text-base shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)] outline-none transition placeholder:text-black/35 focus:border-emerald-600 focus:bg-white focus:shadow-[0_0_0_4px_rgba(16,185,129,0.18),inset_0_2px_6px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:bg-white/10";
 
 function Campo({ etiqueta, error, children }: { etiqueta: string; error?: string; children: React.ReactNode }) {
   return (
@@ -94,34 +96,49 @@ export function FormularioAfiliacion() {
   const siguiente = () => (paso === 4 ? enviar() : validar(PASOS[paso].campos) && setPaso(paso + 1));
   const p = PASOS[paso];
 
-  return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-surface shadow-2xl sm:my-6 sm:min-h-0 sm:overflow-hidden sm:rounded-[2rem] sm:border sm:border-border">
-      {escaneando && <CapturaCedula onLeida={alLeer} onCerrar={() => setEscaneando(false)} />}
+  const quieto = useReducedMotion();
+  const mx = useSpring(useMotionValue(0), { stiffness: 120, damping: 18 });
+  const my = useSpring(useMotionValue(0), { stiffness: 120, damping: 18 });
+  const rotY = useTransform(mx, [-0.5, 0.5], [-5, 5]);
+  const rotX = useTransform(my, [-0.5, 0.5], [4, -4]);
+  const inclinar = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (quieto || e.pointerType !== "mouse") return;
+    const r = e.currentTarget.getBoundingClientRect();
+    mx.set((e.clientX - r.left) / r.width - 0.5);
+    my.set((e.clientY - r.top) / r.height - 0.5);
+  };
+  const soltar = () => { mx.set(0); my.set(0); };
 
-      <header className="relative overflow-hidden bg-gradient-to-br from-[#0a4f37] via-[#0f6b4c] to-[#14825c] px-5 pt-6 pb-8 text-white">
-        <div aria-hidden className="absolute -top-10 -right-10 size-44 rounded-full bg-white/10" />
-        <div aria-hidden className="absolute -bottom-16 left-10 size-40 rounded-full bg-amber-300/15 blur-2xl" />
+  return (
+    <div className="relative isolate min-h-dvh sm:py-8">
+      <Escena />
+      {escaneando && <CapturaCedula onLeida={alLeer} onCerrar={() => setEscaneando(false)} />}
+      <div className="relative mx-auto max-w-md [perspective:1400px] sm:pt-2" onPointerMove={inclinar} onPointerLeave={soltar}>
+       <motion.div style={{ rotateX: rotX, rotateY: rotY }} className="flex min-h-dvh flex-col sm:min-h-0 sm:overflow-hidden sm:rounded-[2.25rem] sm:border sm:border-white/20 sm:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)] sm:backdrop-blur-sm [transform-style:preserve-3d]">
+
+      <header className="relative px-5 pt-6 pb-10 text-white">
         <div className="relative flex items-center justify-between">
           {paso > 0 ? (
-            <button type="button" onClick={() => setPaso(paso - 1)} aria-label="Atrás" className="grid size-9 place-items-center rounded-full bg-white/15"><ArrowLeft className="size-5" /></button>
+            <button type="button" onClick={() => setPaso(paso - 1)} aria-label="Atrás" className="grid size-10 place-items-center rounded-full bg-white/15 ring-1 ring-white/25 backdrop-blur"><ArrowLeft className="size-5" /></button>
           ) : (
-            <Link href="/" aria-label="Volver al sitio" className="grid size-9 place-items-center rounded-full bg-white/15"><ArrowLeft className="size-5" /></Link>
+            <Link href="/" aria-label="Volver al sitio" className="grid size-10 place-items-center rounded-full bg-white/15 ring-1 ring-white/25 backdrop-blur"><ArrowLeft className="size-5" /></Link>
           )}
-          <Image src="/logo-mark.png" alt="Fundación Escuela Libertad" width={36} height={36} className="rounded-full bg-white/90 p-1" />
+          <Image src="/logo-mark.png" alt="Fundación Escuela Libertad" width={40} height={40} className="rounded-full bg-white/90 p-1 shadow-lg shadow-emerald-500/40" />
         </div>
+        {paso === 0 && <Cedula3D className="mt-6" />}
         <div className="relative mt-5">
-          <p className="text-xs font-medium tracking-widest text-white/75 uppercase">{paso === 0 ? "Comunidad Escuela Libertad" : `Paso ${paso} de ${PASOS.length - 1}`}</p>
-          <h1 className="mt-1 font-display text-3xl leading-tight font-semibold">{p.titulo}</h1>
+          <p className="text-xs font-medium tracking-[0.25em] text-emerald-200/90 uppercase">{paso === 0 ? "Comunidad Escuela Libertad" : `Paso ${paso} de ${PASOS.length - 1}`}</p>
+          <h1 className="mt-1 font-display text-4xl leading-tight font-semibold drop-shadow-[0_4px_20px_rgba(16,185,129,0.45)]">{p.titulo}</h1>
           <p className="mt-1 text-sm text-white/80">{p.sub}</p>
           {paso > 0 && (
-            <div className="mt-4 flex gap-1.5" aria-hidden>
-              {PASOS.slice(1).map((_, i) => <span key={i} className={`h-1.5 flex-1 rounded-full ${i < paso ? "bg-amber-300" : "bg-white/25"}`} />)}
+            <div className="mt-5 flex gap-1.5" aria-hidden>
+              {PASOS.slice(1).map((_, i) => <span key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i < paso ? "bg-gradient-to-r from-amber-300 to-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)]" : "bg-white/20"}`} />)}
             </div>
           )}
         </div>
       </header>
 
-      <div className="-mt-4 flex-1 rounded-t-[1.75rem] bg-surface px-5 pt-6 pb-4">
+      <div className="-mt-4 flex-1 rounded-t-[2rem] border-t border-white/40 bg-white/80 px-5 pt-7 pb-4 shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.5)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#0b1511]/85">
         {paso === 0 && (
           <div className="space-y-5">
             <ul className="space-y-3 text-sm">
@@ -187,12 +204,14 @@ export function FormularioAfiliacion() {
       </div>
 
       {paso > 0 && (
-        <div className="sticky bottom-0 border-t border-border bg-surface/95 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur">
+        <div className="sticky bottom-0 border-t border-black/5 bg-white/85 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-2xl dark:border-white/10 dark:bg-[#0b1511]/90">
           <button type="button" onClick={siguiente} disabled={enviando} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0a4f37] to-[#14825c] px-5 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-900/25 active:scale-[0.99] disabled:opacity-60">
             {enviando ? <><Loader2 className="size-5 animate-spin" /> Afiliándote…</> : paso === 4 ? <>Afiliarme <Check className="size-5" /></> : <>Continuar <ArrowRight className="size-5" /></>}
           </button>
         </div>
       )}
+       </motion.div>
+      </div>
     </div>
   );
 }
