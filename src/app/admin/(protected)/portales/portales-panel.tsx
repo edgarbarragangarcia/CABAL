@@ -4,11 +4,11 @@ import * as React from "react";
 import { Check, Copy, ExternalLink, Eye, History, Layers, Loader2, Monitor, Pause, Pencil, Play, Plus, Rocket, Settings2, Smartphone, Trash2, X } from "lucide-react";
 
 import { PortalView } from "@/components/portales/portal-view";
-import { COLORES_SUGERIDOS, PLANTILLAS, SECCIONES, configPorDefecto, plantillaPorId, slugPortal, type ConfigPortal, type PlantillaId } from "@/lib/portales/plantillas";
+import { COLORES_SUGERIDOS, PLANTILLAS, SECCIONES, configDemo, configPorDefecto, plantillaPorId, slugPortal, type ConfigPortal, type PlantillaId } from "@/lib/portales/plantillas";
 import type { EstadoPortal, Portal } from "@/lib/portales/store";
 
 /**
- * Portales: generador (elige una plantilla y personalízala con vista previa en vivo), controlador (lista, estados, versiones y
+ * Portales (producto aparte de la comunidad del partido): generador (elige una plantilla y personalízala con vista previa en vivo), controlador (lista, estados, versiones y
  * registro) y desplegador (deja el portal en línea en /p/<enlace>). Las plantillas son de DEMOSTRACIÓN: contenido de ejemplo.
  */
 
@@ -47,11 +47,23 @@ async function pedir<T>(url: string, metodo: string, cuerpo?: unknown): Promise<
 
 /* ------------------------------------------------------------ vista previa */
 
-/** Un portal escalado a miniatura: solo se ve el principio (el hero) y no se puede pulsar. */
+/** Ancho de escritorio con el que se dibuja el portal antes de reducirlo a miniatura. */
+const ANCHO_MINIATURA = 1280;
+
+/** Un portal reducido al ancho de la tarjeta: solo se ve el principio (encabezado y hero) y no se puede pulsar. */
 function Miniatura({ plantilla, config }: { plantilla: PlantillaId; config: ConfigPortal }) {
+  const caja = React.useRef<HTMLDivElement>(null);
+  const [escala, setEscala] = React.useState(0.3);
+  React.useEffect(() => {
+    const el = caja.current;
+    if (!el) return;
+    const observador = new ResizeObserver(([e]) => setEscala(e.contentRect.width / ANCHO_MINIATURA));
+    observador.observe(el);
+    return () => observador.disconnect();
+  }, []);
   return (
-    <div aria-hidden className="pointer-events-none relative h-44 overflow-hidden rounded-xl border border-border bg-white">
-      <div className="absolute top-0 left-0 w-[1180px] origin-top-left scale-[0.27]"><PortalView plantilla={plantilla} config={config} enlaces={false} idBase="mini" /></div>
+    <div ref={caja} aria-hidden className="pointer-events-none relative aspect-[8/5] overflow-hidden rounded-xl border border-border bg-white">
+      <div className="absolute top-0 left-0 origin-top-left" style={{ width: ANCHO_MINIATURA, transform: `scale(${escala})` }}><PortalView plantilla={plantilla} config={config} enlaces={false} idBase="mini" /></div>
     </div>
   );
 }
@@ -96,7 +108,7 @@ function VistaCompleta({ plantilla, cerrar, usar }: { plantilla: PlantillaId; ce
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5">
           <div className={`mx-auto overflow-hidden rounded-xl bg-white shadow-lg ${dispositivo === "movil" ? "w-[390px] max-w-full" : "w-full"}`}>
-            <PortalView plantilla={plantilla} config={configPorDefecto(plantilla)} enlaces={false} idBase="completa" />
+            <PortalView plantilla={plantilla} config={configDemo(plantilla)} enlaces={false} idBase="completa" />
           </div>
         </div>
       </div>
@@ -147,7 +159,7 @@ function Despliegue({ nombre, slug, estado, portal, error, cerrar }: { nombre: s
 
 /* -------------------------------------------------------------- principal */
 
-export function PortalesTab() {
+export function PortalesPanel() {
   const [sub, setSub] = React.useState<Sub>("plantillas");
   const [datos, setDatos] = React.useState<Datos | null>(null);
   const [borrador, setBorrador] = React.useState<Borrador>(() => nuevoBorrador("salud"));
@@ -317,7 +329,7 @@ export function PortalesTab() {
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
           {PLANTILLAS.map((p) => (
             <article key={p.id} className={`${tarjeta} flex flex-col gap-4 p-4`}>
-              <Miniatura plantilla={p.id} config={configPorDefecto(p.id)} />
+              <Miniatura plantilla={p.id} config={configDemo(p.id)} />
               <div className="flex-1">
                 <div className="flex items-center gap-2"><span className="size-3 rounded-full" style={{ background: p.colorPrimario }} /><h3 className="font-display text-lg font-semibold">{p.nombre}</h3></div>
                 <p className="mt-1 text-sm text-muted-foreground">{p.descripcion}</p>

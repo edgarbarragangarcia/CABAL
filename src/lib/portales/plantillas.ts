@@ -307,6 +307,12 @@ export function configPorDefecto(id: PlantillaId): ConfigPortal {
   };
 }
 
+/**
+ * Configuración con la que se muestran las plantillas de demostración: la de arranque más un correo de ejemplo (el dominio
+ * example.com está reservado para documentación y no llega a nadie), para que la sección de contacto se vea completa.
+ */
+export const configDemo = (id: PlantillaId): ConfigPortal => ({ ...configPorDefecto(id), correo: "hola@example.com" });
+
 /** Colores sugeridos en el generador (sobrios, de contraste suficiente con texto blanco). */
 export const COLORES_SUGERIDOS = ["#0f766e", "#9f1d4f", "#c2410c", "#2f6f4e", "#1d4ed8", "#6d28d9", "#0a4f37", "#334155"];
 

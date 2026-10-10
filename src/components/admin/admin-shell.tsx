@@ -4,7 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, GraduationCap, LayoutDashboard, LogOut, Menu, Newspaper, Settings, Users, X } from "lucide-react";
+import { BarChart3, GraduationCap, LayoutDashboard, LayoutTemplate, LogOut, Menu, Newspaper, Settings, Users, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ const NAV = [
   { href: "/admin/lms", label: "LMS", icon: GraduationCap },
   { href: "/admin/redactor", label: "Redactor", icon: Newspaper },
   { href: "/admin/comunidad", label: "Comunidad", icon: Users },
+  // Aparte de la comunidad del partido: los portales temáticos son otro producto.
+  { href: "/admin/portales", label: "Portales", icon: LayoutTemplate },
   { href: "/admin/configuracion", label: "Configuración", icon: Settings },
 ];
 

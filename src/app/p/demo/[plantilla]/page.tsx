@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PortalView } from "@/components/portales/portal-view";
-import { PLANTILLAS, configPorDefecto, plantillaPorId } from "@/lib/portales/plantillas";
+import { PLANTILLAS, configDemo, plantillaPorId } from "@/lib/portales/plantillas";
 
 /** Las cuatro plantillas se publican como páginas estáticas de demostración: no necesitan base de datos. */
 export const dynamicParams = false;
@@ -20,7 +20,7 @@ export default async function DemoPlantillaPage({ params }: Props) {
   if (!p) notFound();
   return (
     <main className="min-h-dvh bg-white">
-      <PortalView plantilla={p.id} config={configPorDefecto(p.id)} idBase="demo" />
+      <PortalView plantilla={p.id} config={configDemo(p.id)} idBase="demo" />
     </main>
   );
 }
