@@ -1,64 +1,22 @@
 import * as React from "react";
-import { ArrowRight, ArrowUpRight, Check, EnvelopeSimple, MapPin, Plus, Quotes, SealCheck, WhatsappLogo } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRight, ArrowUpRight, Check, EnvelopeSimple, Plus, Quotes, SealCheck, WhatsappLogo } from "@phosphor-icons/react/dist/ssr";
 
-import { PLANTILLAS, plantillaPorId, type ConfigPortal, type Plantilla, type PlantillaId } from "@/lib/portales/plantillas";
+import type { ConfigPortal, PlantillaId } from "@/lib/portales/plantillas";
+import type { AjustesPortal, ArticuloLista } from "@/lib/portales/cms/tipos";
 import { HeroArte } from "./heroes";
 import { Pantalla } from "./pantallas";
-import { Avatar, Ic, Malla, Telefono, iniciales, textoSobre } from "./piezas";
+import { Avatar, Ic, Malla, Telefono, iniciales } from "./piezas";
+import { BOTON, Encabezado, Enlace, MarcoPortal, construirAmbiente, type Amb, type DatosCms } from "./marco";
+import { BandaUnete, EspacioAnuncio, SeccionArticulos } from "./cms";
 
 /**
  * Visor de un portal: dibuja una plantilla con la configuración que se le pase. Sin estado ni hooks: sirve igual en el
  * servidor (página pública /p/<enlace>) y en el cliente (vista previa del generador). Se adapta al ANCHO DE SU CONTENEDOR
  * (container queries), no al de la pantalla: en la vista previa de celular del panel se ve como en un celular.
  *
- * Cada plantilla tiene su propia dirección visual (ver TEMAS): clínica y limpia, editorial y cálida, nocturna y técnica, y
- * hogareña y amable. Las «imágenes» son ilustraciones y maquetas dibujadas por código; no hay fotografías.
+ * Cada plantilla tiene su propia dirección visual (ver TEMAS en marco.tsx): clínica y limpia, editorial y cálida, nocturna y
+ * técnica, y hogareña y amable. Las «imágenes» son ilustraciones y maquetas dibujadas por código; no hay fotografías.
  */
-
-type Tema = { oscuro: boolean; serif: boolean; fondo: string; texto: string; alterno: string; sec: string; ter: string };
-const TEMAS: Record<PlantillaId, Tema> = {
-  salud: { oscuro: false, serif: false, fondo: "#f4fafa", texto: "#0b2323", alterno: "#ffffff", sec: "#38bdf8", ter: "#a7f3d0" },
-  belleza: { oscuro: false, serif: true, fondo: "#fffaf7", texto: "#2b1a22", alterno: "#fff1ec", sec: "#f59e0b", ter: "#fbcfe8" },
-  "motos-autos": { oscuro: true, serif: false, fondo: "#0a0c10", texto: "#eef2f7", alterno: "#0e1117", sec: "#ef4444", ter: "#3b82f6" },
-  "hogar-cuidado": { oscuro: false, serif: true, fondo: "#fbf7f0", texto: "#2a2a24", alterno: "#f6efe3", sec: "#e07a5f", ter: "#f2cc8f" },
-};
-
-type Claves = { suave: string; tarjeta: string; cabecera: string; pildora: string; etiqueta: string; boton2: string; linea: string; anillo: string };
-const CLARO: Claves = {
-  suave: "text-black/60",
-  tarjeta: "border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_22px_44px_-28px_rgba(15,23,42,0.28)]",
-  cabecera: "border-black/5 bg-white/75 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.4)]",
-  pildora: "border-black/[0.07] bg-white/70 text-black/70",
-  etiqueta: "bg-[var(--p)]/10 text-[var(--p)]",
-  boton2: "border border-black/10 bg-white/70 text-[var(--texto)] hover:bg-white",
-  linea: "border-black/10",
-  anillo: "ring-white",
-};
-const OSCURO: Claves = {
-  suave: "text-white/60",
-  tarjeta: "border border-white/[0.08] bg-white/[0.04] shadow-[0_22px_44px_-28px_rgba(0,0,0,0.8)] backdrop-blur",
-  cabecera: "border-white/10 bg-[#0a0c10]/70 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.9)]",
-  pildora: "border-white/10 bg-white/[0.06] text-white/75",
-  etiqueta: "bg-[var(--p)]/15 text-[var(--p)]",
-  boton2: "border border-white/15 bg-white/[0.06] text-white hover:bg-white/10",
-  linea: "border-white/10",
-  anillo: "ring-[#12161d]",
-};
-
-/** Todo lo que comparten las secciones: la plantilla, la configuración, el tema y cómo se arman los enlaces. */
-type Amb = {
-  id: PlantillaId; t: Plantilla; c: ConfigPortal; tema: Tema; k: Claves;
-  /** Clases tipográficas de los titulares (serifa ligera o sans en negrita). */
-  tit: string;
-  demo: boolean; enlaces: boolean; wa: string; hrefCta: string; base: string; ancla: (s: string) => string;
-};
-
-const BOTON = "inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[var(--p)] to-[var(--p2)] px-6 py-3 text-sm font-bold whitespace-nowrap text-[var(--sobre)] shadow-[0_18px_36px_-16px_var(--p)] transition hover:-translate-y-0.5 hover:brightness-110";
-
-/** En la vista previa del panel los enlaces no deben navegar: se dibujan como un `span` con la misma apariencia. */
-function Enlace({ a, href, className, children }: { a: Amb; href: string; className: string; children: React.ReactNode }) {
-  return a.enlaces ? <a href={href} className={className}>{children}</a> : <span className={className}>{children}</span>;
-}
 
 /** Los últimos dos o tres términos del título van en degradado: es la frase que se recuerda. */
 function partirTitulo(s: string): [string, string] {
@@ -88,25 +46,6 @@ function FondoHero({ id }: { id: PlantillaId }) {
 
 /* ---------------------------------------------------------------- secciones */
 
-function Cabecera({ a, secciones }: { a: Amb; secciones: { id: string; texto: string }[] }) {
-  const { c, t, k } = a;
-  return (
-    <header className="sticky top-0 z-30 px-3 pt-3 @2xl:px-6">
-      <div className={`mx-auto flex max-w-6xl items-center gap-3 rounded-full border py-2 pr-2 pl-3 backdrop-blur-xl ${k.cabecera}`}>
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[var(--p)] to-[var(--p2)] text-[var(--sobre)] shadow-[0_10px_20px_-10px_var(--p)]"><Ic id={t.icono} weight="duotone" className="size-6" /></span>
-        <div className="min-w-0 leading-tight">
-          <p className={`truncate text-[1.05rem] font-bold ${a.tema.serif ? "font-display" : ""}`}>{c.nombre}</p>
-          {c.ciudad && <p className={`flex items-center gap-1 text-[0.68rem] ${k.suave}`}><MapPin weight="fill" className="size-3" />{c.ciudad}</p>}
-        </div>
-        <nav className={`mx-auto hidden items-center gap-1 text-sm font-medium @3xl:flex ${k.suave}`}>
-          {secciones.map((s) => <Enlace key={s.id} a={a} href={`#${a.ancla(s.id)}`} className="rounded-full px-3.5 py-1.5 transition hover:bg-[var(--p)]/10 hover:text-[var(--p)]">{s.texto}</Enlace>)}
-        </nav>
-        <Enlace a={a} href={a.hrefCta} className={`${BOTON} ml-auto !px-5 !py-2.5 @3xl:ml-0`}>{c.cta}</Enlace>
-      </div>
-    </header>
-  );
-}
-
 function Hero({ a }: { a: Amb }) {
   const { c, t, id, k } = a;
   const [ini, fin] = partirTitulo(c.titulo);
@@ -124,8 +63,8 @@ function Hero({ a }: { a: Amb }) {
           </h1>
           <p className={`mt-6 max-w-xl text-[1.08rem] leading-relaxed ${k.suave}`}>{c.eslogan}</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Enlace a={a} href={a.hrefCta} className={BOTON}>{c.cta} <ArrowRight weight="bold" className="size-4" /></Enlace>
-            {c.secciones.servicios && <Enlace a={a} href={`#${a.ancla("servicios")}`} className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold backdrop-blur transition ${k.boton2}`}>{t.hero.ctaSecundaria}</Enlace>}
+            <Enlace a={a} href={a.hrefCta} className={BOTON}>{a.textoCta} <ArrowRight weight="bold" className="size-4" /></Enlace>
+            {c.secciones.servicios && <Enlace a={a} href={`${a.inicio}#${a.ancla("servicios")}`} className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold backdrop-blur transition ${k.boton2}`}>{t.hero.ctaSecundaria}</Enlace>}
           </div>
           <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-4">
             {a.demo && (
@@ -142,16 +81,6 @@ function Hero({ a }: { a: Amb }) {
         <HeroArte id={id} base={a.base} />
       </div>
     </section>
-  );
-}
-
-function Encabezado({ a, etiqueta, titulo, texto }: { a: Amb; etiqueta: string; titulo: string; texto?: string }) {
-  return (
-    <div className="max-w-2xl">
-      <span className={`inline-flex items-center rounded-full px-3.5 py-1.5 text-[0.68rem] font-bold tracking-[0.16em] uppercase ${a.k.etiqueta}`}>{etiqueta}</span>
-      <h2 className={`mt-4 text-[clamp(1.9rem,5.2cqi,3rem)] leading-[1.08] text-balance ${a.tit}`}>{titulo}</h2>
-      {texto && <p className={`mt-3 text-[1.02rem] ${a.k.suave}`}>{texto}</p>}
-    </div>
   );
 }
 
@@ -306,68 +235,40 @@ function Contacto({ a }: { a: Amb }) {
   );
 }
 
-function Pie({ a }: { a: Amb }) {
-  const { c, t, tema } = a;
-  return (
-    <footer className="border-t border-white/10 bg-[#0c1017] text-white/70">
-      <div className="mx-auto grid max-w-6xl gap-10 px-5 py-14 @2xl:px-8 @3xl:grid-cols-[1.4fr_1fr_1fr]">
-        <div>
-          <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-2xl bg-gradient-to-br from-[var(--p)] to-[var(--p2)] text-[var(--sobre)]"><Ic id={t.icono} weight="duotone" className="size-6" /></span><p className={`text-lg font-bold text-white ${tema.serif ? "font-display" : ""}`}>{c.nombre}</p></div>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed">{c.eslogan}</p>
-          {t.aviso && <p className="mt-4 max-w-sm text-xs leading-relaxed text-white/45">{t.aviso}</p>}
-        </div>
-        <div><p className="text-xs font-bold tracking-[0.16em] text-white/40 uppercase">Servicios</p><ul className="mt-4 space-y-2.5 text-sm">{t.servicios.items.slice(0, 5).map((s) => <li key={s.titulo}>{s.titulo}</li>)}</ul></div>
-        <div><p className="text-xs font-bold tracking-[0.16em] text-white/40 uppercase">Portal</p><ul className="mt-4 space-y-2.5 text-sm"><li>Cómo funciona</li><li>Preguntas frecuentes</li><li>Contacto</li>{c.ciudad && <li className="flex items-center gap-1.5"><MapPin className="size-3.5" />{c.ciudad}</li>}</ul></div>
-      </div>
-      <div className="border-t border-white/10 px-5 py-5 text-center text-xs text-white/40">{a.demo ? "Plantilla de demostración · contenido de ejemplo" : "Portal generado con el generador de portales"}</div>
-    </footer>
-  );
-}
-
 /* -------------------------------------------------------------------- visor */
 
-export function PortalView({ plantilla: id, config: c, demo = true, enlaces = true, idBase = "portal" }: { plantilla: PlantillaId; config: ConfigPortal; demo?: boolean; enlaces?: boolean; idBase?: string }) {
-  const t = plantillaPorId(id) ?? PLANTILLAS[0];
-  const tema = TEMAS[t.id];
-  const p = c.colorPrimario;
-  const vars = {
-    "--p": p,
-    "--p2": `color-mix(in oklab, ${p} 52%, ${tema.sec})`,
-    "--ps": `color-mix(in oklab, ${p} 9%, white)`,
-    "--pm": `color-mix(in oklab, ${p} 55%, white)`,
-    "--pd": `color-mix(in oklab, ${p} 62%, black)`,
-    "--sobre": textoSobre(p),
-    "--fondo": tema.fondo,
-    "--alt": tema.alterno,
-    "--texto": tema.texto,
-  } as React.CSSProperties;
-  const wa = c.whatsapp ? `https://wa.me/${c.whatsapp}?text=${encodeURIComponent(`Hola, quiero información sobre ${c.nombre}.`)}` : "";
-  const ancla = (s: string) => `${idBase}-${s}`;
-  const a: Amb = {
-    id: t.id, t, c, tema, k: tema.oscuro ? OSCURO : CLARO, demo, enlaces, wa, base: idBase, ancla,
-    tit: tema.serif ? "font-display font-light tracking-[-0.02em]" : "font-sans font-extrabold tracking-[-0.035em]",
-    hrefCta: c.secciones.contacto ? `#${ancla("contacto")}` : wa || "#",
-  };
+export type ContenidoCms = {
+  datos: DatosCms;
+  ajustes: AjustesPortal;
+  /** Los artículos más recientes (el inicio muestra los primeros). */
+  articulos: ArticuloLista[];
+};
+
+export function PortalView({ plantilla, config: c, demo = true, enlaces = true, idBase = "portal", cms }: { plantilla: PlantillaId; config: ConfigPortal; demo?: boolean; enlaces?: boolean; idBase?: string; cms?: ContenidoCms }) {
+  const { a, vars } = construirAmbiente({ plantilla, config: c, demo, enlaces, idBase, cms: cms?.datos, desdeInicio: true });
   const secciones = [
     c.secciones.servicios && { id: "servicios", texto: "Servicios" },
+    cms && cms.articulos.length > 0 && { id: "articulos", texto: "Artículos" },
     c.secciones.pasos && { id: "pasos", texto: "Cómo funciona" },
-    c.secciones.proveedores && { id: "proveedores", texto: "Directorio" },
+    c.secciones.proveedores && !cms && { id: "proveedores", texto: "Directorio" },
     c.secciones.preguntas && { id: "preguntas", texto: "Preguntas" },
   ].filter(Boolean) as { id: string; texto: string }[];
+  // Un portal publicado no muestra personas de ejemplo (proveedores y testimonios de la plantilla): no son reales.
+  const ejemplos = !cms;
 
   return (
-    // `overflow-x-clip` (y no `hidden`): recorta lo que se sale a los lados sin volver este bloque el contenedor de scroll, así el encabezado sí se queda pegado al desplazarse.
-    <div style={vars} className="@container relative isolate w-full overflow-x-clip bg-[var(--fondo)] text-[var(--texto)]">
-      {demo && <div className="bg-[#0c1017] px-4 py-1.5 text-center text-[0.7rem] font-medium tracking-wide text-white/80">Portal de demostración · el contenido es de ejemplo</div>}
-      <Cabecera a={a} secciones={secciones} />
+    <MarcoPortal a={a} vars={vars} secciones={secciones}>
       <Hero a={a} />
+      {cms && <EspacioAnuncio a={a} espacio="cabecera" />}
       {c.secciones.servicios && <Servicios a={a} />}
+      {cms && cms.articulos.length > 0 && <SeccionArticulos a={a} articulos={cms.articulos.slice(0, 3)} />}
       {c.secciones.pasos && <Pasos a={a} />}
-      {c.secciones.proveedores && <Proveedores a={a} />}
-      {c.secciones.testimonios && <Testimonios a={a} />}
+      {c.secciones.proveedores && ejemplos && <Proveedores a={a} />}
+      {c.secciones.testimonios && ejemplos && <Testimonios a={a} />}
       {c.secciones.preguntas && <Preguntas a={a} />}
-      {c.secciones.contacto && <Contacto a={a} />}
-      <Pie a={a} />
-    </div>
+      {cms && <EspacioAnuncio a={a} espacio="pie" />}
+      {cms && <BandaUnete a={a} />}
+      {a.contacto && <Contacto a={a} />}
+    </MarcoPortal>
   );
 }

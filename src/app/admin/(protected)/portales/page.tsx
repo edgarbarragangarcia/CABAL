@@ -2,13 +2,17 @@ import { LayoutTemplate } from "lucide-react";
 
 import { PortalesPanel } from "./portales-panel";
 
-/** Portales temáticos: un producto aparte de la comunidad del partido (tiene su propio menú, su propia tabla y sus propias rutas /p/…). */
+/**
+ * Centro de operaciones de los portales temáticos (salud, belleza, motos y carros, cuidado en el hogar): cada uno es un CMS
+ * independiente y todos comparten la misma base de datos. Es un producto aparte de la comunidad del partido (tiene su propio
+ * menú, sus propias tablas y sus propias rutas /p/…), pero lleva gente a ella con el botón «Súmate».
+ */
 export default function PortalesAdminPage() {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold"><LayoutTemplate className="size-6 text-brand" /> Portales</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Genera, controla y despliega portales temáticos a partir de plantillas: salud, belleza, motos y carros, y cuidado en el hogar.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Desde aquí operas los portales de salud, belleza, motos y carros, y cuidado en el hogar: artículos con IA, publicidad y cuántas personas traen a la comunidad de María Fernanda Cabal.</p>
       </div>
       <PortalesPanel />
     </div>

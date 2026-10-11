@@ -78,7 +78,7 @@ export async function listarPortales(): Promise<Portal[]> {
   return (data ?? []).map(aPortal);
 }
 
-async function obtener(id: string): Promise<Portal> {
+export async function obtener(id: string): Promise<Portal> {
   const { data, error } = await db().from("portales").select("*").eq("id", id).maybeSingle();
   if (error) throw fallo(error);
   if (!data) throw new ErrorPortales("no_encontrado", "No existe ese portal.");

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { crearSchema } from "@/lib/portales/esquemas";
+import { hayCms } from "@/lib/portales/cms/store";
 import { SQL_PORTALES } from "@/lib/portales/sql";
 import { respuestaError } from "@/lib/portales/respuesta";
 import { ErrorPortales, crearPortal, hayTabla, listarPortales } from "@/lib/portales/store";
@@ -10,11 +11,14 @@ export const runtime = "nodejs";
 /** Lista los portales generados. `/api/admin/*` ya exige la sesión del panel (src/proxy.ts). */
 export async function GET() {
   try {
-    if (!(await hayTabla())) {
+    const tabla = await hayTabla();
+    // Las piezas del centro de operaciones (artículos, anuncios...) vienen en el mismo SQL; si falta alguna, se vuelve a ofrecer completo.
+    const cms = tabla && (await hayCms());
+    if (!tabla || !cms) {
       const ref = process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).hostname.split(".")[0] : "";
-      return NextResponse.json({ configurada: true, tabla: false, portales: [], sql: SQL_PORTALES, editorSql: ref ? `https://supabase.com/dashboard/project/${ref}/sql/new` : undefined });
+      return NextResponse.json({ configurada: true, tabla, cms, portales: tabla ? await listarPortales() : [], sql: SQL_PORTALES, editorSql: ref ? `https://supabase.com/dashboard/project/${ref}/sql/new` : undefined });
     }
-    return NextResponse.json({ configurada: true, tabla: true, portales: await listarPortales() });
+    return NextResponse.json({ configurada: true, tabla: true, cms: true, portales: await listarPortales() });
   } catch (e) {
     if (e instanceof ErrorPortales && e.codigo === "sin_db") return NextResponse.json({ configurada: false, tabla: false, portales: [] });
     return respuestaError(e);

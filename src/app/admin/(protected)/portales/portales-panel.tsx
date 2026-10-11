@@ -1,18 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { Check, Copy, ExternalLink, Eye, History, Layers, Loader2, Monitor, Pause, Pencil, Play, Plus, Rocket, Settings2, Smartphone, Trash2, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Eye, FileText, History, Layers, LayoutDashboard, Loader2, Megaphone, Monitor, Pause, Pencil, Play, Plus, Rocket, Settings2, Smartphone, Trash2, UserPlus, X } from "lucide-react";
 
 import { PortalView } from "@/components/portales/portal-view";
 import { COLORES_SUGERIDOS, PLANTILLAS, SECCIONES, configDemo, configPorDefecto, plantillaPorId, slugPortal, type ConfigPortal, type PlantillaId } from "@/lib/portales/plantillas";
+import { resumenVacio, type ResumenPortal } from "@/lib/portales/cms/tipos";
 import type { EstadoPortal, Portal } from "@/lib/portales/store";
+import { PortalCms } from "./cms/portal-cms";
 
 /**
  * Portales (producto aparte de la comunidad del partido): generador (elige una plantilla y personalízala con vista previa en vivo), controlador (lista, estados, versiones y
  * registro) y desplegador (deja el portal en línea en /p/<enlace>). Las plantillas son de DEMOSTRACIÓN: contenido de ejemplo.
  */
 
-type Datos = { configurada: boolean; tabla: boolean; portales: Portal[]; sql?: string; editorSql?: string; error?: string };
+type Datos = { configurada: boolean; tabla: boolean; cms?: boolean; portales: Portal[]; sql?: string; editorSql?: string; error?: string };
 type Borrador = { id: string | null; plantilla: PlantillaId; slug: string; slugManual: boolean; config: ConfigPortal };
 type Sub = "plantillas" | "generador" | "portales";
 
@@ -147,7 +149,7 @@ function Despliegue({ nombre, slug, estado, portal, error, cerrar }: { nombre: s
         {listo && portal && (
           <div className="mt-5 space-y-3">
             <div className="flex items-center gap-2 rounded-xl bg-surface-muted p-3"><code className="min-w-0 flex-1 truncate text-sm">{url}</code><button type="button" onClick={() => { navigator.clipboard?.writeText(url); setCopiado(true); setTimeout(() => setCopiado(false), 1500); }} className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface">{copiado ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}{copiado ? "Copiado" : "Copiar"}</button></div>
-            <p className="text-xs text-muted-foreground">Versión {portal.version} · desplegada ahora. Es un portal de demostración: no aparece en buscadores.</p>
+            <p className="text-xs text-muted-foreground">Versión {portal.version} · desplegada ahora. Los buscadores solo lo mostrarán si lo permites en los ajustes del portal (Centro de operaciones).</p>
             <a href={`/p/${slug}`} target="_blank" rel="noreferrer noopener" className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground hover:brightness-110"><ExternalLink className="size-4" /> Abrir el portal</a>
           </div>
         )}
@@ -160,7 +162,9 @@ function Despliegue({ nombre, slug, estado, portal, error, cerrar }: { nombre: s
 /* -------------------------------------------------------------- principal */
 
 export function PortalesPanel() {
-  const [sub, setSub] = React.useState<Sub>("plantillas");
+  const [sub, setSub] = React.useState<Sub>("portales");
+  const [resumen, setResumen] = React.useState<Record<string, ResumenPortal>>({});
+  const [abierto, setAbierto] = React.useState<string | null>(null);
   const [datos, setDatos] = React.useState<Datos | null>(null);
   const [borrador, setBorrador] = React.useState<Borrador>(() => nuevoBorrador("salud"));
   const [dispositivo, setDispositivo] = React.useState<"escritorio" | "movil">("escritorio");
@@ -180,6 +184,19 @@ export function PortalesPanel() {
       .then((d) => { if (!cancelado) setDatos(d); });
     return () => { cancelado = true; };
   }, []);
+
+  const hayCms = !!datos?.cms;
+  const cargarResumen = React.useCallback(async () => {
+    try { setResumen((await pedir<{ resumen: Record<string, ResumenPortal> }>("/api/admin/portales/resumen", "GET")).resumen); } catch { /* sin cifras, el centro se ve igual */ }
+  }, []);
+  React.useEffect(() => {
+    if (!hayCms) return;
+    let cancelado = false;
+    pedir<{ resumen: Record<string, ResumenPortal> }>("/api/admin/portales/resumen", "GET")
+      .then((r) => { if (!cancelado) setResumen(r.resumen); })
+      .catch(() => undefined);
+    return () => { cancelado = true; };
+  }, [hayCms]);
 
   const cfg = borrador.config;
   const plantilla = plantillaPorId(borrador.plantilla)!;
@@ -239,7 +256,7 @@ export function PortalesPanel() {
 
   async function guardarBorrador() {
     const p = await guardar();
-    if (p) setMensaje({ ok: true, texto: "Borrador guardado. Lo encuentras en «Mis portales»." });
+    if (p) setMensaje({ ok: true, texto: "Borrador guardado. Lo encuentras en el centro de operaciones." });
   }
 
   /** Despliega un portal (guardándolo antes si viene del generador); muestra los pasos mientras se hace de verdad: validar, guardar y publicar. */
@@ -279,10 +296,29 @@ export function PortalesPanel() {
     }
   }
 
+  /** Un portal por temática, con los datos de la plantilla: quedan como borrador hasta que se desplieguen. */
+  async function crearLosCuatro() {
+    setOcupado(true);
+    setMensaje(null);
+    try {
+      const existentes = new Set(portales.map((x) => x.plantilla));
+      for (const pl of PLANTILLAS.filter((x) => !existentes.has(x.id))) {
+        const config = configPorDefecto(pl.id);
+        await pedir("/api/admin/portales", "POST", { nombre: config.nombre, slug: slugPortal(config.nombre), plantilla: pl.id, config });
+      }
+      await cargar();
+      setMensaje({ ok: true, texto: "Listo: los cuatro portales están creados como borrador. Ábrelos para escribir artículos y despliégalos cuando estén listos." });
+    } catch (e) {
+      setMensaje({ ok: false, texto: e instanceof Error ? e.message : "No se pudieron crear los portales." });
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   async function eliminar(p: Portal) {
     if (!window.confirm(`¿Eliminar «${p.nombre}»? Dejará de estar en línea y no se puede deshacer.`)) return;
     setOcupado(true);
-    try { await pedir(`/api/admin/portales/${p.id}`, "DELETE"); await cargar(); if (borrador.id === p.id) setBorrador(nuevoBorrador("salud")); }
+    try { await pedir(`/api/admin/portales/${p.id}`, "DELETE"); setAbierto((a) => (a === p.id ? null : a)); await cargar(); if (borrador.id === p.id) setBorrador(nuevoBorrador("salud")); }
     catch (e) { setMensaje({ ok: false, texto: e instanceof Error ? e.message : "No se pudo eliminar." }); }
     finally { setOcupado(false); }
   }
@@ -290,30 +326,31 @@ export function PortalesPanel() {
   const portales = datos?.portales ?? [];
   const cuenta = (e: EstadoPortal) => portales.filter((p) => p.estado === e).length;
   const subs: { id: Sub; texto: string; icono: typeof Layers; n?: number }[] = [
+    { id: "portales", texto: "Centro de operaciones", icono: LayoutDashboard, n: portales.length },
     { id: "plantillas", texto: "Plantillas", icono: Layers, n: PLANTILLAS.length },
-    { id: "generador", texto: "Generador", icono: Settings2 },
-    { id: "portales", texto: "Mis portales", icono: Rocket, n: portales.length },
+    { id: "generador", texto: "Diseño", icono: Settings2 },
   ];
+  const portalAbierto = abierto ? portales.find((x) => x.id === abierto) ?? null : null;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <div role="tablist" aria-label="Portales" className="inline-flex rounded-full bg-surface p-1 shadow-sm ring-1 ring-border">
           {subs.map((s) => (
-            <button key={s.id} type="button" role="tab" aria-selected={sub === s.id} onClick={() => setSub(s.id)} className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold transition ${sub === s.id ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            <button key={s.id} type="button" role="tab" aria-selected={sub === s.id} onClick={() => { setSub(s.id); if (s.id !== "portales") setAbierto(null); }} className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold transition ${sub === s.id ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`}>
               <s.icono className="size-4" />{s.texto}{s.n !== undefined && <span className={`rounded-full px-1.5 text-[11px] ${sub === s.id ? "bg-white/20" : "bg-surface-muted"}`}>{s.n}</span>}
             </button>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">Genera, controla y despliega portales de salud, belleza, motos y carros, y cuidado en el hogar. Plantillas de demostración con contenido de ejemplo.</p>
+        <p className="text-xs text-muted-foreground">Aquí se operan los portales de salud, belleza, motos y carros, y cuidado en el hogar: cada uno es un CMS propio, con la misma base de datos.</p>
       </div>
 
       {datos && !datos.configurada && <p className="rounded-xl bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300">Falta conectar Supabase: define SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Vercel.</p>}
       {datos?.error && <p className="rounded-xl bg-rose-500/10 p-4 text-sm text-rose-800 dark:text-rose-300">{datos.error}</p>}
-      {datos && datos.configurada && !datos.tabla && !datos.error && (
+      {datos && datos.configurada && (!datos.tabla || !datos.cms) && !datos.error && (
         <section className={`${tarjeta} space-y-3 border-amber-400/50 p-5`}>
-          <h2 className="font-display text-lg font-semibold">Un paso para guardar y desplegar portales</h2>
-          <p className="text-sm text-muted-foreground">Las plantillas y la vista previa ya funcionan. Para guardar portales y desplegarlos hace falta crear la tabla <code className="rounded bg-surface-muted px-1.5 py-0.5">portales</code> en tu base de Supabase (una sola vez): copia este SQL y ejecútalo en el editor SQL.</p>
+          <h2 className="font-display text-lg font-semibold">{datos.tabla ? "Un paso para activar el centro de operaciones" : "Un paso para guardar y desplegar portales"}</h2>
+          <p className="text-sm text-muted-foreground">{datos.tabla ? "Los portales ya se guardan, pero faltan las tablas de artículos, publicidad y métricas." : "Las plantillas y la vista previa ya funcionan, pero para guardar portales y desplegarlos"} hace falta crear las tablas en tu base de Supabase (una sola vez; el SQL se puede repetir sin problema): copia este SQL y ejecútalo en el editor SQL. Necesita que la comunidad (<code className="rounded bg-surface-muted px-1.5 py-0.5">supabase/comunidad.sql</code>) ya esté creada.</p>
           <pre className="max-h-56 overflow-auto rounded-xl bg-[#0f1613] p-4 text-xs leading-relaxed text-emerald-100">{datos.sql}</pre>
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => { navigator.clipboard?.writeText(datos.sql ?? ""); setCopiadoSql(true); setTimeout(() => setCopiadoSql(false), 1600); }} className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground">{copiadoSql ? <Check className="size-4" /> : <Copy className="size-4" />}{copiadoSql ? "Copiado" : "Copiar SQL"}</button>
@@ -408,61 +445,105 @@ export function PortalesPanel() {
         </div>
       )}
 
-      {/* ------------------------------------------------------ controlador */}
-      {sub === "portales" && (
+      {/* ------------------------------------------- centro de operaciones */}
+      {sub === "portales" && (portalAbierto ? (
+        <PortalCms
+          key={portalAbierto.id}
+          portal={portalAbierto}
+          resumen={resumen[portalAbierto.id] ?? resumenVacio}
+          volver={() => { setAbierto(null); void cargarResumen(); }}
+          editarDiseno={() => editar(portalAbierto)}
+          desplegar={() => desplegar(portalAbierto.id, portalAbierto.nombre, portalAbierto.slug, false)}
+          cambio={cargarResumen}
+        />
+      ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[["Portales", portales.length], ["En línea", cuenta("publicado")], ["Borradores", cuenta("borrador")], ["En pausa", cuenta("pausado")]].map(([t, n]) => (
-              <div key={t} className={`${tarjeta} p-4`}><p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{t}</p><p className="mt-1 font-display text-3xl font-semibold tabular-nums">{n}</p></div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            {[
+              ["Portales", portales.length, `${cuenta("publicado")} en línea · ${cuenta("borrador")} en borrador`],
+              ["Artículos publicados", portales.reduce((t, x) => t + (resumen[x.id]?.publicados ?? 0), 0), "Entre todos los portales"],
+              ["Visitas · 30 días", portales.reduce((t, x) => t + (resumen[x.id]?.vistas30d ?? 0), 0), "Inicio, listados y artículos"],
+              ["Clics en «Súmate»", portales.reduce((t, x) => t + (resumen[x.id]?.cta30d ?? 0), 0), "Últimos 30 días"],
+              ["Afiliados traídos", portales.reduce((t, x) => t + (resumen[x.id]?.adeptos ?? 0), 0), `${portales.reduce((t, x) => t + (resumen[x.id]?.adeptos30d ?? 0), 0)} en los últimos 30 días`],
+            ].map(([t, n, d]) => (
+              <div key={String(t)} className={`${tarjeta} p-4`}><p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{t}</p><p className="mt-1 font-display text-3xl font-semibold tabular-nums">{Number(n).toLocaleString("es-CO")}</p><p className="mt-0.5 text-xs text-muted-foreground">{d}</p></div>
             ))}
           </div>
           {portales.length === 0 ? (
             <div className={`${tarjeta} grid place-items-center gap-3 p-14 text-center`}>
               <Rocket className="size-9 text-muted-foreground" />
-              <p className="font-semibold">Todavía no has generado ningún portal</p>
-              <p className="max-w-sm text-sm text-muted-foreground">Elige una plantilla, personalízala y despliégala: quedará en línea en una dirección propia.</p>
-              <button type="button" onClick={() => setSub("plantillas")} className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground">Ver las plantillas</button>
+              <p className="font-semibold">Todavía no hay portales</p>
+              <p className="max-w-lg text-sm text-muted-foreground">Crea los cuatro portales (salud, belleza, motos y carros, y cuidado en el hogar) con los datos de cada plantilla. Quedan como borrador: tú decides cuándo desplegarlos. Cada uno tiene su propio espacio para escribir artículos con IA y vender publicidad.</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button type="button" onClick={crearLosCuatro} disabled={ocupado || !datos?.tabla} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground hover:brightness-110 disabled:opacity-50">{ocupado ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Crear los cuatro portales</button>
+                <button type="button" onClick={() => setSub("plantillas")} className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-border hover:bg-surface-muted">Ver las plantillas</button>
+              </div>
+              {!datos?.tabla && <p className="text-xs text-muted-foreground">Primero hay que crear las tablas (arriba).</p>}
             </div>
           ) : (
-            <ul className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-              {portales.map((p) => {
-                const e = ETIQUETA_ESTADO[p.estado];
-                const pl = plantillaPorId(p.plantilla)!;
-                return (
-                  <li key={p.id} className={`${tarjeta} flex flex-col gap-4 p-5`}>
-                    <div className="flex items-start gap-3">
-                      <span className="mt-1 size-3 shrink-0 rounded-full" style={{ background: p.config.colorPrimario }} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-display text-lg leading-tight font-semibold">{p.nombre}</p>
-                        <p className="text-xs text-muted-foreground">{pl.nombre} · {p.config.ciudad || "sin ciudad"} · actualizado {hace(p.actualizadoEn)}</p>
+            <>
+              <ul className="grid gap-4 xl:grid-cols-2">
+                {portales.map((p) => {
+                  const e = ETIQUETA_ESTADO[p.estado];
+                  const pl = plantillaPorId(p.plantilla)!;
+                  const r = resumen[p.id] ?? resumenVacio;
+                  return (
+                    <li key={p.id} className={`${tarjeta} flex flex-col gap-4 p-5`}>
+                      <div className="flex items-start gap-3">
+                        <span className="mt-1 size-3 shrink-0 rounded-full" style={{ background: p.config.colorPrimario }} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-display text-lg leading-tight font-semibold">{p.nombre}</p>
+                          <p className="text-xs text-muted-foreground">{pl.nombre} · {p.config.ciudad || "sin ciudad"} · actualizado {hace(p.actualizadoEn)}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${e.clase}`}>{e.texto}{p.version > 0 ? ` · v${p.version}` : ""}</span>
                       </div>
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${e.clase}`}>{e.texto}{p.version > 0 ? ` · v${p.version}` : ""}</span>
-                    </div>
-                    <p className="flex items-center gap-2 rounded-xl bg-surface-muted px-3 py-2 text-sm"><code className="min-w-0 flex-1 truncate">/p/{p.slug}</code>{p.estado === "publicado" && <a href={`/p/${p.slug}`} target="_blank" rel="noreferrer noopener" aria-label="Abrir el portal" className="text-brand"><ExternalLink className="size-4" /></a>}</p>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => editar(p)} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted"><Pencil className="size-3.5" /> Editar</button>
-                      <button type="button" onClick={() => desplegar(p.id, p.nombre, p.slug, false)} disabled={ocupado} className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-xs font-semibold text-brand-foreground hover:brightness-110 disabled:opacity-50"><Rocket className="size-3.5" /> {p.version > 0 ? "Volver a desplegar" : "Desplegar"}</button>
-                      {p.estado === "publicado" && <button type="button" onClick={() => accion(p, "pausar")} disabled={ocupado} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted"><Pause className="size-3.5" /> Pausar</button>}
-                      {p.estado === "pausado" && <button type="button" onClick={() => accion(p, "reanudar")} disabled={ocupado} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted"><Play className="size-3.5" /> Reanudar</button>}
-                      <button type="button" onClick={() => accion(p, "duplicar")} disabled={ocupado} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted"><Copy className="size-3.5" /> Duplicar</button>
-                      <button type="button" onClick={() => eliminar(p)} disabled={ocupado} aria-label={`Eliminar ${p.nombre}`} className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-rose-600 ring-1 ring-rose-500/30 hover:bg-rose-500/10"><Trash2 className="size-3.5" /></button>
-                    </div>
-                    <details className="group text-sm">
-                      <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden"><History className="size-3.5" /> Registro de despliegues ({p.eventos.length})</summary>
-                      <ol className="mt-2 space-y-1.5 border-l border-border pl-4">
-                        {[...p.eventos].reverse().slice(0, 8).map((ev, i) => <li key={i} className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{EVENTO[ev.tipo] ?? ev.tipo}{ev.version ? ` · v${ev.version}` : ""}</span> · {hace(ev.en)}</li>)}
-                      </ol>
-                    </details>
-                  </li>
-                );
-              })}
-            </ul>
+                      <p className="flex items-center gap-2 rounded-xl bg-surface-muted px-3 py-2 text-sm"><code className="min-w-0 flex-1 truncate">/p/{p.slug}</code>{p.estado === "publicado" && <a href={`/p/${p.slug}`} target="_blank" rel="noreferrer noopener" aria-label="Abrir el portal" className="text-brand"><ExternalLink className="size-4" /></a>}</p>
+                      {hayCms ? (
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+                          {[
+                            [FileText, "Artículos", r.publicados, `${r.borradores} en borrador`],
+                            [Eye, "Visitas · 30 d", r.vistas30d, `${r.lecturas} lecturas`],
+                            [Megaphone, "Anuncios", r.anunciosActivos, `${r.anuncioClics30d} clics · 30 d`],
+                            [UserPlus, "Afiliados", r.adeptos, `${r.cta30d} clics en «Súmate»`],
+                          ].map(([Icono, t, n, d]) => {
+                            const I = Icono as typeof FileText;
+                            return (
+                              <div key={String(t)}><dt className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><I className="size-3.5" />{String(t)}</dt><dd className="font-display text-2xl font-semibold tabular-nums">{Number(n).toLocaleString("es-CO")}</dd><dd className="text-[11px] text-muted-foreground">{String(d)}</dd></div>
+                            );
+                          })}
+                        </dl>
+                      ) : (
+                        <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">Faltan las tablas del centro de operaciones: ejecuta el SQL (arriba) para ver aquí las cifras y abrir el CMS.</p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setAbierto(p.id)} disabled={!hayCms} className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-1.5 text-xs font-semibold text-brand-foreground hover:brightness-110 disabled:opacity-50"><LayoutDashboard className="size-3.5" /> Abrir el CMS</button>
+                        <button type="button" onClick={() => editar(p)} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted"><Pencil className="size-3.5" /> Diseño</button>
+                        <button type="button" onClick={() => desplegar(p.id, p.nombre, p.slug, false)} disabled={ocupado} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted disabled:opacity-50"><Rocket className="size-3.5" /> {p.version > 0 ? "Volver a desplegar" : "Desplegar"}</button>
+                        {p.estado === "publicado" && <button type="button" onClick={() => accion(p, "pausar")} disabled={ocupado} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted"><Pause className="size-3.5" /> Pausar</button>}
+                        {p.estado === "pausado" && <button type="button" onClick={() => accion(p, "reanudar")} disabled={ocupado} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted"><Play className="size-3.5" /> Reanudar</button>}
+                        <button type="button" onClick={() => accion(p, "duplicar")} disabled={ocupado} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted"><Copy className="size-3.5" /> Duplicar</button>
+                        <button type="button" onClick={() => eliminar(p)} disabled={ocupado} aria-label={`Eliminar ${p.nombre}`} className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-rose-600 ring-1 ring-rose-500/30 hover:bg-rose-500/10"><Trash2 className="size-3.5" /></button>
+                      </div>
+                      <details className="group text-sm">
+                        <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden"><History className="size-3.5" /> Registro de despliegues ({p.eventos.length})</summary>
+                        <ol className="mt-2 space-y-1.5 border-l border-border pl-4">
+                          {[...p.eventos].reverse().slice(0, 8).map((ev, i) => <li key={i} className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{EVENTO[ev.tipo] ?? ev.tipo}{ev.version ? ` · v${ev.version}` : ""}</span> · {hace(ev.en)}</li>)}
+                        </ol>
+                      </details>
+                    </li>
+                  );
+                })}
+              </ul>
+              {PLANTILLAS.some((pl) => !portales.some((x) => x.plantilla === pl.id)) && (
+                <p className="text-sm text-muted-foreground">Faltan portales de {PLANTILLAS.filter((pl) => !portales.some((x) => x.plantilla === pl.id)).map((pl) => pl.nombre.toLowerCase()).join(", ")}. <button type="button" onClick={crearLosCuatro} disabled={ocupado} className="font-semibold text-brand hover:underline disabled:opacity-50">Crear los que faltan</button></p>
+              )}
+            </>
           )}
         </div>
-      )}
+      ))}
 
       {vista && <VistaCompleta plantilla={vista} cerrar={() => setVista(null)} usar={() => usarPlantilla(vista)} />}
-      {desp && <Despliegue nombre={desp.nombre} slug={desp.slug} estado={desp.estado} portal={desp.portal} error={desp.error} cerrar={() => { setDesp(null); if (desp.portal) setSub("portales"); }} />}
+      {desp && <Despliegue nombre={desp.nombre} slug={desp.slug} estado={desp.estado} portal={desp.portal} error={desp.error} cerrar={() => { setDesp(null); if (desp.portal) { setSub("portales"); void cargarResumen(); } }} />}
     </div>
   );
 }
