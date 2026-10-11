@@ -3,6 +3,8 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 
 import { ELECCIONES_DATA, GEOS } from "@/data/elecciones";
+import { guardarEnSegundoPlano, leerGuardado } from "./almacen";
+import { filaDe, type Territorio } from "./almacen-puro";
 import { findEleccion, type CorporacionInfo, type EleccionInfo } from "./catalogo";
 import { alReves, mismaPersona, normalizar as normalizarTexto, type FilaComparacion, type Lado } from "./comparacion";
 import { resultadoCongreso2018 } from "./congreso-2018";
@@ -15,6 +17,9 @@ import type { PuestoDatos } from "./oportunidad";
  * Registraduría, `https://<host>.registraduria.gov.co/json/ACT/<sigla>/<código>.json`.
  * Cada archivo trae todos los partidos y candidatos de ese ámbito, más el
  * ganador en cada territorio del mapa (`mapagan`).
+ *
+ * Cada resultado se busca primero en la copia guardada en Supabase (`almacen.ts`);
+ * si no está, se pide a la fuente y se guarda de paso.
  */
 
 // ------------------------------------------------------------- tipos ---
@@ -109,7 +114,7 @@ export type VistaElectoral = {
 /** [código, nombre, nivel, mesas, posición del padre, DANE?] */
 type Row = [string, string, number, number, number, string?, string?];
 
-type Geografia = {
+export type Geografia = {
   rows: Row[];
   byCode: Map<string, number>;
   children: Map<number, number[]>;
@@ -290,11 +295,14 @@ function normalizar(raw: Raw, partidos: EleccionData["partidos"], geo: Geografia
   };
 }
 
-/** El firewall de la Registraduría corta conexiones si llegan muchas seguidas: reintentar con pausa. */
-async function descargar(url: string): Promise<Raw | null> {
+/**
+ * El firewall de la Registraduría corta conexiones si llegan muchas seguidas: reintentar con pausa. Sin opciones, tres intentos de
+ * 20 s (la consulta de una persona); la sincronización pide menos paciencia para no pasarse del tiempo de la función.
+ */
+async function descargar(url: string, { intentos = 3, timeoutMs = 20_000 }: { intentos?: number; timeoutMs?: number } = {}): Promise<Raw | null> {
   for (let attempt = 1; ; attempt++) {
     try {
-      const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+      const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
       // Ámbitos sin elección para esa corporación (p. ej. JAL donde no hay).
       // Un 403 no cuenta: puede ser el firewall limitando, y esto se cachea para siempre.
       if (res.status === 404) return null;
@@ -304,7 +312,7 @@ async function descargar(url: string): Promise<Raw | null> {
       if (!text.trimStart().startsWith("{")) return null;
       return JSON.parse(text) as Raw;
     } catch (err) {
-      if (attempt >= 3) {
+      if (attempt >= intentos) {
         throw new Error(
           "La Registraduría no respondió (puede estar limitando las consultas). Intenta de nuevo en unos minutos.",
           { cause: err }
@@ -330,6 +338,39 @@ function descargarUnaVez(url: string) {
   return pending;
 }
 
+/**
+ * El resultado de un ámbito pedido a la fuente: el archivo del preconteo de la Registraduría o, en el Congreso 2018, la
+ * consulta a datos.gov.co. `sinCache` evita llenar la caché de datos de Next cuando se sincronizan miles de territorios.
+ */
+export async function resultadoEnVivo(
+  eleccion: EleccionInfo,
+  sigla: string,
+  codigo: string,
+  partidos: EleccionData["partidos"],
+  geo: Geografia,
+  /** Solo en elecciones de datos.gov.co: traer también el ganador de cada territorio hijo. */
+  conMapa = false,
+  sinCache = false
+): Promise<Resultado | null> {
+  if (eleccion.fuente === "socrata") return resultadoCongreso2018(sigla, codigo, geo, conMapa);
+  const url = `https://${eleccion.host}.registraduria.gov.co/json/ACT/${sigla}/${codigo}.json`;
+  const raw = await (sinCache ? descargar(url, { intentos: 2, timeoutMs: 12_000 }) : descargarUnaVez(url));
+  return raw ? normalizar(raw, partidos, geo) : null;
+}
+
+/** El territorio de un código del nomenclátor (una mesa es el código de su puesto más 6 dígitos). */
+export function territorioDe(geo: Geografia, codigo: string): Territorio {
+  const i = geo.byCode.get(codigo);
+  if (i !== undefined) {
+    const [cod, nombre, nivel, , , dane] = geo.rows[i];
+    return { codigo: cod, nombre, nivel, ...(dane ? { dane } : {}) };
+  }
+  const puesto = geo.byCode.get(codigo.slice(0, -6));
+  if (puesto !== undefined && geo.rows[puesto][2] === 6) return { codigo, nombre: `Mesa ${Number(codigo.slice(-6))}`, nivel: 7 };
+  return { codigo };
+}
+
+/** Primero la copia guardada en Supabase; si no está, la fuente, y se guarda de paso para la próxima. */
 async function resultadoDe(
   eleccion: EleccionInfo,
   sigla: string,
@@ -339,11 +380,15 @@ async function resultadoDe(
   /** Solo en elecciones de datos.gov.co: traer también el ganador de cada territorio hijo. */
   conMapa = false
 ): Promise<Resultado | null> {
-  if (eleccion.fuente === "socrata") return resultadoCongreso2018(sigla, codigo, geo, conMapa);
-  const raw = await descargarUnaVez(
-    `https://${eleccion.host}.registraduria.gov.co/json/ACT/${sigla}/${codigo}.json`
-  );
-  return raw ? normalizar(raw, partidos, geo) : null;
+  const guardado = await leerGuardado(eleccion, sigla, codigo, conMapa);
+  if (guardado !== undefined) return guardado;
+  const r = await resultadoEnVivo(eleccion, sigla, codigo, partidos, geo, conMapa);
+  const corporacion = eleccion.corporaciones.find((c) => c.sigla === sigla);
+  // El archivo de la Registraduría siempre trae el mapa de ganadores; el de datos.gov.co, solo si se pidió.
+  // Un territorio que la fuente «no publica» (null) no se guarda de paso: podría ser una página de error disfrazada de respuesta,
+  // y guardarla como definitiva taparía datos reales. Eso solo lo decide la sincronización, que sí puede comprobarlo.
+  if (corporacion && r) guardarEnSegundoPlano(filaDe(eleccion, corporacion, territorioDe(geo, codigo), r, eleccion.fuente !== "socrata" || conMapa));
+  return r;
 }
 
 /** Ganador de un ámbito completo (para las listas de zonas y puestos). */
@@ -372,7 +417,7 @@ function ganadorDe(ambito: AmbitoRef, r: Resultado | null): Ganador | null {
 }
 
 /** Pocas a la vez: son peticiones al mismo servidor. */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   await Promise.all(
@@ -387,6 +432,17 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 }
 
 const MAX_HIJOS_CONSULTADOS = 40;
+
+/** La elección, el cargo, sus partidos y su división territorial: lo que hace falta para recorrer todos los territorios de un cargo. */
+export async function contextoCorporacion(eleccionId: string, sigla: string) {
+  const eleccion = findEleccion(eleccionId);
+  if (!eleccion) throw new Error("Elección no válida.");
+  const corporacion = eleccion.corporaciones.find((c) => c.sigla === sigla);
+  const data = await loadEleccionData(eleccion.id);
+  const corpData = data.corporaciones.find((c) => c.sigla === sigla);
+  if (!corporacion || !corpData) throw new Error("Corporación no disponible para esta elección.");
+  return { eleccion, corporacion, data, geo: await loadGeografia(corpData.geo) };
+}
 
 // -------------------------------------------------------------- vista ---
 

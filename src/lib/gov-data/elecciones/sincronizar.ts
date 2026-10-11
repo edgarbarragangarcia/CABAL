@@ -1,0 +1,212 @@
+import "server-only";
+
+import { coberturaGuardada, codigosGuardados, guardarCatalogo, guardarFilas } from "./almacen";
+import { filaDe, type FilaResultado, type Territorio } from "./almacen-puro";
+import { ELECCIONES } from "./catalogo";
+import { contextoCorporacion, mapLimit, resultadoEnVivo, type Geografia } from "./resultados";
+
+/**
+ * Sincronización: recorre los territorios de cada elección y cargo del catálogo, pide el resultado a la fuente y lo guarda en
+ * Supabase (ver `almacen.ts`). Se hace por lotes que caben en una función de Vercel; quien llama (el panel Análisis > Datos)
+ * repite hasta que `terminado`. Lo ya guardado se salta, así que se puede parar y seguir cuando sea.
+ *
+ * Corre en producción porque ahí la Registraduría sí responde; desde otras redes suele cortar las conexiones.
+ */
+
+export type ParElectoral = { eleccion: string; corporacion: string; eleccionNombre: string; corporacionNombre: string; fecha: string };
+
+/** Todos los cargos del catálogo, en el orden del selector. */
+export const PARES: ParElectoral[] = ELECCIONES.flatMap((e) =>
+  e.corporaciones.map((c) => ({ eleccion: e.id, corporacion: c.sigla, eleccionNombre: e.nombre, corporacionNombre: c.nombre, fecha: e.fecha }))
+);
+
+/** Hasta qué nivel se guarda: 2 = país y departamentos, 3 = más los municipios, 5 = más zonas, localidades y comunas. */
+export const NIVELES_SINCRONIZACION = [2, 3, 5] as const;
+
+/** Con pocas peticiones a la vez y una pausa entre ellas: el firewall de la Registraduría corta a quien pide más de unas 13.000 por hora. */
+const CONCURRENCIA = 2;
+const PAUSA_MS = 350;
+/** Vercel corta la función a los 60 s: se deja margen para terminar las peticiones en curso y subir lo último. */
+const PRESUPUESTO_MS = 38_000;
+const FALLOS_PARA_PARAR = 6;
+const SUBIR_CADA = 20;
+
+const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type TerritorioNivel = Territorio & { nivel: number };
+
+/** Los territorios de la división hasta cierto nivel, de arriba abajo (el país y los departamentos primero). */
+export function territoriosHasta(geo: Geografia, nivelMax: number): TerritorioNivel[] {
+  return geo.rows
+    .filter((r) => r[2] <= nivelMax)
+    .map(([codigo, nombre, nivel, , , dane]): TerritorioNivel => ({ codigo, nombre, nivel, ...(dane ? { dane } : {}) }))
+    .sort((a, b) => a.nivel - b.nivel);
+}
+
+const esperadosEnMemoria = new Map<string, Promise<Record<number, number>>>();
+
+/** Cuántos territorios tiene el cargo en cada nivel. */
+export function esperadosPorNivel(eleccion: string, corporacion: string): Promise<Record<number, number>> {
+  const clave = `${eleccion}|${corporacion}`;
+  let p = esperadosEnMemoria.get(clave);
+  if (!p) {
+    p = contextoCorporacion(eleccion, corporacion).then(({ geo }) => {
+      const cuenta: Record<number, number> = {};
+      for (const r of geo.rows) cuenta[r[2]] = (cuenta[r[2]] ?? 0) + 1;
+      return cuenta;
+    });
+    esperadosEnMemoria.set(clave, p);
+    p.catch(() => esperadosEnMemoria.delete(clave));
+  }
+  return p;
+}
+
+const hasta = (porNivel: Record<number, number>, nivelMax: number) =>
+  Object.entries(porNivel).reduce((s, [n, v]) => s + (Number(n) <= nivelMax ? v : 0), 0);
+
+export type EstadoPar = ParElectoral & {
+  esperados: Record<number, number>;
+  guardados: Record<number, number>;
+  vacios: Record<number, number>;
+  ultima: string | null;
+};
+
+/** Qué hay guardado de cada cargo frente a lo que tendría que haber, nivel por nivel. */
+export async function estadoSincronizacion(): Promise<EstadoPar[]> {
+  const cobertura = await coberturaGuardada();
+  return Promise.all(
+    PARES.map(async (par): Promise<EstadoPar> => {
+      const propias = cobertura.filter((c) => c.eleccion === par.eleccion && c.corporacion === par.corporacion);
+      const guardados: Record<number, number> = {};
+      const vacios: Record<number, number> = {};
+      for (const c of propias) {
+        const n = c.nivel ?? 0;
+        guardados[n] = (guardados[n] ?? 0) + c.guardados;
+        vacios[n] = (vacios[n] ?? 0) + c.vacios;
+      }
+      const ultima = propias.map((c) => c.ultima).filter((u): u is string => !!u).sort().at(-1) ?? null;
+      return { ...par, esperados: await esperadosPorNivel(par.eleccion, par.corporacion), guardados, vacios, ultima };
+    })
+  );
+}
+
+export type LoteSincronizacion = {
+  /** Territorios guardados en este lote con resultado. */
+  guardados: number;
+  /** Territorios guardados como «la fuente no los publica» (p. ej. el cargo de gobernador en un municipio). */
+  vacios: number;
+  errores: number;
+  /** La fuente empezó a cortar las conexiones: conviene esperar unos minutos. */
+  limitada: boolean;
+  /** No se pudo guardar en Supabase (lo que se había pedido en este lote no cuenta como guardado). */
+  errorBase?: string;
+  mensaje?: string;
+  /** Cargo que se estaba guardando al terminar el lote. */
+  actual: string | null;
+  /** Territorios que faltan, de todos los cargos pedidos, y los que hay en total. */
+  pendientes: number;
+  total: number;
+  terminado: boolean;
+};
+
+/**
+ * Un lote de la sincronización: guarda territorios de los cargos pedidos (todos, o uno solo) hasta el `nivelMax`, mientras
+ * alcance el tiempo. Los que ya estaban guardados no se piden otra vez.
+ */
+export async function sincronizarLote(p: { eleccion?: string; corporacion?: string; nivelMax: number }): Promise<LoteSincronizacion> {
+  const limite = Date.now() + PRESUPUESTO_MS;
+  await guardarCatalogo();
+
+  const pares = PARES.filter((x) => (!p.eleccion || x.eleccion === p.eleccion) && (!p.corporacion || x.corporacion === p.corporacion));
+  if (pares.length === 0) throw new Error("Elección o cargo no válido.");
+
+  const cobertura = await coberturaGuardada();
+  const estados = await Promise.all(
+    pares.map(async (par) => {
+      const esperados = hasta(await esperadosPorNivel(par.eleccion, par.corporacion), p.nivelMax);
+      const hechos = cobertura
+        .filter((c) => c.eleccion === par.eleccion && c.corporacion === par.corporacion && c.nivel !== null && c.nivel <= p.nivelMax)
+        .reduce((s, c) => s + c.guardados + c.vacios, 0);
+      return { par, esperados, hechos: Math.min(hechos, esperados) };
+    })
+  );
+  const total = estados.reduce((s, e) => s + e.esperados, 0);
+  const faltabanAlEmpezar = estados.reduce((s, e) => s + (e.esperados - e.hechos), 0);
+
+  let guardados = 0;
+  let vacios = 0;
+  let errores = 0;
+  let seguidos = 0;
+  let limitada = false;
+  let errorBase: string | undefined;
+  let mensaje: string | undefined;
+  let actual: string | null = null;
+
+  for (const e of estados) {
+    if (e.hechos >= e.esperados) continue;
+    if (Date.now() >= limite || limitada) break;
+    const { eleccion, corporacion, data, geo } = await contextoCorporacion(e.par.eleccion, e.par.corporacion);
+    actual = `${e.par.eleccionNombre} · ${e.par.corporacionNombre}`;
+    const yaEstan = await codigosGuardados(e.par.eleccion, e.par.corporacion, p.nivelMax);
+    const faltan = territoriosHasta(geo, p.nivelMax).filter((t) => !yaEstan.has(t.codigo));
+
+    const porSubir: FilaResultado[] = [];
+    /** Territorios que la fuente dice no publicar: se guardan al final, y solo si el cargo tiene resultados reales (ver abajo). */
+    const sinPublicar: FilaResultado[] = [];
+    /** Sube lo acumulado; solo lo que Supabase confirma cuenta como guardado. */
+    const subir = async (filas = porSubir.splice(0)) => {
+      if (filas.length === 0) return;
+      try {
+        await guardarFilas(filas, true);
+        vacios += filas.filter((f) => f.vacio).length;
+        guardados += filas.filter((f) => !f.vacio).length;
+      } catch (err) {
+        errorBase ??= err instanceof Error ? err.message : "No se pudo guardar en Supabase.";
+      }
+    };
+    const conResultadoAntes = cobertura.filter((c) => c.eleccion === e.par.eleccion && c.corporacion === e.par.corporacion).reduce((s, c) => s + c.guardados, 0);
+    const guardadosAntes = guardados;
+    await mapLimit(faltan, CONCURRENCIA, async (t) => {
+      if (Date.now() >= limite || limitada || errorBase) return;
+      try {
+        // Siempre con el mapa de ganadores y sin la caché de Next: lo que se guarda aquí es la copia completa.
+        const r = await resultadoEnVivo(eleccion, corporacion.sigla, t.codigo, data.partidos, geo, true, true);
+        (r ? porSubir : sinPublicar).push(filaDe(eleccion, corporacion, t, r, true));
+        seguidos = 0;
+        if (porSubir.length >= SUBIR_CADA) await subir();
+      } catch (err) {
+        errores++;
+        if (++seguidos >= FALLOS_PARA_PARAR) {
+          limitada = true;
+          mensaje = err instanceof Error ? err.message : "La fuente dejó de responder.";
+        }
+      }
+      await esperar(PAUSA_MS);
+    });
+    await subir();
+    // «La fuente no publica este territorio» solo vale si el cargo sí tiene resultados reales: si ninguna petición devolvió un
+    // archivo (una página de error, una red bloqueada), eso no es «no publicado» y guardarlo taparía datos verdaderos.
+    if (!errorBase && sinPublicar.length > 0) {
+      if (conResultadoAntes + (guardados - guardadosAntes) > 0) await subir(sinPublicar);
+      else {
+        errores += sinPublicar.length;
+        mensaje ??= "La fuente no devolvió ningún resultado de este cargo: no se guardó nada. Vuelve a intentarlo en unos minutos.";
+      }
+    }
+    if (errorBase) break;
+  }
+
+  const pendientes = Math.max(0, faltabanAlEmpezar - guardados - vacios);
+  return {
+    guardados,
+    vacios,
+    errores,
+    limitada,
+    ...(errorBase ? { errorBase } : {}),
+    ...(mensaje ? { mensaje } : {}),
+    actual,
+    pendientes,
+    total,
+    terminado: pendientes === 0 && !limitada && !errorBase,
+  };
+}
