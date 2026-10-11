@@ -87,6 +87,28 @@ export async function createSessionToken(email: string): Promise<string> {
   return `${payloadB64}.${sig}`;
 }
 
+/**
+ * Ficha de un solo propósito y corta vida (p. ej. la carga electoral en segundo plano, que se llama a sí misma): va firmada con
+ * el mismo secreto, pero su contenido no trae `email`, así que `verifySessionToken` la rechaza y NO sirve como sesión del panel.
+ */
+export async function createPurposeToken(purpose: string, ttlSeconds: number): Promise<string> {
+  const payloadB64 = toBase64Url(encoder.encode(JSON.stringify({ p: purpose, exp: Date.now() + ttlSeconds * 1000 })));
+  return `${payloadB64}.${await sign(payloadB64)}`;
+}
+
+/** ¿Es una ficha válida, vigente y creada para este propósito? */
+export async function verifyPurposeToken(purpose: string, token: string | undefined | null): Promise<boolean> {
+  if (!token) return false;
+  const [payloadB64, sig] = token.split(".");
+  if (!payloadB64 || !sig || (await sign(payloadB64)) !== sig) return false;
+  try {
+    const payload = JSON.parse(decoder.decode(fromBase64Url(payloadB64))) as { p?: unknown; exp?: unknown };
+    return payload.p === purpose && typeof payload.exp === "number" && Date.now() <= payload.exp;
+  } catch {
+    return false;
+  }
+}
+
 /** Verifica firma y expiración; devuelve la sesión o `null`. */
 export async function verifySessionToken(
   token: string | undefined | null

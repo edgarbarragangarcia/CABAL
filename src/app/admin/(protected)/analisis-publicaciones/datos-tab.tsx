@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Check, CheckCircle2, Copy, Database, ExternalLink, Loader2, Play, RefreshCw, Square } from "lucide-react";
+import { Check, CheckCircle2, Copy, Database, ExternalLink, Loader2, Play, RefreshCw, Square, TriangleAlert } from "lucide-react";
 
 /**
- * Datos: la copia de los resultados de Votaciones en Supabase. Muestra qué hay guardado de cada elección y cargo, y guarda lo
- * que falta pidiéndolo a la fuente por lotes (cada lote cabe en una función de Vercel; esta pantalla repite hasta terminar).
+ * Datos: la copia de los resultados de Votaciones en Supabase. Muestra qué hay guardado de cada elección y cargo y lo carga
+ * pidiéndolo a la fuente. La carga principal corre en segundo plano en el servidor (por tramos que se llaman unos a otros): se
+ * pulsa una vez y sigue aunque se cierre esta pantalla. Sin la tabla que la anota, o a mano para un solo cargo, esta pantalla
+ * puede hacerla por lotes (cada lote cabe en una función de Vercel; repite hasta terminar mientras siga abierta).
  * Lo que ya está guardado se lee desde Supabase; el resto se pide a la fuente y se guarda de paso.
  */
 
@@ -21,7 +23,28 @@ type Par = {
   vacios: Niveles;
   ultima: string | null;
 };
-type Estado = { configurada: boolean; tabla: boolean; pares: Par[]; sql?: string; editorSql?: string; error?: string };
+/** La carga en segundo plano (ver src/lib/gov-data/elecciones/carga.ts). */
+type VistaCarga = {
+  activa: boolean;
+  enMarcha: boolean;
+  ultimoLoteEn: string | null;
+  nivelMax?: number;
+  eleccion?: string;
+  corporacion?: string;
+  iniciadaEn?: string;
+  terminadaEn?: string;
+  fin?: "listo" | "detenida" | "error";
+  lotes?: number;
+  guardados?: number;
+  vacios?: number;
+  errores?: number;
+  actual?: string | null;
+  mensaje?: string | null;
+  pendientes?: number | null;
+  total?: number | null;
+};
+type EstadoCarga = { disponible: boolean; carga: VistaCarga | null; sql?: string; editorSql?: string; error?: string };
+type Estado = { configurada: boolean; tabla: boolean; pares: Par[]; sql?: string; editorSql?: string; error?: string; carga?: EstadoCarga };
 type Lote = { guardados: number; vacios: number; errores: number; limitada: boolean; errorBase?: string; mensaje?: string; actual: string | null; pendientes: number; total: number; terminado: boolean };
 type Profundidad = 2 | 3 | 5;
 type Seleccion = { eleccion?: string; corporacion?: string };
@@ -61,6 +84,14 @@ function duracion(segundos: number) {
   return `${(segundos / 3600).toFixed(1).replace(".", ",")} h`;
 }
 
+/** Territorios guardados por segundo desde que arrancó la carga en segundo plano (o `null` si aún no hay base para calcularlo). */
+function ritmoDe(c: VistaCarga): number | null {
+  if (!c.iniciadaEn) return null;
+  const segundos = ((c.terminadaEn ? Date.parse(c.terminadaEn) : Date.now()) - Date.parse(c.iniciadaEn)) / 1000;
+  const hechos = (c.guardados ?? 0) + (c.vacios ?? 0);
+  return segundos > 20 && hechos > 0 ? hechos / segundos : null;
+}
+
 function Celda({ hechos, esperados }: { hechos: number; esperados: number }) {
   if (esperados === 0) return <span className="text-muted-foreground/60">—</span>;
   if (hechos >= esperados) return <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-300"><Check className="size-3.5" />{numero(esperados)}</span>;
@@ -70,8 +101,10 @@ function Celda({ hechos, esperados }: { hechos: number; esperados: number }) {
 
 export function DatosTab() {
   const [estado, setEstado] = React.useState<Estado | null>(null);
-  const [profundidad, setProfundidad] = React.useState<Profundidad>(2);
+  const [profundidadElegida, setProfundidad] = React.useState<Profundidad>(3);
   const [corriendo, setCorriendo] = React.useState<string | null>(null);
+  const [iniciando, setIniciando] = React.useState(false);
+  const [copiadoCarga, setCopiadoCarga] = React.useState(false);
   const [lote, setLote] = React.useState<Lote | null>(null);
   const [aviso, setAviso] = React.useState<{ ok: boolean; texto: string } | null>(null);
   const [copiado, setCopiado] = React.useState(false);
@@ -92,6 +125,58 @@ export function DatosTab() {
       .then((d) => { if (!cancelado) setEstado(d); });
     return () => { cancelado = true; };
   }, []);
+
+  // Mientras la carga en segundo plano trabaja, se consulta su avance cada pocos segundos (y la tabla de cobertura cada cuatro veces).
+  const enMarcha = estado?.carga?.carga?.enMarcha === true;
+  // Mientras una carga en segundo plano trabaja, la pantalla muestra la profundidad con la que se lanzó (aunque se haya abierto después).
+  const nivelEnMarcha = estado?.carga?.carga?.nivelMax;
+  const profundidad: Profundidad = enMarcha && PROFUNDIDADES.some((o) => o.nivel === nivelEnMarcha) ? (nivelEnMarcha as Profundidad) : profundidadElegida;
+  React.useEffect(() => {
+    if (!enMarcha) return;
+    let cancelado = false;
+    let veces = 0;
+    const id = setInterval(() => {
+      const completo = ++veces % 4 === 0;
+      pedir<Estado | { carga: EstadoCarga }>(`/api/admin/elecciones/almacen${completo ? "" : "?solo=carga"}`, "GET")
+        .then(async (d) => {
+          if (cancelado) return;
+          if (completo) return setEstado(d as Estado);
+          const carga = (d as { carga: EstadoCarga }).carga;
+          // Si la carga acaba de terminar (o se cortó), se trae también la tabla de cobertura: que no quede con cifras viejas.
+          const todo = carga.carga?.enMarcha === false ? await pedir<Estado>("/api/admin/elecciones/almacen", "GET") : null;
+          if (!cancelado) setEstado((prev) => todo ?? (prev ? { ...prev, carga } : prev));
+        })
+        .catch(() => { /* un fallo suelto no importa: el siguiente intento lo corrige */ });
+    }, 5000);
+    return () => { cancelado = true; clearInterval(id); };
+  }, [enMarcha]);
+
+  /** Lanza la carga en segundo plano: sigue en el servidor aunque se cierre esta pantalla. */
+  async function iniciarSegundoPlano() {
+    setAviso(null);
+    setIniciando(true);
+    try {
+      await pedir("/api/admin/elecciones/almacen", "POST", { accion: "iniciar", nivelMax: profundidad });
+      await recargar();
+    } catch (e) {
+      setAviso({ ok: false, texto: e instanceof Error ? e.message : "No fue posible iniciar la carga." });
+    } finally {
+      setIniciando(false);
+    }
+  }
+
+  async function detenerSegundoPlano() {
+    setAviso(null);
+    setIniciando(true);
+    try {
+      await pedir("/api/admin/elecciones/almacen", "POST", { accion: "detener" });
+      await recargar();
+    } catch (e) {
+      setAviso({ ok: false, texto: e instanceof Error ? e.message : "No fue posible detener la carga." });
+    } finally {
+      setIniciando(false);
+    }
+  }
 
   /** Repite lotes hasta terminar (o hasta que se detenga o la fuente se niegue); lo guardado queda, así que se puede seguir otro día. */
   async function sincronizar(sel: Seleccion = {}) {
@@ -150,8 +235,16 @@ export function DatosTab() {
   const hechos = pares.reduce((s, p) => s + avance(p, profundidad).hechos, 0);
   const faltan = Math.max(0, total - hechos);
   const guardadoTotal = pares.reduce((s, p) => s + suma(p.guardados, 0, 99), 0);
+  /** Cargos que ya se leen de Supabase sin tocar la fuente hasta el municipio (lo que se recorre navegando Votaciones). */
+  const completosHastaMunicipios = pares.filter((p) => { const a = avance(p, 3); return a.esperados > 0 && a.hechos >= a.esperados; }).length;
   const pct = total > 0 ? Math.round((hechos / total) * 100) : 0;
   const eleccionesDistintas = [...new Set(pares.map((p) => p.eleccion))];
+  const cargaDisponible = estado?.carga?.disponible === true;
+  const c = estado?.carga?.carga ?? null;
+  const ocupado = !!corriendo || iniciando || enMarcha;
+  const ritmoCarga = c && enMarcha ? ritmoDe(c) : null;
+  /** La última carga quedó a medias (la cortó un error o la cadena se interrumpió): se retoma con «Continuar». */
+  const aMedias = !!c && !enMarcha && (c.activa || c.fin === "error");
 
   return (
     // `contain: inline-size`: el SQL y la tabla (con su desplazamiento propio) no deben ensanchar la página.
@@ -159,10 +252,11 @@ export function DatosTab() {
       <div className={`${tarjeta} p-5`}>
         <div className="flex flex-wrap items-start gap-4">
           <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand"><Database className="size-6" /></span>
-          <div className="min-w-0 flex-1">
+          {/* En pantallas angostas el texto pasa a su propia fila en vez de quedar en una columna estrecha junto al icono. */}
+          <div className="min-w-[min(100%,16rem)] flex-1">
             <h2 className="font-display text-lg font-semibold">Resultados electorales en Supabase</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Aquí se guarda la copia de lo que ves en Votaciones: totales, partidos, candidatos y el ganador de cada territorio, de todas las elecciones y cargos. Lo guardado se lee desde Supabase (más rápido y sin depender de que la Registraduría responda); lo que falta se pide a la fuente y se guarda de paso.
+              Votaciones lee de Supabase: aquí se guarda la copia de totales, partidos, candidatos y el ganador de cada territorio, de todas las elecciones y cargos. Lo guardado se lee desde Supabase (más rápido y sin depender de que la Registraduría responda); lo que todavía no está se pide a la fuente y se guarda de paso. La carga en segundo plano lo va guardando sola en el servidor, sin que tengas que dejar esta pantalla abierta.
             </p>
           </div>
           <button type="button" onClick={recargar} disabled={!!corriendo} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ring-1 ring-border hover:bg-surface-muted disabled:opacity-50"><RefreshCw className="size-4" /> Actualizar</button>
@@ -193,28 +287,37 @@ export function DatosTab() {
           <section className={`${tarjeta} space-y-4 p-5`}>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
               <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="size-4" /> Conectado: tablas listas</span>
-              <span className="text-muted-foreground">{eleccionesDistintas.length} elecciones · {pares.length} cargos · <b className="text-foreground">{numero(guardadoTotal)}</b> territorios con resultado guardado</span>
+              <span className="text-muted-foreground">{eleccionesDistintas.length} elecciones · {pares.length} cargos · <b className="text-foreground">{numero(guardadoTotal)}</b> territorios con resultado guardado · <b className="text-foreground">{completosHastaMunicipios} de {pares.length}</b> cargos completos hasta municipios</span>
             </div>
 
             <div>
               <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Hasta dónde guardar</p>
-              <div role="radiogroup" aria-label="Profundidad" className="inline-flex flex-wrap gap-1 rounded-full bg-surface-muted p-1 text-sm">
+              <div role="radiogroup" aria-label="Profundidad" className="inline-flex flex-wrap gap-1 rounded-3xl bg-surface-muted p-1 text-sm sm:rounded-full">
                 {PROFUNDIDADES.map((o) => (
-                  <button key={o.nivel} type="button" role="radio" aria-checked={profundidad === o.nivel} disabled={!!corriendo} onClick={() => setProfundidad(o.nivel)} className={`rounded-full px-4 py-1.5 font-semibold transition disabled:opacity-60 ${profundidad === o.nivel ? "bg-brand text-brand-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}>{o.texto}</button>
+                  <button key={o.nivel} type="button" role="radio" aria-checked={profundidad === o.nivel} disabled={ocupado} onClick={() => setProfundidad(o.nivel)} className={`rounded-full px-4 py-1.5 font-semibold transition disabled:opacity-60 ${profundidad === o.nivel ? "bg-brand text-brand-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}>{o.texto}</button>
                 ))}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 {profundidad === 2 && "Lo esencial: lo que se ve al abrir una elección y su mapa por departamentos (cada departamento trae al ganador de sus municipios). Son pocas consultas."}
-                {profundidad === 3 && "Agrega el detalle de cada municipio. Son muchísimas consultas (decenas de miles): tarda horas, ocupa bastante espacio en Supabase y la Registraduría puede limitar el ritmo. Se puede parar y seguir cuando quieras."}
+                {profundidad === 3 && "Agrega el detalle de cada municipio: con esto, navegar Votaciones hasta el municipio ya no consulta a la Registraduría. Son decenas de miles de consultas: tarda horas (el servidor las hace solo), ocupa bastante espacio en Supabase y la Registraduría puede limitar el ritmo. Se puede detener y seguir cuando quieras."}
                 {profundidad === 5 && "Agrega también zonas, localidades de Bogotá y comunas (las JAL se eligen por comuna). Es muy pesado: úsalo solo si de verdad hace falta."}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              {corriendo ? (
+              {enMarcha ? (
+                <button type="button" onClick={detenerSegundoPlano} disabled={iniciando} className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"><Square className="size-4" /> Detener la carga</button>
+              ) : corriendo ? (
                 <button type="button" onClick={() => { parar.current = true; }} className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110"><Square className="size-4" /> Detener</button>
+              ) : cargaDisponible ? (
+                <button type="button" onClick={iniciarSegundoPlano} disabled={faltan === 0 || iniciando} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground hover:brightness-110 disabled:opacity-50">
+                  {iniciando ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />} {faltan === 0 ? "Todo guardado" : `${aMedias ? "Continuar la carga" : "Cargar todo en segundo plano"} (${numero(faltan)})`}
+                </button>
               ) : (
                 <button type="button" onClick={() => sincronizar()} disabled={faltan === 0} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground hover:brightness-110 disabled:opacity-50"><Play className="size-4" /> {faltan === 0 ? "Todo guardado" : `Guardar lo que falta (${numero(faltan)})`}</button>
+              )}
+              {cargaDisponible && !ocupado && faltan > 0 && (
+                <button type="button" onClick={() => sincronizar()} title="Lo hace esta pantalla, lote por lote: hay que dejarla abierta." className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted">Guardar desde esta pantalla</button>
               )}
               <span className="text-sm text-muted-foreground">{numero(hechos)} de {numero(total)} territorios · {pct}%</span>
             </div>
@@ -228,8 +331,48 @@ export function DatosTab() {
                 {ritmo ? <span>· {ritmo.toFixed(1).replace(".", ",")} territorios por segundo{faltan > 0 ? ` · faltan unos ${duracion(faltan / ritmo)}` : ""}</span> : null}
               </p>
             )}
+            {c && enMarcha && (
+              <div role="status" className="space-y-1 rounded-xl bg-sky-500/10 px-4 py-3 text-sm text-sky-900 dark:text-sky-200">
+                <p className="flex flex-wrap items-center gap-2 font-semibold">
+                  <Loader2 className="size-4 animate-spin" />
+                  {c.actual ? `Cargando ${c.actual}…` : "Empezando la carga…"}
+                </p>
+                <p className="text-xs">
+                  En el servidor, sin necesidad de esta pantalla: puedes cerrarla y volver más tarde. Tramo {numero(c.lotes ?? 0)} · {numero((c.guardados ?? 0) + (c.vacios ?? 0))} territorios guardados en esta carga
+                  {ritmoCarga ? ` · ${ritmoCarga.toFixed(1).replace(".", ",")} por segundo${faltan > 0 ? ` · faltan unos ${duracion(faltan / ritmoCarga)}` : ""}` : ""}.
+                </p>
+              </div>
+            )}
+            {aMedias && c && (
+              <div role="status" className="flex flex-wrap items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                <p className="min-w-0 flex-1">{c.fin === "error" && c.mensaje ? c.mensaje : `La carga se interrumpió${c.ultimoLoteEn ? ` (${hace(c.ultimoLoteEn)})` : ""}. Lo guardado queda en Supabase; pulsa «Continuar la carga» para seguir donde iba.`}</p>
+              </div>
+            )}
+            {c && !enMarcha && !aMedias && c.fin && c.mensaje && (
+              <p role="status" className={`rounded-xl px-4 py-3 text-sm ${c.fin === "listo" ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300" : "bg-surface-muted text-muted-foreground"}`}>{c.mensaje}</p>
+            )}
             {aviso && <p role="status" className={`rounded-xl px-4 py-3 text-sm ${aviso.ok ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/10 text-rose-800 dark:text-rose-300"}`}>{aviso.texto}</p>}
           </section>
+
+          {estado.carga && !estado.carga.disponible && (
+            <section className={`${tarjeta} space-y-3 border-amber-400/50 p-5`}>
+              <h3 className="font-display text-lg font-semibold">Un paso más para cargar sin dejar esta pantalla abierta</h3>
+              {estado.carga.error ? (
+                <p className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-800 dark:text-rose-300">{estado.carga.error}</p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">Falta una tabla pequeña donde el servidor anota el avance de la carga (se crea una sola vez). Copia este SQL y ejecútalo en el editor SQL de Supabase. Mientras tanto puedes guardar desde esta pantalla, que debe quedar abierta.</p>
+                  <pre className="max-h-48 overflow-auto rounded-xl bg-[#0f1613] p-4 text-xs leading-relaxed text-emerald-100">{estado.carga.sql}</pre>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="button" onClick={() => { navigator.clipboard?.writeText(estado.carga?.sql ?? ""); setCopiadoCarga(true); setTimeout(() => setCopiadoCarga(false), 1600); }} className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground">{copiadoCarga ? <Check className="size-4" /> : <Copy className="size-4" />}{copiadoCarga ? "Copiado" : "Copiar SQL"}</button>
+                    {estado.carga.editorSql && <a href={estado.carga.editorSql} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline">Abrir el editor SQL de Supabase <ExternalLink className="size-4" /></a>}
+                    <button type="button" onClick={recargar} className="ml-auto rounded-full px-4 py-2 text-sm font-semibold ring-1 ring-border hover:bg-surface-muted">Ya la ejecuté, comprobar</button>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
 
           <section className={`${tarjeta} overflow-hidden`}>
             <div className="overflow-x-auto">
@@ -266,7 +409,7 @@ export function DatosTab() {
                         <td className="px-3 py-2.5 align-middle text-muted-foreground">{hondo > 0 ? numero(hondo) : "—"}</td>
                         <td className="px-3 py-2.5 align-middle text-muted-foreground">{p.ultima ? hace(p.ultima) : "—"}</td>
                         <td className="px-4 py-2.5 text-right align-middle">
-                          <button type="button" disabled={!!corriendo || avance(p, profundidad).hechos >= avance(p, profundidad).esperados} onClick={() => sincronizar({ eleccion: p.eleccion, corporacion: p.corporacion })} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted disabled:opacity-40">
+                          <button type="button" disabled={ocupado || avance(p, profundidad).hechos >= avance(p, profundidad).esperados} onClick={() => sincronizar({ eleccion: p.eleccion, corporacion: p.corporacion })} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted disabled:opacity-40">
                             {aqui ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} Guardar
                           </button>
                         </td>

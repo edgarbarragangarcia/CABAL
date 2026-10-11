@@ -30,6 +30,9 @@ const PAUSA_MS = 350;
 const PRESUPUESTO_MS = 38_000;
 const FALLOS_PARA_PARAR = 6;
 const SUBIR_CADA = 20;
+const INTENTOS_SIN_RESULTADO = 12;
+/** Lo que puede alargarse una petición ya empezada cuando se acaba el tiempo del lote (con la fuente lenta o colgada). */
+const COLA_MS = 12_000;
 
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -113,8 +116,8 @@ export type LoteSincronizacion = {
  * Un lote de la sincronización: guarda territorios de los cargos pedidos (todos, o uno solo) hasta el `nivelMax`, mientras
  * alcance el tiempo. Los que ya estaban guardados no se piden otra vez.
  */
-export async function sincronizarLote(p: { eleccion?: string; corporacion?: string; nivelMax: number }): Promise<LoteSincronizacion> {
-  const limite = Date.now() + PRESUPUESTO_MS;
+export async function sincronizarLote(p: { eleccion?: string; corporacion?: string; nivelMax: number; /** Tiempo para pedir territorios (por defecto, el de una función de Vercel con algo de margen). */ presupuestoMs?: number }): Promise<LoteSincronizacion> {
+  const limite = Date.now() + (p.presupuestoMs ?? PRESUPUESTO_MS);
   await guardarCatalogo();
 
   const pares = PARES.filter((x) => (!p.eleccion || x.eleccion === p.eleccion) && (!p.corporacion || x.corporacion === p.corporacion));
@@ -140,6 +143,7 @@ export async function sincronizarLote(p: { eleccion?: string; corporacion?: stri
   let limitada = false;
   let errorBase: string | undefined;
   let mensaje: string | undefined;
+  let ultimoError: string | undefined;
   let actual: string | null = null;
 
   for (const e of estados) {
@@ -166,16 +170,23 @@ export async function sincronizarLote(p: { eleccion?: string; corporacion?: stri
     };
     const conResultadoAntes = cobertura.filter((c) => c.eleccion === e.par.eleccion && c.corporacion === e.par.corporacion).reduce((s, c) => s + c.guardados, 0);
     const guardadosAntes = guardados;
+    /** Territorios donde el cargo se elige (o más arriba no: allí es normal que no haya nada) y la fuente no devolvió resultado. */
+    let sinResultadoDondeDebia = 0;
     await mapLimit(faltan, CONCURRENCIA, async (t) => {
       if (Date.now() >= limite || limitada || errorBase) return;
+      // Una docena de intentos donde tendría que haber resultados y ni uno solo: la fuente no está sirviendo este cargo (o está
+      // bloqueada). Se deja para otro rato en vez de gastar todo el tiempo del lote, y los demás cargos siguen.
+      if (sinResultadoDondeDebia >= INTENTOS_SIN_RESULTADO && conResultadoAntes + (guardados - guardadosAntes) + porSubir.length === 0) return;
       try {
         // Siempre con el mapa de ganadores y sin la caché de Next: lo que se guarda aquí es la copia completa.
-        const r = await resultadoEnVivo(eleccion, corporacion.sigla, t.codigo, data.partidos, geo, true, true);
+        const r = await resultadoEnVivo(eleccion, corporacion.sigla, t.codigo, data.partidos, geo, true, true, limite + COLA_MS);
+        if (!r && t.nivel >= corporacion.nivelEleccion) sinResultadoDondeDebia++;
         (r ? porSubir : sinPublicar).push(filaDe(eleccion, corporacion, t, r, true));
         seguidos = 0;
         if (porSubir.length >= SUBIR_CADA) await subir();
       } catch (err) {
         errores++;
+        ultimoError = err instanceof Error ? err.message : "La fuente dejó de responder.";
         if (++seguidos >= FALLOS_PARA_PARAR) {
           limitada = true;
           mensaje = err instanceof Error ? err.message : "La fuente dejó de responder.";
@@ -197,6 +208,8 @@ export async function sincronizarLote(p: { eleccion?: string; corporacion?: stri
   }
 
   const pendientes = Math.max(0, faltabanAlEmpezar - guardados - vacios);
+  // Si no se guardó nada y hubo errores, que se vea por qué (lo último que dijo la fuente).
+  if (!mensaje && errores > 0 && guardados + vacios === 0) mensaje = ultimoError;
   return {
     guardados,
     vacios,

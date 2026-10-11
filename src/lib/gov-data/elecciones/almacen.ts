@@ -90,12 +90,45 @@ export async function leerGuardado(eleccion: EleccionInfo, corporacion: string, 
   }
 }
 
+/**
+ * Lo guardado de varios territorios de una vez (una sola consulta): código → resultado, o `null` si se guardó que la fuente no lo
+ * publica. Los que no están guardados (o no se pudo consultar) simplemente no aparecen en el resultado.
+ */
+export async function leerGuardados(eleccion: EleccionInfo, corporacion: string, ambitos: string[], conMapa: boolean): Promise<Map<string, Resultado | null>> {
+  const guardados = new Map<string, Resultado | null>();
+  const c = clienteOpcional();
+  if (!c || ambitos.length === 0) return guardados;
+  try {
+    const { data, error } = await c
+      .from(TABLA)
+      .select("ambito, vacio, con_mapa, datos, mesas_total, mesas_informadas, actualizado_en")
+      .eq("eleccion", eleccion.id)
+      .eq("corporacion", corporacion)
+      .in("ambito", ambitos)
+      .abortSignal(AbortSignal.timeout(10_000));
+    if (error) {
+      registrarFallo(error);
+      return guardados;
+    }
+    for (const f of (data ?? []) as Fila[]) {
+      if (!sigueVigente(eleccion, { mesas_total: f.mesas_total, mesas_informadas: f.mesas_informadas, actualizado_en: f.actualizado_en })) continue;
+      if (f.vacio) guardados.set(f.ambito, null);
+      else if (f.datos && !(conMapa && !f.con_mapa)) guardados.set(f.ambito, f.datos as Resultado);
+    }
+  } catch (e) {
+    registrarFallo({ message: e instanceof Error ? e.message : String(e) });
+  }
+  return guardados;
+}
+
 // ---------------------------------------------------------- escritura ---
 
 /** Sube las filas, en lotes. Con `reemplazar` pisa lo que hubiera; si no, deja intacto lo que ya está guardado. Lanza si Supabase falla. */
 export async function guardarFilas(filas: FilaResultado[], reemplazar: boolean): Promise<void> {
   const c = getSupabaseServerClient();
   if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
+  // Que el catálogo (los nombres de cada elección y cargo, que usan las vistas) nunca quede vacío cuando ya hay resultados.
+  void asegurarCatalogo();
   const ahora = new Date().toISOString();
   for (const lote of enLotes(filas)) {
     const { error } = await c.from(TABLA).upsert(
@@ -163,6 +196,101 @@ export async function guardarCatalogo(): Promise<void> {
     }))
   );
   const { error } = await c.from(CATALOGO).upsert(filas, { onConflict: "eleccion,corporacion" });
+  if (error) throw errorDeTablas(error);
+}
+
+let catalogoAsegurado = false;
+
+/**
+ * Deja el catálogo escrito (una vez por instancia): no depende de que alguien haya lanzado una sincronización. Nunca lanza: es un
+ * complemento de lo que se guarda, no puede estorbarlo.
+ */
+export async function asegurarCatalogo(): Promise<void> {
+  if (catalogoAsegurado) return;
+  try {
+    await guardarCatalogo();
+    catalogoAsegurado = true;
+  } catch {
+    /* sin tablas o sin conexión: ya lo dirán las demás consultas */
+  }
+}
+
+// ------------------------------------------------ carga en segundo plano ---
+
+const CARGA = "carga_electoral";
+const ID_CARGA = "principal";
+
+/** Lo que se va anotando de la carga en segundo plano (columna `estado` de `carga_electoral`). */
+export type DetalleCarga = {
+  nivelMax?: number;
+  /** Solo un cargo: si faltan, se cargan todos. */
+  eleccion?: string;
+  corporacion?: string;
+  iniciadaEn?: string;
+  terminadaEn?: string;
+  /** Cómo terminó: listo, detenida a pedido, o por un problema (ver `mensaje`). */
+  fin?: "listo" | "detenida" | "error";
+  lotes?: number;
+  guardados?: number;
+  vacios?: number;
+  errores?: number;
+  /** Tramos seguidos en los que la fuente cortó las conexiones. */
+  limitadasSeguidas?: number;
+  /** Tramos seguidos sin guardar nada. */
+  estancados?: number;
+  actual?: string | null;
+  mensaje?: string | null;
+  pendientes?: number | null;
+  total?: number | null;
+};
+
+export type FilaCarga = { activa: boolean; cadena: string | null; ultimoLoteEn: string | null; estado: DetalleCarga };
+
+/** La fila de la carga en segundo plano. `tabla: false` = falta crear la tabla (ejecutar de nuevo supabase/elecciones.sql); `carga: null` = nunca se ha lanzado. */
+export async function leerCarga(): Promise<{ tabla: boolean; carga: FilaCarga | null }> {
+  const c = getSupabaseServerClient();
+  if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
+  const { data, error } = await c.from(CARGA).select("activa, cadena, ultimo_lote_en, estado").eq("id", ID_CARGA).maybeSingle();
+  if (error) {
+    if (faltaTabla(error)) return { tabla: false, carga: null };
+    throw new Error(error.message);
+  }
+  if (!data) return { tabla: true, carga: null };
+  const f = data as Fila;
+  return { tabla: true, carga: { activa: !!f.activa, cadena: f.cadena ?? null, ultimoLoteEn: f.ultimo_lote_en ?? null, estado: (f.estado ?? {}) as DetalleCarga } };
+}
+
+/** Empieza una carga nueva: reemplaza la fila (y con ella cualquier carga anterior, que al no ser ya la vigente se corta sola). */
+export async function abrirCarga(cadena: string, estado: DetalleCarga): Promise<void> {
+  const c = getSupabaseServerClient();
+  if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
+  const ahora = new Date().toISOString();
+  const { error } = await c.from(CARGA).upsert({ id: ID_CARGA, activa: true, cadena, ultimo_lote_en: ahora, estado, actualizado_en: ahora }, { onConflict: "id" });
+  if (error) throw errorDeTablas(error);
+}
+
+/**
+ * Anota el avance de la carga `cadena` (y que sigue viva). No toca `activa`: solo se enciende al abrirla y se apaga al cerrarla o
+ * detenerla, así un tramo que termina justo cuando alguien pulsa «Detener» no puede volver a encenderla. Devuelve `false` si esa
+ * carga ya no es la vigente.
+ */
+export async function anotarCarga(cadena: string, estado: DetalleCarga): Promise<boolean> {
+  const c = getSupabaseServerClient();
+  if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
+  const ahora = new Date().toISOString();
+  const { data, error } = await c.from(CARGA).update({ ultimo_lote_en: ahora, estado, actualizado_en: ahora }).eq("id", ID_CARGA).eq("cadena", cadena).select("id");
+  if (error) throw errorDeTablas(error);
+  return (data ?? []).length > 0;
+}
+
+/** Cierra la carga `cadena` (o la vigente, si no se dice cuál): ya no sigue. */
+export async function cerrarCarga(estado: DetalleCarga, cadena?: string): Promise<void> {
+  const c = getSupabaseServerClient();
+  if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
+  const ahora = new Date().toISOString();
+  let consulta = c.from(CARGA).update({ activa: false, estado, actualizado_en: ahora }).eq("id", ID_CARGA);
+  if (cadena) consulta = consulta.eq("cadena", cadena);
+  const { error } = await consulta;
   if (error) throw errorDeTablas(error);
 }
 

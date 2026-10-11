@@ -6,6 +6,7 @@ import {
   Building2,
   ChevronDown,
   ChevronRight,
+  Database,
   Landmark,
   Loader2,
   MapPin,
@@ -44,7 +45,7 @@ import { CabalMap, type MapArea } from "./cabal-map";
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
 /** Súbela cuando la API de resultados agregue o cambie campos. */
-const DATOS_VERSION = "3";
+const DATOS_VERSION = "4";
 
 
 // ---------------------------------------------------------------- mapa ---
@@ -739,6 +740,15 @@ export function ExploradorElectoral() {
             <p className="mt-1 text-xs text-white/80">
               {vista?.fuente ?? "Preconteo oficial de la Registraduría Nacional del Estado Civil"}
               {r?.corte ? ` · corte ${r.corte}` : ""}
+              {vista?.origen && (
+                <span
+                  title={vista.origen === "supabase" ? "Todo lo que ves se leyó de la copia guardada en Supabase: no se consultó la fuente." : "Una parte de esta vista no estaba guardada en Supabase: se pidió a la fuente y se guarda para la próxima vez."}
+                  className={`ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 align-middle text-[10px] font-semibold ${vista.origen === "supabase" ? "bg-white/20 text-white" : "bg-amber-300/35 text-amber-50"}`}
+                >
+                  <Database className="size-3" aria-hidden="true" />
+                  {vista.origen === "supabase" ? "Guardado en Supabase" : "En vivo · se guarda de paso"}
+                </span>
+              )}
             </p>
 
             <FiltroEleccion eleccionId={eleccionId} sigla={sigla} onChange={cambiarCargo} />

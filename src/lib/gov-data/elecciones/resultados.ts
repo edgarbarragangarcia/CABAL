@@ -3,7 +3,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 
 import { ELECCIONES_DATA, GEOS } from "@/data/elecciones";
-import { guardarEnSegundoPlano, leerGuardado } from "./almacen";
+import { guardarEnSegundoPlano, leerGuardado, leerGuardados } from "./almacen";
 import { filaDe, type Territorio } from "./almacen-puro";
 import { findEleccion, type CorporacionInfo, type EleccionInfo } from "./catalogo";
 import { alReves, mismaPersona, normalizar as normalizarTexto, type FilaComparacion, type Lado } from "./comparacion";
@@ -107,6 +107,8 @@ export type VistaElectoral = {
   /** null: la Registraduría no publica este ámbito para la corporación. */
   resultado: Resultado | null;
   fuente: string;
+  /** De dónde salió `resultado`: la copia guardada en Supabase, o la fuente en vivo (y entonces se guarda de paso para la próxima). */
+  origen: "supabase" | "vivo";
 };
 
 // -------------------------------------------------------- geografía ---
@@ -299,10 +301,11 @@ function normalizar(raw: Raw, partidos: EleccionData["partidos"], geo: Geografia
  * El firewall de la Registraduría corta conexiones si llegan muchas seguidas: reintentar con pausa. Sin opciones, tres intentos de
  * 20 s (la consulta de una persona); la sincronización pide menos paciencia para no pasarse del tiempo de la función.
  */
-async function descargar(url: string, { intentos = 3, timeoutMs = 20_000 }: { intentos?: number; timeoutMs?: number } = {}): Promise<Raw | null> {
+async function descargar(url: string, { intentos = 3, timeoutMs = 20_000, hasta }: { intentos?: number; timeoutMs?: number; /** Instante (ms) pasado el cual no se espera más ni se reintenta: la función de Vercel tiene tope. */ hasta?: number } = {}): Promise<Raw | null> {
   for (let attempt = 1; ; attempt++) {
     try {
-      const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+      const espera = hasta ? Math.min(timeoutMs, Math.max(1_500, hasta - Date.now())) : timeoutMs;
+      const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(espera) });
       // Ámbitos sin elección para esa corporación (p. ej. JAL donde no hay).
       // Un 403 no cuenta: puede ser el firewall limitando, y esto se cachea para siempre.
       if (res.status === 404) return null;
@@ -312,7 +315,7 @@ async function descargar(url: string, { intentos = 3, timeoutMs = 20_000 }: { in
       if (!text.trimStart().startsWith("{")) return null;
       return JSON.parse(text) as Raw;
     } catch (err) {
-      if (attempt >= intentos) {
+      if (attempt >= intentos || (hasta !== undefined && Date.now() >= hasta)) {
         throw new Error(
           "La Registraduría no respondió (puede estar limitando las consultas). Intenta de nuevo en unos minutos.",
           { cause: err }
@@ -350,11 +353,13 @@ export async function resultadoEnVivo(
   geo: Geografia,
   /** Solo en elecciones de datos.gov.co: traer también el ganador de cada territorio hijo. */
   conMapa = false,
-  sinCache = false
+  sinCache = false,
+  /** Solo con `sinCache` (la sincronización): instante pasado el cual la descarga no espera ni reintenta. */
+  hasta?: number
 ): Promise<Resultado | null> {
   if (eleccion.fuente === "socrata") return resultadoCongreso2018(sigla, codigo, geo, conMapa);
   const url = `https://${eleccion.host}.registraduria.gov.co/json/ACT/${sigla}/${codigo}.json`;
-  const raw = await (sinCache ? descargar(url, { intentos: 2, timeoutMs: 12_000 }) : descargarUnaVez(url));
+  const raw = await (sinCache ? descargar(url, { intentos: 2, timeoutMs: 12_000, hasta }) : descargarUnaVez(url));
   return raw ? normalizar(raw, partidos, geo) : null;
 }
 
@@ -370,18 +375,15 @@ export function territorioDe(geo: Geografia, codigo: string): Territorio {
   return { codigo };
 }
 
-/** Primero la copia guardada en Supabase; si no está, la fuente, y se guarda de paso para la próxima. */
-async function resultadoDe(
+/** Pide un territorio a la fuente y lo guarda en Supabase de paso, para que la próxima vez no haga falta. */
+async function pedirYGuardar(
   eleccion: EleccionInfo,
   sigla: string,
   codigo: string,
   partidos: EleccionData["partidos"],
   geo: Geografia,
-  /** Solo en elecciones de datos.gov.co: traer también el ganador de cada territorio hijo. */
-  conMapa = false
+  conMapa: boolean
 ): Promise<Resultado | null> {
-  const guardado = await leerGuardado(eleccion, sigla, codigo, conMapa);
-  if (guardado !== undefined) return guardado;
   const r = await resultadoEnVivo(eleccion, sigla, codigo, partidos, geo, conMapa);
   const corporacion = eleccion.corporaciones.find((c) => c.sigla === sigla);
   // El archivo de la Registraduría siempre trae el mapa de ganadores; el de datos.gov.co, solo si se pidió.
@@ -389,6 +391,48 @@ async function resultadoDe(
   // y guardarla como definitiva taparía datos reales. Eso solo lo decide la sincronización, que sí puede comprobarlo.
   if (corporacion && r) guardarEnSegundoPlano(filaDe(eleccion, corporacion, territorioDe(geo, codigo), r, eleccion.fuente !== "socrata" || conMapa));
   return r;
+}
+
+/** Primero la copia guardada en Supabase; si no está, la fuente, y se guarda de paso para la próxima. Dice también de dónde salió. */
+async function resultadoDeConOrigen(
+  eleccion: EleccionInfo,
+  sigla: string,
+  codigo: string,
+  partidos: EleccionData["partidos"],
+  geo: Geografia,
+  /** Solo en elecciones de datos.gov.co: traer también el ganador de cada territorio hijo. */
+  conMapa = false,
+  /** Lo ya leído de Supabase en bloque (`leerGuardadosEnTandas`): quien no está ahí no está guardado, y no se vuelve a consultar uno por uno. */
+  previos?: Map<string, Resultado | null>
+): Promise<{ resultado: Resultado | null; origen: "supabase" | "vivo" }> {
+  const guardado = previos ? (previos.has(codigo) ? previos.get(codigo) : undefined) : await leerGuardado(eleccion, sigla, codigo, conMapa);
+  if (guardado !== undefined) return { resultado: guardado, origen: "supabase" };
+  try {
+    return { resultado: await pedirYGuardar(eleccion, sigla, codigo, partidos, geo, conMapa), origen: "vivo" };
+  } catch (err) {
+    // Que se entienda por qué no hay nada: no está en Supabase y la fuente no contestó.
+    throw new Error(`Este resultado todavía no está guardado en Supabase y no se pudo pedir a la fuente. ${err instanceof Error ? err.message : ""}`.trim(), { cause: err });
+  }
+}
+
+async function resultadoDe(
+  eleccion: EleccionInfo,
+  sigla: string,
+  codigo: string,
+  partidos: EleccionData["partidos"],
+  geo: Geografia,
+  conMapa = false,
+  previos?: Map<string, Resultado | null>
+): Promise<Resultado | null> {
+  return (await resultadoDeConOrigen(eleccion, sigla, codigo, partidos, geo, conMapa, previos)).resultado;
+}
+
+/** Lo guardado de muchos territorios en pocas consultas (de cien en cien), para no hacer una a Supabase por cada uno. */
+async function leerGuardadosEnTandas(eleccion: EleccionInfo, sigla: string, codigos: string[], conMapa: boolean): Promise<Map<string, Resultado | null>> {
+  const tandas: string[][] = [];
+  for (let i = 0; i < codigos.length; i += 100) tandas.push(codigos.slice(i, i + 100));
+  const partes = await Promise.all(tandas.map((t) => leerGuardados(eleccion, sigla, t, conMapa)));
+  return new Map(partes.flatMap((m) => [...m]));
 }
 
 /** Ganador de un ámbito completo (para las listas de zonas y puestos). */
@@ -432,6 +476,14 @@ export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) =>
 }
 
 const MAX_HIJOS_CONSULTADOS = 40;
+/** Cuánto esperar, como máximo, a la fuente por los ganadores de los hijos que no están guardados. */
+const TOPE_HIJOS_MS = 12_000;
+
+/** El resultado de `p` o `null` si tarda más de `ms` (la petición sigue por su cuenta y, si termina, se guarda de paso). */
+function conTope<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  p.catch(() => {});
+  return Promise.race([p, new Promise<null>((resolver) => setTimeout(() => resolver(null), Math.max(0, ms)))]);
+}
 
 /** La elección, el cargo, sus partidos y su división territorial: lo que hace falta para recorrer todos los territorios de un cargo. */
 export async function contextoCorporacion(eleccionId: string, sigla: string) {
@@ -505,22 +557,35 @@ async function contexto(params: ParamsAmbito) {
 
 export async function getVistaElectoral(params: ParamsAmbito): Promise<VistaElectoral> {
   const { eleccion, corporacion, data, geo, codigo, ambito, ruta, hijos } = await contexto(params);
-  const resultado = await resultadoDe(eleccion, corporacion.sigla, codigo, data.partidos, geo, true);
+  const { resultado, origen } = await resultadoDeConOrigen(eleccion, corporacion.sigla, codigo, data.partidos, geo, true);
 
   // Del país y los departamentos, `mapagan` ya trae el ganador de cada hijo.
   // Más abajo se consulta cada hijo, si no son demasiados.
   const mapa = resultado?.circunscripciones[0]?.mapa ?? [];
   const cubiertos = hijos.length > 0 && hijos.every((h) => mapa.some((m) => m.codigo === h.codigo));
   let ganadoresHijos: Ganador[] | null = null;
+  let origenVista = origen;
   if (!cubiertos && hijos.length > 0 && hijos.length <= MAX_HIJOS_CONSULTADOS && ambito.nivel >= 3) {
-    const lista = await mapLimit(hijos, 4, async (h) => {
-      try {
-        return ganadorDe(h, await resultadoDe(eleccion, corporacion.sigla, h.codigo, data.partidos, geo));
-      } catch {
-        return null;
-      }
-    });
-    ganadoresHijos = lista.filter((g): g is Ganador => g !== null);
+    // Los hijos que ya están en Supabase se leen en una sola consulta; solo los que faltan se piden a la fuente (con tope de
+    // tiempo: que ella esté lenta o bloqueada no puede tumbar una vista cuyo resultado principal ya se tiene).
+    const guardados = await leerGuardados(eleccion, corporacion.sigla, hijos.map((h) => h.codigo), false);
+    const faltan = hijos.filter((h) => !guardados.has(h.codigo));
+    const vivos = new Map<string, Resultado | null>();
+    if (faltan.length > 0) {
+      origenVista = "vivo";
+      const limite = Date.now() + TOPE_HIJOS_MS;
+      await mapLimit(faltan, 4, async (h) => {
+        if (Date.now() >= limite) return;
+        try {
+          vivos.set(h.codigo, await conTope(pedirYGuardar(eleccion, corporacion.sigla, h.codigo, data.partidos, geo, false), limite - Date.now()));
+        } catch {
+          /* sin este hijo: la lista sale sin su ganador */
+        }
+      });
+    }
+    ganadoresHijos = hijos
+      .map((h) => ganadorDe(h, guardados.has(h.codigo) ? (guardados.get(h.codigo) ?? null) : (vivos.get(h.codigo) ?? null)))
+      .filter((g): g is Ganador => g !== null);
   }
 
   return {
@@ -531,6 +596,7 @@ export async function getVistaElectoral(params: ParamsAmbito): Promise<VistaElec
     hijos,
     ganadoresHijos,
     resultado,
+    origen: origenVista,
     fuente:
       eleccion.fuente === "socrata"
         ? "Resultados oficiales de la Registraduría publicados en datos.gov.co, mesa a mesa (no incluyen el departamento del Cesar ni el censo)"
@@ -584,11 +650,12 @@ export async function getVotosCandidato(
 
   const propio = delCandidato(await resultadoDe(eleccion, corporacion.sigla, codigo, data.partidos, geo));
   const limite = Date.now() + PRESUPUESTO_MS;
+  const previos = await leerGuardadosEnTandas(eleccion, corporacion.sigla, hijos.map((h) => h.codigo), false);
   const votosHijos = await mapLimit(hijos, 6, async (h): Promise<VotosHijo> => {
     const base = { codigo: h.codigo, nombre: h.nombre, nivel: h.nivel, ...(h.dane ? { dane: h.dane } : {}) };
     if (Date.now() > limite) return { ...base, votos: null, pct: "" };
     try {
-      return { ...base, ...delCandidato(await resultadoDe(eleccion, corporacion.sigla, h.codigo, data.partidos, geo)) };
+      return { ...base, ...delCandidato(await resultadoDe(eleccion, corporacion.sigla, h.codigo, data.partidos, geo, false, previos)) };
     } catch {
       return { ...base, votos: null, pct: "" };
     }
@@ -746,12 +813,16 @@ export async function getComparacion(params: {
 
   const limite = Date.now() + PRESUPUESTO_MS;
   const nombres: { a?: string; b?: string; pa?: string; pb?: string } = {};
+  const [previosA, previosB] = await Promise.all([
+    leerGuardadosEnTandas(ca.eleccion, ca.corporacion.sigla, pares.map((x) => x.ha.codigo), false),
+    leerGuardadosEnTandas(cb.eleccion, cb.corporacion.sigla, pares.map((x) => x.hb.codigo), false),
+  ]);
   const filas = await mapLimit(pares, 6, async ({ ha, hb }): Promise<FilaComparacion | null> => {
     if (Date.now() > limite) return null;
     try {
       const [ra, rb] = await Promise.all([
-        resultadoDe(ca.eleccion, ca.corporacion.sigla, ha.codigo, ca.data.partidos, ca.geo),
-        resultadoDe(cb.eleccion, cb.corporacion.sigla, hb.codigo, cb.data.partidos, cb.geo),
+        resultadoDe(ca.eleccion, ca.corporacion.sigla, ha.codigo, ca.data.partidos, ca.geo, false, previosA),
+        resultadoDe(cb.eleccion, cb.corporacion.sigla, hb.codigo, cb.data.partidos, cb.geo, false, previosB),
       ]);
       if (!ra || !rb) return null;
       const [la, lb] = [ladoDe(ra, params.persona), ladoDe(rb, params.persona)];

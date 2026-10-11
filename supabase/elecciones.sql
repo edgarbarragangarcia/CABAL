@@ -3,7 +3,7 @@
 -- se puede repetir sin problema). Se accede solo desde el servidor con la service role key: RLS queda ACTIVADO y sin
 -- políticas, y las vistas usan security_invoker, así la llave pública (anon) no puede leer ni escribir nada.
 
--- Catálogo: qué elecciones y cargos hay (lo llena la propia sincronización).
+-- Catálogo: qué elecciones y cargos hay (lo escribe la propia aplicación al comprobar el estado o al guardar resultados).
 create table if not exists catalogo_electoral (
   eleccion text not null,                  -- presidencia-2022-2v, congreso-2026, territoriales-2023...
   corporacion text not null,               -- PR presidencia, SE senado, CA cámara, GO gobernación, AL alcaldía, AS asamblea, CO concejo, JA JAL, CN/PH/EP/CC consultas, CT CITREP
@@ -114,6 +114,23 @@ language sql stable security invoker set search_path = public as $$
   from resultados_electorales r
   group by r.eleccion, r.corporacion, r.nivel
 $$;
+
+-- [carga:inicio]
+-- Carga en segundo plano: una sola fila con el estado de la carga que el servidor va haciendo por tramos (así no hace falta dejar
+-- abierta la pantalla Análisis > Datos). «cadena» identifica la carga en curso: solo ella puede seguir; iniciar otra o detenerla
+-- la corta. Sin esta tabla todo lo demás funciona: la carga se hace desde la pantalla.
+create table if not exists carga_electoral (
+  id text primary key default 'principal',
+  activa boolean not null default false,
+  cadena text,
+  ultimo_lote_en timestamptz,
+  estado jsonb not null default '{}'::jsonb,
+  actualizado_en timestamptz not null default now()
+);
+
+alter table carga_electoral enable row level security;
+revoke all on carga_electoral from anon, authenticated;
+-- [carga:fin]
 
 -- Nada de esto es público: solo el servidor (service role) lo toca.
 revoke all on catalogo_electoral, resultados_electorales from anon, authenticated;
