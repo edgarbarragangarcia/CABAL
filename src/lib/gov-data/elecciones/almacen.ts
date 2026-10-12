@@ -334,13 +334,65 @@ export async function cerrarCarga(estado: DetalleCarga, cadena?: string): Promis
 
 export type CoberturaNivel = { eleccion: string; corporacion: string; nivel: number | null; guardados: number; vacios: number; ultima: string | null };
 
-/** Cuántos territorios hay guardados por elección, cargo y nivel. */
-export async function coberturaGuardada(): Promise<CoberturaNivel[]> {
+/** Cuenta filas sin traerlas ni recorrer la tabla: cada conteo se resuelve con el índice del cargo. Lanza si Supabase falla. */
+async function contar(eleccion: string, corporacion: string, filtro: { nivel?: number; nivelMax?: number; vacio?: boolean }): Promise<number> {
   const c = getSupabaseServerClient();
   if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
-  const { data, error } = await c.rpc("cobertura_electoral");
+  let q = c.from(TABLA).select("ambito", { count: "exact", head: true }).eq("eleccion", eleccion).eq("corporacion", corporacion);
+  if (filtro.nivel !== undefined) q = q.eq("nivel", filtro.nivel);
+  if (filtro.nivelMax !== undefined) q = q.lte("nivel", filtro.nivelMax);
+  if (filtro.vacio !== undefined) q = q.eq("vacio", filtro.vacio);
+  const { count, error } = await q;
   if (error) throw errorDeTablas(error);
-  return ((data ?? []) as Fila[]).map((f) => ({ eleccion: f.eleccion, corporacion: f.corporacion, nivel: f.nivel ?? null, guardados: Number(f.guardados) || 0, vacios: Number(f.vacios) || 0, ultima: f.ultima ?? null }));
+  return count ?? 0;
+}
+
+/** Territorios ya guardados de un cargo hasta cierto nivel (con resultado o marcados como no publicados). */
+export const guardadosHasta = (eleccion: string, corporacion: string, nivelMax: number) => contar(eleccion, corporacion, { nivelMax });
+
+/** Territorios de un cargo guardados con resultado real. */
+export const conResultado = (eleccion: string, corporacion: string) => contar(eleccion, corporacion, { vacio: false });
+
+const NIVELES = [1, 2, 3, 4, 5, 6, 7];
+let coberturaEnMemoria: { en: number; datos: Promise<CoberturaNivel[]> } | null = null;
+
+/**
+ * Cuántos territorios hay guardados por elección, cargo y nivel. Se arma con conteos pequeños, uno por cargo y nivel, que usan el
+ * índice: agrupar la tabla entera de una vez (como hacía la función SQL `cobertura_electoral`) supera el límite de tiempo de
+ * Supabase cuando ya hay cientos de miles de resultados, y eso detenía la carga. Veinte segundos en memoria.
+ */
+export function coberturaGuardada(): Promise<CoberturaNivel[]> {
+  if (coberturaEnMemoria && Date.now() - coberturaEnMemoria.en < 20_000) return coberturaEnMemoria.datos;
+  const pares = ELECCIONES.flatMap((e) => e.corporaciones.map((k) => ({ eleccion: e.id, corporacion: k.sigla })));
+  const tareas = pares.flatMap((par) => NIVELES.map((nivel) => ({ ...par, nivel })));
+  const datos = (async () => {
+    const salida: CoberturaNivel[] = [];
+    let i = 0;
+    const obrero = async () => {
+      while (i < tareas.length) {
+        const t = tareas[i++];
+        const total = await contar(t.eleccion, t.corporacion, { nivel: t.nivel });
+        if (total === 0) continue;
+        const vacios = await contar(t.eleccion, t.corporacion, { nivel: t.nivel, vacio: true });
+        salida.push({ ...t, guardados: total - vacios, vacios, ultima: null });
+      }
+    };
+    await Promise.all(Array.from({ length: 8 }, obrero));
+    // La fecha de la última actualización de cada cargo, anotada en una de sus filas.
+    await Promise.all(
+      pares.map(async (par) => {
+        const propias = salida.filter((s) => s.eleccion === par.eleccion && s.corporacion === par.corporacion);
+        if (propias.length === 0) return;
+        const c = getSupabaseServerClient()!;
+        const { data } = await c.from(TABLA).select("actualizado_en").eq("eleccion", par.eleccion).eq("corporacion", par.corporacion).order("actualizado_en", { ascending: false }).limit(1);
+        propias[0].ultima = ((data ?? []) as Fila[])[0]?.actualizado_en ?? null;
+      })
+    );
+    return salida;
+  })();
+  coberturaEnMemoria = { en: Date.now(), datos };
+  datos.catch(() => (coberturaEnMemoria = null));
+  return datos;
 }
 
 /**
@@ -378,7 +430,7 @@ export async function codigosGuardados(eleccion: string, corporacion: string, ni
 
 export type EstadoAlmacen = { configurada: boolean; tabla: boolean; error?: string };
 
-/** ¿Está Supabase conectado y tiene las tablas, el catálogo y la función de cobertura? Se prueba cada pieza: un SQL a medias no cuenta. */
+/** ¿Está Supabase conectado y tiene las tablas y el catálogo? Se prueba cada pieza: un SQL a medias no cuenta. */
 export async function estadoAlmacen(): Promise<EstadoAlmacen> {
   const c = getSupabaseServerClient();
   if (!c) return { configurada: false, tabla: false };
@@ -387,7 +439,5 @@ export async function estadoAlmacen(): Promise<EstadoAlmacen> {
     const { error } = await c.from(tabla).select("eleccion").limit(1);
     if (error) return faltaTabla(error) ? { configurada: true, tabla: false } : { configurada: true, tabla: false, error: error.message };
   }
-  const { error } = await c.rpc("cobertura_electoral");
-  if (error) return faltaTabla(error) ? { configurada: true, tabla: false } : { configurada: true, tabla: false, error: error.message };
   return { configurada: true, tabla: true };
 }

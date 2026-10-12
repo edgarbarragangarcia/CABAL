@@ -1,6 +1,6 @@
 import "server-only";
 
-import { coberturaGuardada, codigosGuardados, guardarCatalogo, guardarFilas } from "./almacen";
+import { coberturaGuardada, codigosGuardados, conResultado, guardadosHasta, guardarCatalogo, guardarFilas } from "./almacen";
 import { filaDe, type FilaResultado, type Territorio } from "./almacen-puro";
 import { ELECCIONES } from "./catalogo";
 import { contextoCorporacion, mapLimit, resultadoEnVivo, type Geografia } from "./resultados";
@@ -132,13 +132,12 @@ export async function sincronizarLote(p: { eleccion?: string; corporacion?: stri
   const pares = PARES.filter((x) => (!p.eleccion || x.eleccion === p.eleccion) && (!p.corporacion || x.corporacion === p.corporacion));
   if (pares.length === 0) throw new Error("Elección o cargo no válido.");
 
-  const cobertura = await coberturaGuardada();
+  // Un conteo pequeño por cargo (lo resuelve el índice), no el resumen de toda la tabla: con cientos de miles de resultados
+  // guardados ese resumen superaba el límite de tiempo de Supabase y cada tramo moría antes de pedir nada.
   const estados = await Promise.all(
     pares.map(async (par) => {
       const esperados = hasta(await esperadosPorNivel(par.eleccion, par.corporacion), p.nivelMax);
-      const hechos = cobertura
-        .filter((c) => c.eleccion === par.eleccion && c.corporacion === par.corporacion && c.nivel !== null && c.nivel <= p.nivelMax)
-        .reduce((s, c) => s + c.guardados + c.vacios, 0);
+      const hechos = await guardadosHasta(par.eleccion, par.corporacion, p.nivelMax);
       return { par, esperados, hechos: Math.min(hechos, esperados) };
     })
   );
@@ -177,7 +176,7 @@ export async function sincronizarLote(p: { eleccion?: string; corporacion?: stri
         errorBase ??= err instanceof Error ? err.message : "No se pudo guardar en Supabase.";
       }
     };
-    const conResultadoAntes = cobertura.filter((c) => c.eleccion === e.par.eleccion && c.corporacion === e.par.corporacion).reduce((s, c) => s + c.guardados, 0);
+    const conResultadoAntes = await conResultado(e.par.eleccion, e.par.corporacion);
     const guardadosAntes = guardados;
     /** Territorios donde el cargo se elige (o más arriba no: allí es normal que no haya nada) y la fuente no devolvió resultado. */
     let sinResultadoDondeDebia = 0;
