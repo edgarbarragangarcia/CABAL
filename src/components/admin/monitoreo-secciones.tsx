@@ -1,11 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { AtSign, ExternalLink, Newspaper, PlayCircle, RefreshCw, Search, Share2, Users } from "lucide-react";
+import { AtSign, Database, ExternalLink, Newspaper, RefreshCw, Search, Share2, Users } from "lucide-react";
 
 import { BannerEnVivo, MonitoreoWidget, RedesWidget, useMonitoreo, useRedes } from "@/components/admin/monitoreo-panel";
 import { usePeticion } from "@/app/admin/(protected)/analisis-publicaciones/peticion";
-import { Kpis } from "@/components/admin/estilo-cabal";
 import type { DatosPersonaje, NoticiaMarcada, RespuestaPersonajes } from "@/lib/monitoreo/personajes";
 
 type Seccion = "prensa" | "redes" | "politicos";
@@ -95,7 +94,7 @@ function Tarjeta({ p }: { p: DatosPersonaje }) {
               <p className="py-3 text-xs text-muted-foreground">Sin videos en los últimos 30 días{p.videos.ultimo ? ` (el último fue ${hace(p.videos.ultimo)})` : ""}.</p>
             ) : (
               <ul className="divide-y divide-border">
-                {p.videos.items.map((v) => (
+                {[...p.videos.items.filter((v) => v.nombra), ...p.videos.items.filter((v) => !v.nombra)].slice(0, 6).map((v) => (
                   <li key={v.id} className="py-2 text-xs">
                     <a href={v.enlace} target="_blank" rel="noreferrer" className="line-clamp-2 font-medium hover:underline">{v.titulo}</a>
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
@@ -143,41 +142,93 @@ function Tarjeta({ p }: { p: DatosPersonaje }) {
 
 function Politicos() {
   const [v, setV] = React.useState(0);
+  const [elegido, setElegido] = React.useState<string | null>(null);
   const r = usePeticion<RespuestaPersonajes>(`/api/admin/monitoreo/personajes${v ? `?forzar=1&v=${v}` : ""}`);
   const cargando = r.estado === "cargando";
   const datos = r.estado === "listo" ? r.data : undefined;
   const error = r.estado === "error" ? r.error : undefined;
   const cargar = () => setV((n) => n + 1);
 
-  const nombranPropios = (p: DatosPersonaje) => p.resumen.videosQueLaNombran + p.resumen.publicacionesQueLaNombran;
-  // Primero quienes la nombran en lo suyo, luego quienes la nombran según la prensa, luego los cruces.
-  const orden = datos ? [...datos.personajes].sort((a, b) => nombranPropios(b) - nombranPropios(a) || b.resumen.declaracionesQueLaNombran - a.resumen.declaracionesQueLaNombran || b.resumen.cruces - a.resumen.cruces) : [];
-  const total = (f: (p: DatosPersonaje) => number) => orden.reduce((s, p) => s + f(p), 0);
+  const propios = (p: DatosPersonaje) => p.resumen.videosQueLaNombran + p.resumen.publicacionesQueLaNombran;
+  const cruzan = (p: DatosPersonaje) => p.resumen.cruces + p.resumen.declaracionesQueLaNombran;
+  const orden = datos ? [...datos.personajes].sort((a, b) => propios(b) - propios(a) || cruzan(b) - cruzan(a)) : [];
+  const actual = orden.find((p) => p.id === elegido) ?? orden[0];
+  const quienesLaNombran = orden.filter((p) => propios(p) > 0);
+  const masCruzado = orden.reduce<DatosPersonaje | undefined>((m, p) => (!m || cruzan(p) > cruzan(m) ? p : m), undefined);
+  const totalCruces = orden.reduce((s, p) => s + cruzan(p), 0);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">Qué publican en sus videos y qué reporta la prensa que dijeron, y si nombran a María Fernanda. No se necesita ninguna conexión.</p>
+        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">Qué publican seis figuras políticas en YouTube y qué reporta la prensa de ellas, y si nombran a María Fernanda. Sin conexiones ni claves.</p>
         <button type="button" onClick={cargar} disabled={cargando} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60">
           <RefreshCw className={`size-3 ${cargando ? "animate-spin" : ""}`} aria-hidden="true" /> Actualizar
         </button>
       </div>
       {error && <p className="rounded-xl bg-red-500/10 p-3 text-xs text-red-600">{error}</p>}
       {!datos && cargando && <p className="text-sm text-muted-foreground">Consultando YouTube y la prensa…</p>}
-      {datos && (
-        <Kpis
-          items={[
-            { etiqueta: "Vigilados", valor: orden.length, detalle: "políticos de la lista base", icono: Users },
-            { etiqueta: "La nombran", valor: orden.filter((p) => nombranPropios(p) > 0).length, detalle: "en sus videos o publicaciones, 30 días", icono: AtSign },
-            { etiqueta: "Videos", valor: total((p) => p.resumen.videosQueLaNombran), detalle: "la nombran en título o descripción", icono: PlayCircle },
-            { etiqueta: "Cruces", valor: total((p) => p.resumen.cruces + p.resumen.declaracionesQueLaNombran), detalle: "titulares de prensa con los dos, 30 días", icono: Newspaper },
-          ]}
-        />
+
+      {datos && actual && (
+        <>
+          <div className={`rounded-2xl p-4 ${quienesLaNombran.length > 0 ? "bg-rose-500/10" : "bg-sky-500/10"}`}>
+            <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Lo más importante</p>
+            <p className="mt-1 text-sm leading-relaxed sm:text-base">
+              {quienesLaNombran.length > 0 ? (
+                <><strong>{quienesLaNombran.map((p) => p.nombre).join(", ")}</strong> {quienesLaNombran.length === 1 ? "nombra" : "nombran"} a María Fernanda en sus publicaciones de los últimos 30 días.</>
+              ) : (
+                <><strong>Ninguno de los {orden.length}</strong> nombra a María Fernanda en sus videos de los últimos 30 días.</>
+              )}{" "}
+              La prensa los vincula con ella en <strong>{totalCruces}</strong> {totalCruces === 1 ? "titular" : "titulares"}{masCruzado && cruzan(masCruzado) > 0 ? <>; el que más aparece junto a ella es <strong>{masCruzado.nombre}</strong> ({cruzan(masCruzado)})</> : null}.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-border">
+            <table className="w-full min-w-[34rem] text-left text-xs sm:text-sm">
+              <thead className="bg-surface-muted text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <tr>
+                  <th className="px-3 py-2">Político</th>
+                  <th className="px-3 py-2">Videos (30 días)</th>
+                  <th className="px-3 py-2">La nombra</th>
+                  <th className="px-3 py-2">Titulares con ella</th>
+                  <th className="px-3 py-2">Último video</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {orden.map((p) => {
+                  const sel = p.id === actual.id;
+                  return (
+                    <tr key={p.id} onClick={() => setElegido(p.id)} className={`cursor-pointer transition hover:bg-surface-muted ${sel ? "bg-brand-soft" : ""}`}>
+                      <td className="px-3 py-2.5">
+                        <button type="button" onClick={() => setElegido(p.id)} aria-pressed={sel} className="text-left font-semibold">{p.nombre}</button>
+                        <span className="block text-[11px] text-muted-foreground">{BANDO[p.bando]}</span>
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums">{p.videos.estado === "ok" ? p.videos.revisados : "—"}</td>
+                      <td className="px-3 py-2.5">
+                        {propios(p) > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300"><AtSign className="size-3" aria-hidden="true" />Sí · {propios(p)}</span> : <span className="text-muted-foreground">No</span>}
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums font-semibold">{cruzan(p)}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground">{p.videos.estado === "ok" && p.videos.ultimo ? hace(p.videos.ultimo) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <p className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Detalle · {actual.nombre} <span className="font-normal normal-case">(elige otro en la tabla)</span></p>
+            <Tarjeta key={actual.id} p={actual} />
+          </div>
+
+          <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+            <Database className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+            <span>{datos.guardado ? "Lo encontrado se guarda en Supabase y las listas acumulan 30 días de historial." : "Todavía no se guarda el historial: ejecuta supabase/monitoreo.sql en Supabase para que se acumule."}</span>
+          </p>
+        </>
       )}
-      <div className="grid gap-4 xl:grid-cols-2">{orden.map((p) => <Tarjeta key={p.id} p={p} />)}</div>
       <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
         <ExternalLink className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-        <span>X, Facebook, Instagram y TikTok no se pueden leer sin su API: de ellos solo se muestra lo que reporta la prensa y un enlace a la búsqueda en X (se abre con tu sesión). La marca «nombra» busca «Cabal», «MaFe» o su cuenta en el título y la descripción de los videos y en los titulares; no lee el audio del video ni el texto completo de la noticia.</span>
+        <span>X, Facebook, Instagram y TikTok no se pueden leer sin su API: de ellos solo se muestra lo que reporta la prensa y un enlace a la búsqueda en X. La marca «nombra» busca «Cabal», «MaFe» o su cuenta en título y descripción de videos y en titulares; no oye el video ni lee la noticia completa.</span>
       </p>
     </div>
   );

@@ -3,6 +3,7 @@ import "server-only";
 import { claveRed } from "@/lib/ia-config";
 import { buscarNoticias, entidades, type Noticia } from "@/lib/informe/fuentes";
 import { contextoDeMencion, nombraAMariaFernanda } from "./menciones";
+import { guardarItems, leerItems, type ItemMonitoreo } from "./historial";
 import type { PublicacionRed } from "./redes";
 
 /**
@@ -58,7 +59,8 @@ export type DatosPersonaje = {
   publicaciones: { estado: "sin_clave" } | { estado: "error"; error: string } | { estado: "ok"; items: PublicacionMarcada[] };
   resumen: { videosQueLaNombran: number; declaracionesQueLaNombran: number; cruces: number; publicacionesQueLaNombran: number };
 };
-export type RespuestaPersonajes = { generadoEn: string; personajes: DatosPersonaje[] };
+/** `guardado`: lo encontrado quedó en Supabase y el panel muestra el historial de 30 días; false = solo lo de la fuente en vivo. */
+export type RespuestaPersonajes = { generadoEn: string; guardado: boolean; personajes: DatosPersonaje[] };
 
 const VENTANA_VIDEOS_MS = 30 * 86_400_000;
 
@@ -156,8 +158,7 @@ async function datosDe(p: Personaje, token: string | undefined, ahora: number): 
   const videos: DatosPersonaje["videos"] = yt.ok
     ? (() => {
         const recientes = yt.videos.filter((v) => ahora - new Date(v.fecha).getTime() <= VENTANA_VIDEOS_MS);
-        // Los que la nombran primero, luego los más nuevos; se muestran cinco como máximo, en orden de fecha.
-        const elegidos = [...recientes.filter((v) => v.nombra), ...recientes.filter((v) => !v.nombra)].slice(0, 5).sort((a, b) => b.fecha.localeCompare(a.fecha));
+        const elegidos = [...recientes].sort((a, b) => b.fecha.localeCompare(a.fecha));
         return { estado: "ok", items: elegidos, ultimo: yt.videos[0]?.fecha ?? null, revisados: recientes.length, nombran: recientes.filter((v) => v.nombra).length };
       })()
     : { estado: "error", error: yt.error };
@@ -184,13 +185,51 @@ async function datosDe(p: Personaje, token: string | undefined, ahora: number): 
   };
 }
 
-/** Se guarda 30 minutos en memoria: son varias consultas por personaje. */
+const aItems = (d: DatosPersonaje): ItemMonitoreo[] => [
+  ...(d.videos.estado === "ok" ? d.videos.items : []).map((v) => ({ personaje: d.id, tipo: "video" as const, enlace: v.enlace, titulo: v.titulo, medio: null, fecha: v.fecha, vistas: v.vistas, nombra: v.nombra, donde: v.donde, contexto: v.contexto })),
+  ...(["dicho", "cruce", "prensa"] as const).flatMap((tipo) =>
+    (tipo === "dicho" ? d.declaraciones : tipo === "cruce" ? d.cruces : d.prensa).map((n) => ({ personaje: d.id, tipo, enlace: n.enlace, titulo: n.titulo, medio: n.medio, fecha: n.fecha, vistas: null, nombra: n.nombra, donde: null, contexto: null }))
+  ),
+];
+
+/** Mezcla lo recién traído con el historial guardado (30 días): las listas del panel acumulan en vez de depender de la última búsqueda. */
+function conHistorial(d: DatosPersonaje, guardados: ItemMonitoreo[]): DatosPersonaje {
+  const propios = guardados.filter((g) => g.personaje === d.id);
+  const noticias = (tipo: "dicho" | "cruce" | "prensa", max: number): NoticiaMarcada[] =>
+    propios.filter((g) => g.tipo === tipo).slice(0, max).map((g) => ({ titulo: g.titulo, medio: g.medio ?? "Medio sin nombre", fecha: g.fecha, enlace: g.enlace, nombra: g.nombra }));
+  const declaraciones = noticias("dicho", 12);
+  const cruces = noticias("cruce", 12);
+  const prensa = noticias("prensa", 12);
+  const vids = propios.filter((g) => g.tipo === "video");
+  const videos: DatosPersonaje["videos"] =
+    d.videos.estado === "ok"
+      ? {
+          ...d.videos,
+          revisados: Math.max(d.videos.revisados, vids.length),
+          nombran: vids.filter((v) => v.nombra).length,
+          items: vids.map((v) => ({ id: v.enlace.split("v=")[1] ?? v.enlace, titulo: v.titulo, fecha: v.fecha, vistas: v.vistas ?? 0, enlace: v.enlace, nombra: v.nombra, contexto: v.contexto, donde: v.donde === "título" || v.donde === "descripción" ? v.donde : null })),
+        }
+      : d.videos;
+  return {
+    ...d,
+    videos,
+    declaraciones,
+    cruces,
+    prensa,
+    resumen: { ...d.resumen, videosQueLaNombran: videos.estado === "ok" ? videos.nombran : 0, declaracionesQueLaNombran: declaraciones.filter((n) => n.nombra).length, cruces: cruces.length },
+  };
+}
+
+/** Se guarda 30 minutos en memoria: son varias consultas por personaje. Lo encontrado se acumula en Supabase. */
 export async function personajes(forzar = false): Promise<RespuestaPersonajes> {
   if (!forzar && memoria && Date.now() - memoria.en < TTL) return memoria.datos;
   const token = await claveRed("x").catch(() => undefined);
   const ahora = Date.now();
-  const datos = await Promise.all(PERSONAJES.map((p) => datosDe(p, token, ahora)));
-  const respuesta = { generadoEn: new Date(ahora).toISOString(), personajes: datos };
+  const vivos = await Promise.all(PERSONAJES.map((p) => datosDe(p, token, ahora)));
+  const guardado = await guardarItems(vivos.flatMap(aItems));
+  const historial = guardado ? await leerItems(new Date(ahora - VENTANA_VIDEOS_MS).toISOString()) : undefined;
+  const datos = historial ? vivos.map((d) => conHistorial(d, historial)) : vivos;
+  const respuesta = { generadoEn: new Date(ahora).toISOString(), guardado: !!historial, personajes: datos };
   memoria = { en: ahora, datos: respuesta };
   return respuesta;
 }
