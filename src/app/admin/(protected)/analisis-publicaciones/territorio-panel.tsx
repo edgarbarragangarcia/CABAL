@@ -13,6 +13,7 @@ import type { Relacion } from "@/lib/territorio/relacion";
 import type { EleccionLugar } from "@/lib/territorio/votacion";
 import { titulo } from "./nombres";
 import { usePeticion } from "./peticion";
+import { SocioeconomicoTerritorio } from "./territorio-socioeconomico";
 import { RelacionTerritorio } from "./territorio-relacion";
 import { TerritorioMapa, mapaDe } from "./territorio-mapa";
 import { FuentesTerritorio } from "./territorio-fuentes";
@@ -280,7 +281,7 @@ function Explorar({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) =>
   );
 }
 
-type Pestana = "votacion" | "conflicto" | "seguidores" | "municipios";
+type Pestana = "votacion" | "conflicto" | "economia" | "seguidores" | "municipios";
 
 export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; demo: boolean }) {
   const [id, setId] = React.useState(leerLugar);
@@ -308,7 +309,7 @@ export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; dem
   const nombreLugar = lugar ? titulo(lugar.nombre) : "";
   const hayInfo = !!lugar && lugar.nivel !== "pais";
   const bajo = lugar && (lugar.nivel === "localidad" || lugar.nivel === "barrio" || lugar.nivel === "puesto");
-  const pestanas: [Pestana, string][] = [["votacion", "Votación"], ["conflicto", "Conflicto y problemas"], ["seguidores", "Seguidores"], ...(d?.relacion ? ([["municipios", "Municipio por municipio"]] as [Pestana, string][]) : [])];
+  const pestanas: [Pestana, string][] = [["votacion", "Votación"], ["conflicto", "Conflicto y problemas"], ["economia", "Economía y población"], ["seguidores", "Seguidores"], ...(d?.relacion ? ([["municipios", "Municipio por municipio"]] as [Pestana, string][]) : [])];
 
   return (
     <div className="space-y-4">
@@ -388,6 +389,7 @@ export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; dem
                 </details>
               </div>
             )}
+            {pestana === "economia" && <SocioeconomicoTerritorio key={lugar!.id} lugarId={lugar!.id} nombreLugar={nombreLugar} subnivel={!!bajo} />}
             {pestana === "seguidores" && seguidores && (
               <div className="space-y-2">
                 {demo && <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />Son contactos de ejemplo (inventados). Cuando conectes Bitrix24 aquí aparecerán los reales.</p>}
