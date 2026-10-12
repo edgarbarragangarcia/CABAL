@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { configPorDefecto, type ConfigPortal, type PlantillaId } from "./plantillas";
+import { TEXTOS_ANTERIORES, configPorDefecto, type ConfigPortal, type PlantillaId } from "./plantillas";
 
 /** Acceso a los portales generados (tabla `portales`, ver supabase/portales.sql). Solo servidor, con la service role key. */
 
@@ -44,6 +44,13 @@ function fallo(e: { code?: string; message?: string }) {
   return new ErrorPortales("invalido", "No fue posible completar la acción.");
 }
 
+/** Un portal guardado con los textos de arranque de cuando las plantillas eran de servicios pasa a los de comunidad; lo editado se respeta. */
+function textosDeComunidad(plantilla: PlantillaId, c: ConfigPortal, base: ConfigPortal): ConfigPortal {
+  const ant = TEXTOS_ANTERIORES[plantilla];
+  if (!ant) return c;
+  return { ...c, titulo: c.titulo === ant.titulo ? base.titulo : c.titulo, eslogan: c.eslogan === ant.eslogan ? base.eslogan : c.eslogan, cta: c.cta === ant.cta ? base.cta : c.cta };
+}
+
 const aPortal = (f: Fila): Portal => {
   const base = configPorDefecto(f.plantilla);
   const c = (f.config ?? {}) as Partial<ConfigPortal>;
@@ -53,7 +60,7 @@ const aPortal = (f: Fila): Portal => {
     nombre: f.nombre,
     plantilla: f.plantilla,
     estado: f.estado,
-    config: { ...base, ...c, secciones: { ...base.secciones, ...(c.secciones ?? {}) } },
+    config: textosDeComunidad(f.plantilla, { ...base, ...c, secciones: { ...base.secciones, ...(c.secciones ?? {}) } }, base),
     version: f.version ?? 0,
     eventos: Array.isArray(f.eventos) ? f.eventos : [],
     creadoEn: f.creado_en,

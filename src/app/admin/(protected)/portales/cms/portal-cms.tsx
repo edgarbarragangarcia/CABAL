@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, BarChart3, ExternalLink, FileText, Loader2, Megaphone, Pencil, Rocket, Settings2 } from "lucide-react";
+import { ArrowLeft, BarChart3, CalendarDays, ExternalLink, FileText, Loader2, Megaphone, Pencil, Rocket, Settings2, Users } from "lucide-react";
 
 import { plantillaPorId } from "@/lib/portales/plantillas";
 import { ajustesPorDefecto, type AjustesPortal, type ResumenPortal } from "@/lib/portales/cms/tipos";
@@ -10,6 +10,8 @@ import type { EstadoPortal, Portal } from "@/lib/portales/store";
 import { AjustesPanel } from "./ajustes-panel";
 import { ArticulosPanel } from "./articulos-panel";
 import { botonSecundario, mensajeDe, pedir } from "./comun";
+import { CrmPanel } from "./crm-panel";
+import { EventosPanel } from "./eventos-panel";
 import { PublicidadPanel } from "./publicidad-panel";
 import { ResumenPanel } from "./resumen-panel";
 
@@ -18,7 +20,7 @@ import { ResumenPanel } from "./resumen-panel";
  * todos viven en las mismas tablas de la misma base de datos. Se abre desde el centro de operaciones.
  */
 
-type Pestana = "resumen" | "articulos" | "publicidad" | "ajustes";
+type Pestana = "resumen" | "comunidad" | "eventos" | "articulos" | "publicidad" | "ajustes";
 
 const ETIQUETA_ESTADO: Record<EstadoPortal, { texto: string; clase: string }> = {
   borrador: { texto: "Borrador", clase: "bg-surface-muted text-muted-foreground" },
@@ -45,6 +47,8 @@ export function PortalCms({ portal, resumen, volver, editarDiseno, desplegar, ca
 
   const pestanas: { id: Pestana; texto: string; icono: typeof BarChart3; n?: number }[] = [
     { id: "resumen", texto: "Resumen", icono: BarChart3 },
+    { id: "comunidad", texto: "Comunidad", icono: Users },
+    { id: "eventos", texto: "Eventos", icono: CalendarDays },
     { id: "articulos", texto: tematica.seccion.nombre, icono: FileText, n: resumen.publicados },
     { id: "publicidad", texto: "Publicidad", icono: Megaphone, n: resumen.anunciosActivos },
     { id: "ajustes", texto: "Ajustes", icono: Settings2 },
@@ -81,6 +85,8 @@ export function PortalCms({ portal, resumen, volver, editarDiseno, desplegar, ca
       ) : (
         <>
           {pestana === "resumen" && <ResumenPanel portal={portal} resumen={resumen} ajustes={ajustes} desplegar={desplegar} ir={(t, ia) => { setIaAlAbrir(!!ia); setPestana(t); }} />}
+          {pestana === "comunidad" && <CrmPanel portal={portal} />}
+          {pestana === "eventos" && <EventosPanel portal={portal} />}
           {pestana === "articulos" && <ArticulosPanel key={String(iaAlAbrir)} portal={portal} ajustes={ajustes} cambio={cambio} abrirIa={iaAlAbrir} />}
           {pestana === "publicidad" && <PublicidadPanel portal={portal} ajustes={ajustes} cambio={cambio} />}
           {pestana === "ajustes" && <AjustesPanel portal={portal} ajustes={ajustes} guardado={setAjustes} />}

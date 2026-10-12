@@ -1,10 +1,12 @@
 import * as React from "react";
-import { ArrowRight, CalendarBlank, Clock, Sparkle, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRight, CalendarBlank, Clock, MapPin, Sparkle, UsersThree, VideoCamera } from "@phosphor-icons/react/dist/ssr";
 
 import { minutosDeLectura, parsearMarkdown, posicionAnuncioEnArticulo, type Bloque, type Trozo } from "@/lib/portales/cms/puro";
 import { tematicaDe, type EspacioId } from "@/lib/portales/cms/tematicas";
 import type { Articulo, ArticuloLista } from "@/lib/portales/cms/tipos";
+import type { Evento } from "@/lib/portales/crm/tipos";
 import { BOTON, Encabezado, Enlace, type Amb } from "./marco";
+import { FormularioComunidad } from "./formularios";
 import { Ic, Malla } from "./piezas";
 
 /**
@@ -290,6 +292,160 @@ export function VistaListado({ a, articulos, categorias, actual }: { a: Amb; art
           </div>
         )}
       </section>
+      <EspacioAnuncio a={a} espacio="pie" />
+    </>
+  );
+}
+
+// ------------------------------------------------------- eventos y comunidad ---
+
+const hora = (iso: string) => new Date(iso).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", timeZone: "America/Bogota" });
+const diaCorto = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Bogota" });
+const mes = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { month: "short", timeZone: "America/Bogota" }).replace(".", "");
+const dia = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", timeZone: "America/Bogota" });
+
+function dondeEs(e: Pick<Evento, "modalidad" | "lugar" | "ciudad">) {
+  if (e.modalidad === "virtual") return "Virtual";
+  const sitio = [e.lugar, e.ciudad].filter(Boolean).join(", ");
+  return e.modalidad === "mixta" ? `${sitio || "Presencial"} · y virtual` : sitio || "Presencial";
+}
+
+export function TarjetaEvento({ a, ev }: { a: Amb; ev: Evento }) {
+  const cms = a.cms;
+  const lleno = ev.cupo !== null && ev.inscritos >= ev.cupo;
+  return (
+    <Enlace a={a} href={cms ? `${cms.urlBase}/eventos/${ev.slug}` : "#"} className={`group flex h-full gap-5 rounded-[1.75rem] p-5 transition duration-300 hover:-translate-y-1 ${a.k.tarjeta}`}>
+      <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[var(--p)] to-[var(--pd)] text-center text-[var(--sobre)]">
+        <span className="leading-none"><span className="block text-[0.65rem] font-bold tracking-wide uppercase">{mes(ev.iniciaEn)}</span><span className="block text-2xl font-extrabold">{dia(ev.iniciaEn)}</span></span>
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {ev.estado === "cancelado" && <span className="w-fit rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[0.68rem] font-bold text-rose-600">Cancelado</span>}
+        <span className="text-lg leading-snug font-bold text-balance">{ev.titulo}</span>
+        <span className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-sm ${a.k.suave}`}>
+          <span className="inline-flex items-center gap-1.5"><Clock className="size-4" />{hora(ev.iniciaEn)}</span>
+          <span className="inline-flex items-center gap-1.5">{ev.modalidad === "virtual" ? <VideoCamera className="size-4" /> : <MapPin className="size-4" />}{dondeEs(ev)}</span>
+        </span>
+        <span className="mt-auto inline-flex items-center gap-1.5 pt-2 text-sm font-bold text-[var(--p)]">{lleno ? "Sin cupos · ver detalles" : "Ver y inscribirme"} <ArrowRight weight="bold" className="size-3.5 transition group-hover:translate-x-1" /></span>
+      </span>
+    </Enlace>
+  );
+}
+
+/** Los próximos eventos en el inicio del portal. Sin eventos publicados, la sección no sale. */
+export function SeccionEventos({ a, eventos }: { a: Amb; eventos: Evento[] }) {
+  const cms = a.cms!;
+  if (eventos.length === 0) return null;
+  return (
+    <section id={a.ancla("eventos")} className="scroll-mt-24 py-20">
+      <div className="mx-auto max-w-6xl px-5 @2xl:px-8">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <Encabezado a={a} etiqueta="Agenda" titulo="Próximos encuentros" texto="Eventos de la comunidad: inscríbete y participa." />
+          <Enlace a={a} href={`${cms.urlBase}/eventos`} className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition ${a.k.boton2}`}>Ver toda la agenda <ArrowRight weight="bold" className="size-4" /></Enlace>
+        </div>
+        <ul className="mt-12 grid gap-5 @2xl:grid-cols-2">{eventos.slice(0, 4).map((e) => <li key={e.id}><TarjetaEvento a={a} ev={e} /></li>)}</ul>
+      </div>
+    </section>
+  );
+}
+
+/** «Sé parte»: el formulario para sumarse a la comunidad del portal (o su maqueta inerte en las vistas previas). */
+export function SeccionSuscribir({ a, intereses }: { a: Amb; intereses: string[] }) {
+  const cms = a.cms;
+  const slug = cms ? cms.urlBase.replace(/^\/p\//, "") : "";
+  const oscuro = a.tema.oscuro;
+  return (
+    <section id={a.ancla("suscribir")} className="scroll-mt-24 py-20" style={{ background: a.tema.alterno }}>
+      <div className="mx-auto grid max-w-6xl gap-10 px-5 @2xl:px-8 @4xl:grid-cols-[0.9fr_1.1fr] @4xl:items-center">
+        <div>
+          <Encabezado a={a} etiqueta="Sé parte" titulo={`Únete a ${a.c.nombre}`} texto="Recibe novedades, guías e invitaciones a los encuentros. Es gratis y puedes salirte cuando quieras." />
+          <ul className={`mt-6 space-y-2.5 text-sm ${a.k.suave}`}>
+            {a.t.hero.puntos.map((p) => <li key={p} className="flex items-start gap-2.5"><span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--p)]" />{p}</li>)}
+          </ul>
+        </div>
+        <div className={`rounded-[2rem] p-6 @2xl:p-8 ${a.k.tarjeta}`}>
+          {cms ? (
+            <FormularioComunidad slug={slug} oscuro={oscuro} intereses={intereses} />
+          ) : (
+            <div className="space-y-3" aria-hidden>
+              {["Tu nombre", "Correo", "Celular (opcional)"].map((t) => <div key={t} className={`rounded-xl border px-4 py-3 text-sm ${a.k.pildora}`}>{t}</div>)}
+              <div className="rounded-full bg-gradient-to-r from-[var(--p)] to-[var(--p2)] px-6 py-3.5 text-center text-sm font-bold text-[var(--sobre)]">{a.c.cta}</div>
+              <p className={`text-center text-xs ${a.k.suave}`}>Vista previa: en el portal publicado este formulario guarda a cada persona en su CRM.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** La agenda completa del portal: próximos eventos y, aparte, los que ya pasaron. */
+export function VistaAgenda({ a, proximos, pasados }: { a: Amb; proximos: Evento[]; pasados: Evento[] }) {
+  return (
+    <>
+      <EspacioAnuncio a={a} espacio="cabecera" />
+      <section className="mx-auto max-w-6xl px-5 pt-12 pb-20 @2xl:px-8">
+        <Encabezado a={a} etiqueta="Agenda" titulo="Eventos de la comunidad" texto="Encuentros, charlas, foros y jornadas. Inscríbete y participa." />
+        {proximos.length === 0 ? (
+          <p className={`mt-10 rounded-2xl p-8 text-center ${a.k.tarjeta} ${a.k.suave}`}>No hay eventos programados por ahora. Súmate a la comunidad y te avisamos cuando haya uno.</p>
+        ) : (
+          <ul className="mt-10 grid gap-5 @2xl:grid-cols-2">{proximos.map((e) => <li key={e.id}><TarjetaEvento a={a} ev={e} /></li>)}</ul>
+        )}
+        {pasados.length > 0 && (
+          <div className="mt-16">
+            <h2 className={`text-2xl ${a.tit}`}>Ya realizados</h2>
+            <ul className="mt-6 grid gap-5 @2xl:grid-cols-2">{pasados.slice(0, 6).map((e) => <li key={e.id} className="opacity-75"><TarjetaEvento a={a} ev={e} /></li>)}</ul>
+          </div>
+        )}
+      </section>
+      <SeccionSuscribir a={a} intereses={[]} />
+      <EspacioAnuncio a={a} espacio="pie" />
+    </>
+  );
+}
+
+/** La página de un evento: qué es, cuándo y dónde, y el formulario para inscribirse. */
+export function VistaEvento({ a, evento, terminado }: { a: Amb; evento: Evento; terminado: boolean }) {
+  const cms = a.cms!;
+  const slug = cms.urlBase.replace(/^\/p\//, "");
+  const lleno = evento.cupo !== null && evento.inscritos >= evento.cupo;
+  const cerrado = evento.estado === "cancelado" || terminado || lleno;
+  const motivo = evento.estado === "cancelado" ? "Este evento fue cancelado." : terminado ? "Este evento ya terminó." : "El evento ya no tiene cupos disponibles.";
+  const bloques = parsearMarkdown(evento.descripcion);
+  return (
+    <>
+      <EspacioAnuncio a={a} espacio="cabecera" />
+      <article className="mx-auto max-w-6xl px-5 pt-10 pb-20 @2xl:px-8">
+        <Enlace a={a} href={`${cms.urlBase}/eventos`} className={`inline-flex items-center gap-1.5 text-sm font-semibold ${a.k.suave} hover:text-[var(--p)]`}>← Toda la agenda</Enlace>
+        <div className="mt-6 grid gap-12 @4xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="max-w-3xl">
+            {evento.categoria && <span className={`inline-flex rounded-full px-3.5 py-1.5 text-[0.68rem] font-bold tracking-[0.16em] uppercase ${a.k.etiqueta}`}>{evento.categoria}</span>}
+            <h1 className={`mt-4 text-[clamp(2rem,5.6cqi,3.2rem)] leading-[1.08] text-balance ${a.tit}`}>{evento.titulo}</h1>
+            <ul className={`mt-6 space-y-3 text-[1.02rem] ${a.k.suave}`}>
+              <li className="flex items-start gap-3"><CalendarBlank className="mt-0.5 size-5 shrink-0 text-[var(--p)]" /><span className="capitalize">{diaCorto(evento.iniciaEn)}</span></li>
+              <li className="flex items-start gap-3"><Clock className="mt-0.5 size-5 shrink-0 text-[var(--p)]" /><span>{hora(evento.iniciaEn)}{evento.terminaEn ? ` a ${hora(evento.terminaEn)}` : ""} (hora de Colombia)</span></li>
+              <li className="flex items-start gap-3">{evento.modalidad === "virtual" ? <VideoCamera className="mt-0.5 size-5 shrink-0 text-[var(--p)]" /> : <MapPin className="mt-0.5 size-5 shrink-0 text-[var(--p)]" />}<span>{dondeEs(evento)}</span></li>
+            </ul>
+            {bloques.length > 0 && <div className="mt-8"><Prosa a={a} bloques={bloques} /></div>}
+          </div>
+          <aside className="@4xl:sticky @4xl:top-28 @4xl:self-start">
+            <div className={`rounded-[2rem] p-6 ${a.k.tarjeta}`}>
+              {cerrado ? (
+                <>
+                  <p className="text-lg font-bold">{motivo}</p>
+                  <p className={`mt-1 text-sm ${a.k.suave}`}>Súmate a la comunidad para enterarte de los próximos encuentros.</p>
+                  <Enlace a={a} href={`${cms.urlBase}#portal-suscribir`} className={`mt-5 ${BOTON}`}>Sumarme a la comunidad</Enlace>
+                </>
+              ) : (
+                <>
+                  <p className="text-lg font-bold">Inscríbete</p>
+                  {evento.cupo !== null && <p className={`mt-0.5 text-sm ${a.k.suave}`}>Quedan {Math.max(0, evento.cupo - evento.inscritos)} cupos.</p>}
+                  <FormularioComunidad slug={slug} evento={evento.slug} oscuro={a.tema.oscuro} className="mt-5" gracias={evento.modalidad === "presencial" ? "Te esperamos. Guarda la fecha en tu calendario." : "Te esperamos. Aquí tienes el enlace de la sala:"} />
+                </>
+              )}
+            </div>
+          </aside>
+        </div>
+      </article>
       <EspacioAnuncio a={a} espacio="pie" />
     </>
   );

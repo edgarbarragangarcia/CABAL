@@ -48,6 +48,8 @@ export type DatosCms = {
   urlBase: string;
   /** Hay artículos publicados: el encabezado y el pie los enlazan. */
   articulos: boolean;
+  /** Hay eventos publicados: el encabezado y el pie enlazan la agenda. */
+  eventos: boolean;
   union: AjustesPortal["union"];
   editor: string;
   /** Enlace con conteo que lleva a la afiliación de la comunidad y recuerda de qué portal vino la persona. */
@@ -70,8 +72,11 @@ export type Amb = {
   enlaces: boolean;
   wa: string;
   hrefCta: string;
-  /** Lo que dice el botón principal: la acción del portal o, si no hay a dónde escribir, sumarse a la comunidad. */
+  /** Lo que dice el botón principal: sumarse a la comunidad. */
   textoCta: string;
+  /** El segundo botón del inicio (la agenda, los artículos o, en las demos, las secciones) y su texto. */
+  hrefSecundario: string;
+  textoSecundario: string;
   base: string;
   ancla: (s: string) => string;
   /** Prefijo de los enlaces a las secciones del inicio: vacío dentro del inicio y `/p/<enlace>` en las demás páginas. */
@@ -123,8 +128,11 @@ export function construirAmbiente(o: OpcionesAmbiente): { a: Amb; vars: React.CS
     a: {
       id: t.id, t, c, tema, k: tema.oscuro ? OSCURO : CLARO, demo: o.demo, enlaces: o.enlaces, wa, base: o.idBase, ancla, inicio, cms, contacto,
       tit: tema.serif ? "font-display font-light tracking-[-0.02em]" : "font-sans font-extrabold tracking-[-0.035em]",
-      hrefCta: contacto ? `${inicio}#${ancla("contacto")}` : cms ? cms.hrefUnete : wa || "#",
-      textoCta: contacto || !cms ? c.cta : cms.union.boton,
+      // El botón principal de una comunidad lleva siempre al formulario para sumarse; en las demos, a la sección de contacto o al WhatsApp.
+      hrefCta: cms ? `${inicio}#${ancla("suscribir")}` : contacto ? `${inicio}#${ancla("contacto")}` : wa || "#",
+      textoCta: c.cta,
+      hrefSecundario: cms ? (cms.eventos ? `${cms.urlBase}/eventos` : cms.articulos ? `${inicio}#${ancla("articulos")}` : "") : c.secciones.servicios ? `${inicio}#${ancla("servicios")}` : "",
+      textoSecundario: cms ? (cms.eventos ? t.hero.ctaSecundaria : "Leer lo último") : "Conocer la comunidad",
     },
   };
 }
@@ -154,6 +162,7 @@ export function Cabecera({ a, secciones, accion }: { a: Amb; secciones: { id: st
     ...secciones.map((s) => ({ href: `${a.inicio}#${a.ancla(s.id)}`, texto: s.texto })),
     // En el inicio, «Artículos» ya viene entre las secciones (baja hasta ellos); en las demás páginas lleva al listado.
     ...(a.cms?.articulos && !secciones.some((s) => s.id === "articulos") ? [{ href: `${a.cms.urlBase}/articulos`, texto: "Artículos" }] : []),
+    ...(a.cms?.eventos && !secciones.some((s) => s.id === "eventos") ? [{ href: `${a.cms.urlBase}/eventos`, texto: "Eventos" }] : []),
   ];
   const boton = accion ?? { href: a.hrefCta, texto: a.textoCta };
   return (
@@ -183,7 +192,7 @@ export function Pie({ a }: { a: Amb }) {
           <p className="mt-4 max-w-sm text-sm leading-relaxed">{c.eslogan}</p>
           {t.aviso && <p className="mt-4 max-w-sm text-xs leading-relaxed text-white/45">{t.aviso}</p>}
         </div>
-        <div><p className="text-xs font-bold tracking-[0.16em] text-white/40 uppercase">Servicios</p><ul className="mt-4 space-y-2.5 text-sm">{t.servicios.items.slice(0, 5).map((s) => <li key={s.titulo}>{s.titulo}</li>)}</ul></div>
+        <div><p className="text-xs font-bold tracking-[0.16em] text-white/40 uppercase">La comunidad</p><ul className="mt-4 space-y-2.5 text-sm">{t.servicios.items.slice(0, 5).map((s) => <li key={s.titulo}>{s.titulo}</li>)}</ul></div>
         <div>
           <p className="text-xs font-bold tracking-[0.16em] text-white/40 uppercase">Portal</p>
           <ul className="mt-4 space-y-2.5 text-sm">
@@ -191,10 +200,11 @@ export function Pie({ a }: { a: Amb }) {
               <>
                 <li><Enlace a={a} href={cms.urlBase} className="hover:text-white">Inicio</Enlace></li>
                 {cms.articulos && <li><Enlace a={a} href={`${cms.urlBase}/articulos`} className="hover:text-white">Artículos</Enlace></li>}
+                {cms.eventos && <li><Enlace a={a} href={`${cms.urlBase}/eventos`} className="hover:text-white">Eventos</Enlace></li>}
                 <li><Enlace a={a} href={cms.hrefUnete} className="hover:text-white">Únete a la comunidad</Enlace></li>
               </>
             ) : (
-              <><li>Cómo funciona</li><li>Preguntas frecuentes</li><li>Contacto</li></>
+              <><li>Cómo participar</li><li>Preguntas frecuentes</li><li>Contacto</li></>
             )}
             {c.ciudad && <li className="flex items-center gap-1.5"><MapPin className="size-3.5" />{c.ciudad}</li>}
           </ul>

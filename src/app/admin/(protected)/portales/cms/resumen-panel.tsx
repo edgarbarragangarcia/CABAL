@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, Check, Circle, ExternalLink, Rocket, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Circle, ExternalLink, Rocket, Sparkles, Users } from "lucide-react";
 
 import type { AjustesPortal, ResumenPortal } from "@/lib/portales/cms/tipos";
 import type { Portal } from "@/lib/portales/store";
-import { botonPrimario, botonSecundario, numero, tarjeta } from "./comun";
+import type { ResumenCrm } from "@/lib/portales/crm/tipos";
+import { botonPrimario, botonSecundario, numero, pedir, tarjeta } from "./comun";
 
 /** Resumen del portal: sus cifras, el camino de visita a afiliado y lo que falta para que esté listo. */
 
@@ -21,8 +22,26 @@ function Cifra({ titulo, valor, detalle }: { titulo: string; valor: string; deta
   );
 }
 
-export function ResumenPanel({ portal, resumen, ajustes, ir, desplegar }: { portal: Portal; resumen: ResumenPortal; ajustes: AjustesPortal; ir: (t: "articulos" | "publicidad" | "ajustes", ia?: boolean) => void; desplegar: () => void }) {
+/** Cuántas personas hay en el CRM del portal (si todavía no se crearon las tablas, no muestra nada). */
+function useCrm(portalId: string) {
+  const [crm, setCrm] = React.useState<ResumenCrm | null>(null);
+  React.useEffect(() => {
+    let cancelado = false;
+    pedir<{ disponible: boolean; resumen?: ResumenCrm }>(`/api/admin/portales/${portalId}/crm`, "GET")
+      .then((r) => {
+        if (!cancelado && r.disponible && r.resumen) setCrm(r.resumen);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelado = true;
+    };
+  }, [portalId]);
+  return crm;
+}
+
+export function ResumenPanel({ portal, resumen, ajustes, ir, desplegar }: { portal: Portal; resumen: ResumenPortal; ajustes: AjustesPortal; ir: (t: "articulos" | "publicidad" | "ajustes" | "comunidad" | "eventos", ia?: boolean) => void; desplegar: () => void }) {
   const enLinea = portal.estado === "publicado";
+  const crm = useCrm(portal.id);
   const pasos: { hecho: boolean; titulo: string; detalle: string; accion?: React.ReactNode }[] = [
     {
       hecho: enLinea,
@@ -35,6 +54,12 @@ export function ResumenPanel({ portal, resumen, ajustes, ir, desplegar }: { port
       titulo: "Tiene al menos tres artículos publicados",
       detalle: `${resumen.publicados} publicados · ${resumen.borradores} en borrador. Con tres o cuatro el portal ya se ve vivo.`,
       accion: <button type="button" onClick={() => ir("articulos", true)} className={botonSecundario}><Sparkles className="size-4" /> Escribir con IA</button>,
+    },
+    {
+      hecho: !!crm && crm.total > 0,
+      titulo: "Ya hay personas en la comunidad del portal",
+      detalle: crm ? (crm.total > 0 ? `${numero(crm.total)} personas, ${numero(crm.nuevos30d)} nuevas en 30 días.` : "Aún nadie se ha sumado: comparte el portal o invita a las primeras personas.") : "Para ver el CRM, ejecuta supabase/portales-crm.sql en Supabase.",
+      accion: <button type="button" onClick={() => ir("comunidad")} className={botonSecundario}><Users className="size-4" /> Abrir el CRM</button>,
     },
     {
       hecho: ajustes.buscadores,

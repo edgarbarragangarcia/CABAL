@@ -44,7 +44,7 @@ export default async function PortalPublicoPage({ params }: Props) {
   }
   return (
     <main className="min-h-dvh bg-[#0c1017]">
-      <PortalView plantilla={sitio.portal.plantilla} config={sitio.portal.config} demo={false} idBase="portal" cms={{ datos: sitio.datos, ajustes: sitio.ajustes, articulos: sitio.recientes }} />
+      <PortalView plantilla={sitio.portal.plantilla} config={sitio.portal.config} demo={false} idBase="portal" cms={{ datos: sitio.datos, ajustes: sitio.ajustes, articulos: sitio.recientes, eventos: sitio.eventos }} />
     </main>
   );
 }

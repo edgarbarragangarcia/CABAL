@@ -8,6 +8,9 @@ import { elegirPorEspacio } from "./puro";
 import type { EspacioId } from "./tematicas";
 import { anunciosVigentes, articulosPublicados, leerAjustes } from "./store";
 import type { AjustesPortal, ArticuloLista } from "./tipos";
+import { separarEventos } from "../crm/puro";
+import { eventosPublicados } from "../crm/store";
+import type { Evento } from "../crm/tipos";
 
 /**
  * Lo que necesita el sitio público de un portal para armarse: el portal, sus ajustes, sus artículos más recientes y los anuncios
@@ -17,7 +20,7 @@ import type { AjustesPortal, ArticuloLista } from "./tipos";
 
 export type Sitio =
   | { estado: "pausado"; portal: Portal }
-  | { estado: "en-linea"; portal: Portal; ajustes: AjustesPortal; recientes: ArticuloLista[]; datos: DatosCms };
+  | { estado: "en-linea"; portal: Portal; ajustes: AjustesPortal; recientes: ArticuloLista[]; /** Próximos eventos publicados. */ eventos: Evento[]; datos: DatosCms };
 
 /** Los espacios que dibuja cada página: solo los anuncios de esos espacios cuentan una impresión en esa visita. */
 const ESPACIOS_DE = {
@@ -38,20 +41,24 @@ export const cargarSitio = cache(async (slug: string): Promise<Sitio | null> => 
   if (!portal || portal.estado === "borrador") return null;
   if (portal.estado === "pausado") return { estado: "pausado", portal };
 
-  const [ajustes, recientes, anuncios] = await Promise.all([
+  const [ajustes, recientes, anuncios, todosEventos] = await Promise.all([
     leerAjustes(portal.id),
     articulosPublicados(portal.id, { limite: 30 }).catch(() => [] as ArticuloLista[]),
     anunciosVigentes(portal.id).catch(() => []),
+    // Sin las tablas del CRM, el portal sale igual: simplemente sin agenda.
+    eventosPublicados(portal.id, { limite: 40 }).catch(() => [] as Evento[]),
   ]);
+  const { proximos } = separarEventos(todosEventos);
   const urlBase = `/p/${portal.slug}`;
   const datos: DatosCms = {
     urlBase,
     articulos: recientes.length > 0,
+    eventos: todosEventos.length > 0,
     union: ajustes.union,
     editor: ajustes.editor,
     hrefUnete: `${urlBase}/unete`,
     hrefAnuncio: (id) => `${urlBase}/anuncio/${id}`,
     elegidos: elegirPorEspacio(anuncios, () => Math.random()),
   };
-  return { estado: "en-linea", portal, ajustes, recientes, datos };
+  return { estado: "en-linea", portal, ajustes, recientes, eventos: proximos, datos };
 });

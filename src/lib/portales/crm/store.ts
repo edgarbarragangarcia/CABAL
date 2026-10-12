@@ -3,6 +3,7 @@ import "server-only";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { slugDeTitulo, slugUnico } from "../cms/puro";
 import { ErrorPortales } from "../store";
+import { eventoTerminado } from "./puro";
 import {
   ETAPAS,
   ORIGENES,
@@ -526,8 +527,7 @@ export async function eventoPublicado(portalId: string, slug: string): Promise<E
 /** Inscribe a una persona (creando o reutilizando su contacto). Respeta el cupo y los eventos cancelados o ya pasados. */
 export async function inscribirAEvento(portalId: string, evento: Evento, d: DatosInscripcion): Promise<{ yaInscrito: boolean }> {
   if (evento.estado !== "publicado") throw new ErrorPortales("invalido", "Este evento fue cancelado.");
-  const fin = Date.parse(evento.terminaEn ?? evento.iniciaEn);
-  if (fin + 3 * 3_600_000 < Date.now()) throw new ErrorPortales("invalido", "Este evento ya terminó.");
+  if (eventoTerminado(evento)) throw new ErrorPortales("invalido", "Este evento ya terminó.");
   const c = db();
   const email = d.email.toLowerCase();
   const { data: previo, error } = await c.from("portal_contactos").select("*").eq("portal_id", portalId).eq("email", email).maybeSingle();

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Heartbeat, HandHeart, MapPin, Wrench } from "@phosphor-icons/react/dist/ssr";
+import { CalendarBlank, HandHeart, Megaphone, Newspaper, UsersThree } from "@phosphor-icons/react/dist/ssr";
 
 import type { PlantillaId } from "@/lib/portales/plantillas";
 import { Pantalla } from "./pantallas";
@@ -28,12 +28,11 @@ function HeroSalud() {
       </svg>
       <Telefono className="absolute top-[3%] left-1/2 -translate-x-1/2 -rotate-3"><Pantalla id="salud" /></Telefono>
       <Vidrio className="absolute top-[50%] -left-[8%] hidden w-[12.8rem] @md:block">
-        <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-full bg-emerald-500 text-white"><Check weight="bold" className="size-4" /></span><div><p className="text-[0.78rem] font-bold">Cita confirmada</p><p className="text-[0.68rem] text-slate-500">Mañana · 9:30 a. m.</p></div></div>
+        <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-full bg-[var(--p)] text-[var(--sobre)]"><CalendarBlank weight="bold" className="size-4" /></span><div><p className="text-[0.78rem] font-bold">Próximo encuentro</p><p className="text-[0.68rem] text-slate-500">Este sábado · 9:30 a. m.</p></div></div>
       </Vidrio>
       <Vidrio retraso={-3} className="absolute right-[-6%] bottom-[9%] hidden w-[11rem] @md:block">
-        <div className="flex items-center gap-2"><Heartbeat weight="duotone" className="size-5 text-[var(--p)]" /><p className="text-[0.78rem] font-bold">Signos vitales</p></div>
-        <svg viewBox="0 0 160 40" className="mt-1.5 h-9 w-full text-[var(--p)]" fill="none"><path d="M0 22h34l8-16 10 30 9-18 6 4h93" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        <p className="text-[0.68rem] text-slate-500">Todo en orden</p>
+        <div className="flex items-center gap-2"><Newspaper weight="duotone" className="size-5 text-[var(--p)]" /><p className="text-[0.78rem] font-bold">Novedades</p></div>
+        <p className="mt-1.5 text-[0.68rem] leading-snug text-slate-500">Una guía o una noticia nueva cada semana</p>
       </Vidrio>
     </div>
   );
@@ -60,10 +59,10 @@ function HeroBelleza() {
       <Destello className="absolute top-[4%] right-[30%] size-4 text-[var(--p)]" />
       <Telefono className="absolute bottom-[-3%] left-1/2 -translate-x-1/2 scale-[.92] rotate-[5deg]"><Pantalla id="belleza" /></Telefono>
       <Vidrio className="absolute top-[56%] -left-[9%] hidden w-[12.4rem] @md:block">
-        <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[var(--p)] to-[var(--p2)] text-[var(--sobre)]"><Check weight="bold" className="size-4" /></span><div><p className="text-[0.78rem] font-bold">Reserva confirmada</p><p className="text-[0.68rem] text-slate-500">Sábado · 3:30 p. m.</p></div></div>
+        <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[var(--p)] to-[var(--p2)] text-[var(--sobre)]"><CalendarBlank weight="bold" className="size-4" /></span><div><p className="text-[0.78rem] font-bold">Taller de la comunidad</p><p className="text-[0.68rem] text-slate-500">Sábado · 3:30 p. m.</p></div></div>
       </Vidrio>
       <Vidrio retraso={-3} className="absolute top-[8%] right-[-3%] hidden w-[9.4rem] @md:block">
-        <p className="text-[0.68rem] font-bold text-slate-500">Paleta del día</p>
+        <p className="text-[0.68rem] font-bold text-slate-500">Tendencia de la semana</p>
         <div className="mt-2 flex gap-1.5">{["var(--p)", "var(--p2)", "#f5b942", "#fde4d3"].map((c, i) => <span key={i} className="size-6 rounded-full ring-2 ring-white" style={{ background: c }} />)}</div>
       </Vidrio>
     </div>
@@ -111,11 +110,11 @@ function HeroMotos({ base }: { base: string }) {
       <span className="absolute right-[7%] bottom-[10%] grid size-24 place-items-center rounded-full border border-white/15 bg-white/[0.07] shadow-[0_0_50px_-10px_var(--p)] backdrop-blur-xl"><Ic id="moto" weight="duotone" className="size-14 text-white" /></span>
       <Telefono oscuro className="absolute -bottom-[10%] left-[-6%] hidden scale-[.58] -rotate-6 origin-bottom-left @4xl:block"><Pantalla id="motos-autos" /></Telefono>
       <Vidrio oscuro className="absolute top-[6%] right-[-3%] hidden w-[12.4rem] @md:block">
-        <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-full bg-[var(--p)] text-[var(--sobre)]"><Wrench weight="bold" className="size-4" /></span><div><p className="text-[0.78rem] font-bold">Mantenimiento</p><p className="text-[0.68rem] text-white/60">Programado en 2 días</p></div></div>
+        <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-full bg-[var(--p)] text-[var(--sobre)]"><CalendarBlank weight="bold" className="size-4" /></span><div><p className="text-[0.78rem] font-bold">Rodada de la comunidad</p><p className="text-[0.68rem] text-white/60">Domingo · 7:00 a. m.</p></div></div>
       </Vidrio>
       <Vidrio oscuro retraso={-3} className="absolute top-[14%] left-[-5%] hidden w-[11.6rem] @md:block">
-        <div className="flex items-center gap-2"><MapPin weight="fill" className="size-4 text-[var(--p)]" /><p className="text-[0.78rem] font-bold">Taller cercano</p></div>
-        <p className="mt-0.5 text-[0.68rem] text-white/60">Cotización recibida</p>
+        <div className="flex items-center gap-2"><Megaphone weight="fill" className="size-4 text-[var(--p)]" /><p className="text-[0.78rem] font-bold">Normas al día</p></div>
+        <p className="mt-0.5 text-[0.68rem] text-white/60">Lo que cambia, explicado</p>
       </Vidrio>
     </div>
   );
@@ -150,12 +149,11 @@ function HeroHogar({ base }: { base: string }) {
       <Malla colores={["#f2cc8f", "var(--p)", "#e07a5f"]} intensidad={0.4} />
       <Casa base={base} className="absolute inset-0 size-full drop-shadow-[0_30px_40px_rgba(42,42,36,0.18)]" />
       <Vidrio className="absolute top-[6%] -left-[2%] hidden w-[12.6rem] @md:block">
-        <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[var(--p)] to-[var(--p2)] text-[var(--sobre)]"><HandHeart weight="duotone" className="size-5" /></span><div><p className="text-[0.78rem] font-bold">Cuidadora en camino</p><p className="text-[0.68rem] text-slate-500">Llega en 20 min</p></div></div>
-        <div className="mt-2 h-1.5 rounded-full bg-black/10"><div className="h-full w-2/3 rounded-full bg-gradient-to-r from-[var(--p)] to-[var(--p2)]" /></div>
+        <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[var(--p)] to-[var(--p2)] text-[var(--sobre)]"><HandHeart weight="duotone" className="size-5" /></span><div><p className="text-[0.78rem] font-bold">Encuentro de cuidadores</p><p className="text-[0.68rem] text-slate-500">Jueves · 6:00 p. m.</p></div></div>
       </Vidrio>
       <Vidrio retraso={-3} className="absolute right-[-3%] bottom-[-3%] hidden w-[12.4rem] @md:block">
         <div className="flex -space-x-2">{["Ana", "Luis", "Marta"].map((n) => <Avatar key={n} nombre={n} className="size-8 text-xs ring-2 ring-white" />)}</div>
-        <p className="mt-2 text-[0.78rem] font-bold">Tu familia en buenas manos</p>
+        <p className="mt-2 flex items-center gap-1.5 text-[0.78rem] font-bold"><UsersThree weight="fill" className="size-4 text-[var(--p)]" /> Cuidadores que se acompañan</p>
       </Vidrio>
     </div>
   );
