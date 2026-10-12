@@ -91,7 +91,7 @@ export async function POST(req: Request) {
         `- ${f.nombre}: ${f.a.votos} → ${f.b.votos} (${f.delta >= 0 ? "+" : ""}${f.delta}); cuota ${f.cuotaA.toFixed(1)}% → ${f.cuotaB.toFixed(1)}%`;
       const datos = [
         `Candidato: ${c.a.nombre ?? body.persona} (${c.a.partido ?? "s/d"}) en la elección más antigua (${c.a.clave}); ${c.b.nombre ?? "sin datos"} (${c.b.partido ?? "s/d"}) en la más reciente (${c.b.clave}). Los votos van de la más antigua a la más reciente.`,
-        `Territorio: ${c.ambito.nombre}. Territorios comparados: ${c.filas.length} de ${c.total}${c.pendientes ? ` (faltaron ${c.pendientes})` : ""}.`,
+        `Territorio: ${c.ambito.nombre}. Territorios comparados: ${c.filas.length} de ${c.total}${c.pendientes ? ` (faltaron ${c.pendientes})` : ""}${c.sinGuardar ? ` (${c.sinGuardar} todavía no están guardados en Supabase)` : ""}.`,
         `Votos: ${t.votosA} → ${t.votosB} (${t.delta >= 0 ? "+" : ""}${t.delta}); cuota ${t.cuotaA.toFixed(1)}% → ${t.cuotaB.toFixed(1)}% de los válidos.`,
         `Cayó en ${t.fugas.territorios} territorios (${t.fugas.votosPerdidos} votos menos) y creció en ${t.crecimiento.territorios} (${t.crecimiento.votosGanados} votos más).`,
         "Mayores caídas:",
@@ -142,7 +142,7 @@ export async function POST(req: Request) {
       const pc = (n: number) => `${(n * 100).toFixed(1)}%`;
       oportunidad = [
         "",
-        `OPORTUNIDAD POR PUESTO DE VOTACIÓN (${o.puestos.length} de ${d.total} puestos${d.pendientes ? `; faltaron ${d.pendientes} por consultar` : ""}):`,
+        `OPORTUNIDAD POR PUESTO DE VOTACIÓN (${o.puestos.length} de ${d.total} puestos${d.pendientes ? `; faltaron ${d.pendientes} por consultar` : ""}${d.sinGuardar ? `; ${d.sinGuardar} puestos todavía no están guardados en Supabase` : ""}):`,
         `Participación media ${pc(o.participacionMedia)}; cuota media del candidato ${pc(o.cuotaMedia)}; votos por ganar (si cada puesto votara como el promedio) ${o.potencialTotal}.`,
         "Perfiles: " + o.segmentos.map((x) => `${SEGMENTO_NOMBRE[x.segmento]} ${x.puestos} puestos (${x.potencial} por ganar)`).join("; "),
         "Los 15 puestos con más votos por ganar:",
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
       `Puesto entre ${ranking.length} candidatos: #${ranking.findIndex((k) => k === candidato) + 1}`,
       `Votos de su partido aquí: ${partido.votos} (${partido.pct}); puesto dentro de su lista: #${lista.indexOf(candidato) + 1} de ${lista.length}`,
       `Votantes del territorio: ${vista.resultado!.votantes}; participación ${vista.resultado!.participacion}`,
-      `Votos por ${vista.hijos.length ? "subdivisión" : "—"} (de mayor a menor)${votos.pendientes ? `, faltan ${votos.pendientes} sin consultar` : ""}:`,
+      `Votos por ${vista.hijos.length ? "subdivisión" : "—"} (de mayor a menor)${votos.pendientes ? `, faltan ${votos.pendientes} sin consultar` : ""}${votos.sinGuardar ? `, ${votos.sinGuardar} todavía no están guardados en Supabase` : ""}:`,
       ...hijos,
     ].join("\n") + oportunidad;
 

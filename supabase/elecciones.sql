@@ -130,6 +130,53 @@ create table if not exists carga_electoral (
 
 alter table carga_electoral enable row level security;
 revoke all on carga_electoral from anon, authenticated;
+
+-- Aviso entre tramos (recomendado): la extensión pg_net hace que Postgres llame a la aplicación para pedir el siguiente tramo. Esa
+-- llamada llega desde fuera de Vercel, así que no choca con su límite de cinco funciones encadenadas (HTTP 508) y la carga sigue
+-- sola todo el tiempo que haga falta, aunque se cierre la pantalla. Si pg_net no está disponible, no pasa nada: la carga sigue por
+-- tramos de cinco y se retoma con «Continuar».
+do $$
+begin
+  create extension if not exists pg_net;
+exception when others then
+  raise notice 'pg_net no está disponible: la carga seguirá por tramos de cinco y se retomará con Continuar.';
+end
+$$;
+
+create or replace function carga_siguiente(p_url text, p_cadena text, p_enfriar boolean default false, p_turno integer default null)
+returns bigint
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  return net.http_post(
+    url := p_url,
+    body := jsonb_build_object('cadena', p_cadena, 'enfriar', p_enfriar, 'turno', p_turno),
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || p_cadena,
+      'Origin', substring(p_url from '^https?://[^/]+')
+    ),
+    timeout_milliseconds := 10000
+  );
+end
+$$;
+
+revoke all on function carga_siguiente(text, text, boolean, integer) from public, anon, authenticated;
+grant execute on function carga_siguiente(text, text, boolean, integer) to service_role;
+
+-- ¿Está instalado el aviso automático? (lo consulta el panel para saber si la carga puede seguir sola sin límite de tramos)
+create or replace function carga_aviso_disponible()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$ select exists (select 1 from pg_extension where extname = 'pg_net') $$;
+
+revoke all on function carga_aviso_disponible() from public, anon, authenticated;
+grant execute on function carga_aviso_disponible() to service_role;
 -- [carga:fin]
 
 -- Nada de esto es público: solo el servidor (service role) lo toca.

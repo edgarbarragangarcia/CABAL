@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createPurposeToken } from "@/lib/admin-auth";
-import { abrirCarga, anotarCarga, asegurarCatalogo, cerrarCarga, leerCarga, type DetalleCarga, type FilaCarga } from "./almacen";
+import { abrirCarga, anotarCarga, asegurarCatalogo, avisarPorBaseDeDatos, avisoAutomaticoDisponible, cerrarCarga, leerCarga, type DetalleCarga, type FilaCarga } from "./almacen";
 import { sincronizarLote } from "./sincronizar";
 
 /**
@@ -22,6 +22,8 @@ export const RUTA_TRAMO = "/api/carga-electoral";
 const PRESUPUESTO_TRAMO_MS = Math.max(1_000, Number(process.env.CARGA_ELECTORAL_PRESUPUESTO_MS) || 32_000);
 /** Cuánto esperar antes de volver a intentarlo cuando la fuente corta las conexiones. */
 const ENFRIAR_MS = Math.max(0, Number(process.env.CARGA_ELECTORAL_ENFRIAR_MS) || 45_000);
+/** Cuánto esperar a que el aviso de Postgres arranque el tramo siguiente antes de seguir por el camino directo. */
+const ESPERA_AVISO_MS = Math.max(300, Number(process.env.CARGA_ELECTORAL_ESPERA_AVISO_MS) || 9_000);
 const MAX_LIMITADAS = 5;
 const MAX_ESTANCADOS = 3;
 const MAX_TRAMOS = 3_000;
@@ -33,20 +35,30 @@ const LIMITE_FUNCION_MS = 55_000;
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ahora = () => new Date().toISOString();
 
+/**
+ * Vercel corta con HTTP 508 (bucle infinito) las cadenas de funciones que se llaman unas a otras más de cinco veces seguidas: así
+ * sale cada ~5 tramos. No es un fallo: la carga hace una pausa y se retoma con «Continuar» (o sola, si la pantalla Datos está abierta).
+ */
+class LimiteDeCadena extends Error {}
+const MENSAJE_PAUSA = "Vercel no deja encadenar más de cinco tramos seguidos, así que la carga hizo una pausa. Se retoma sola si dejas abierta la pantalla Datos; si no, pulsa «Continuar la carga».";
+
 const estaViva = (c: FilaCarga) => c.activa && !!c.ultimoLoteEn && Date.now() - Date.parse(c.ultimoLoteEn) < VIVA_MS;
 
 export type VistaCarga = DetalleCarga & { activa: boolean; enMarcha: boolean; ultimoLoteEn: string | null };
 export type EstadoCarga = {
   /** `false`: falta crear la tabla `carga_electoral` (ejecutar de nuevo supabase/elecciones.sql). */
   disponible: boolean;
+  /** El aviso automático entre tramos (pg_net) está instalado: la carga sigue sola sin el límite de cinco tramos de Vercel. */
+  aviso: boolean;
   carga: VistaCarga | null;
 };
 
 export async function estadoDeCarga(): Promise<EstadoCarga> {
   const { tabla, carga } = await leerCarga();
-  if (!tabla) return { disponible: false, carga: null };
-  if (!carga) return { disponible: true, carga: null };
-  return { disponible: true, carga: { ...carga.estado, activa: carga.activa, enMarcha: estaViva(carga), ultimoLoteEn: carga.ultimoLoteEn } };
+  if (!tabla) return { disponible: false, aviso: false, carga: null };
+  const aviso = await avisoAutomaticoDisponible().catch(() => false);
+  if (!carga) return { disponible: true, aviso, carga: null };
+  return { disponible: true, aviso, carga: { ...carga.estado, activa: carga.activa, enMarcha: estaViva(carga), ultimoLoteEn: carga.ultimoLoteEn } };
 }
 
 export type ResultadoInicio = { ok: true; cadena: string } | { ok: false; motivo: "sin-tabla" | "en-marcha" };
@@ -58,18 +70,28 @@ export async function iniciarCarga(p: { nivelMax: number; eleccion?: string; cor
   if (carga && estaViva(carga)) return { ok: false, motivo: "en-marcha" };
   await asegurarCatalogo();
   const cadena = crypto.randomUUID();
+  // Si se retoma una carga que solo hizo una pausa (el límite de cinco tramos de Vercel) con el mismo alcance, el conteo sigue
+  // acumulándose: así la velocidad y el tiempo que falta no se reinician cada cinco tramos.
+  const previo = carga?.estado;
+  const sigue =
+    !!previo &&
+    previo.fin === "pausa" &&
+    previo.nivelMax === p.nivelMax &&
+    previo.eleccion === p.eleccion &&
+    previo.corporacion === p.corporacion &&
+    Date.now() - Date.parse(previo.terminadaEn ?? "") < 10 * 60_000;
   await abrirCarga(cadena, {
     nivelMax: p.nivelMax,
     ...(p.eleccion ? { eleccion: p.eleccion } : {}),
     ...(p.corporacion ? { corporacion: p.corporacion } : {}),
-    iniciadaEn: ahora(),
-    lotes: 0,
-    guardados: 0,
-    vacios: 0,
-    errores: 0,
+    iniciadaEn: sigue ? (previo.iniciadaEn ?? ahora()) : ahora(),
+    lotes: sigue ? (previo.lotes ?? 0) : 0,
+    guardados: sigue ? (previo.guardados ?? 0) : 0,
+    vacios: sigue ? (previo.vacios ?? 0) : 0,
+    errores: sigue ? (previo.errores ?? 0) : 0,
     limitadasSeguidas: 0,
     estancados: 0,
-    actual: null,
+    actual: sigue ? (previo.actual ?? null) : null,
     mensaje: null,
   });
   return { ok: true, cadena };
@@ -94,14 +116,18 @@ async function esVigente(cadena: string): Promise<boolean> {
  * responder): cualquier problema queda anotado en la fila para que el panel lo muestre. Con `enfriar` no pide nada: espera a que
  * la fuente deje de limitar las consultas y sigue.
  */
-export async function ejecutarTramo(cadena: string, origen: string, enfriar = false): Promise<void> {
+export async function ejecutarTramo(cadena: string, origen: string, enfriar = false, turno?: number): Promise<void> {
   const inicio = Date.now();
   let detalle: DetalleCarga = {};
   try {
     const { tabla, carga } = await leerCarga();
     if (!tabla || !carga || !carga.activa || carga.cadena !== cadena) return;
     detalle = carga.estado;
-    await anotarCarga(cadena, detalle); // «sigo viva»
+    // Un aviso repetido o atrasado (por ejemplo el de Postgres que llega después de que ya se siguió por el camino directo) trae
+    // un turno que ya se usó: se descarta, para que nunca corran dos tramos a la vez y se duplique el ritmo de peticiones.
+    if (turno !== undefined && turno <= (detalle.turno ?? 0)) return;
+    detalle = { ...detalle, turno: turno ?? (detalle.turno ?? 0) + 1 };
+    await anotarCarga(cadena, detalle); // «sigo viva» y turno tomado
 
     if (enfriar) {
       await esperar(ENFRIAR_MS);
@@ -158,15 +184,34 @@ async function seguir(cadena: string, origen: string, detalle: DetalleCarga, enf
     return;
   }
   try {
-    await llamarTramo(origen, cadena, enfriar, inicio + LIMITE_FUNCION_MS);
+    await llamarTramo(origen, cadena, enfriar, inicio + LIMITE_FUNCION_MS, (detalle.turno ?? 0) + 1);
   } catch (err) {
+    if (err instanceof LimiteDeCadena) {
+      await cerrarCarga({ ...detalle, fin: "pausa", terminadaEn: ahora(), mensaje: MENSAJE_PAUSA }, cadena);
+      return;
+    }
     const motivo = err instanceof Error ? err.message : "sin respuesta";
     await cerrarCarga({ ...detalle, fin: "error", terminadaEn: ahora(), mensaje: `La carga no pudo seguir sola (${motivo}). Lo guardado queda; pulsa «Continuar».` }, cadena);
   }
 }
 
-/** Pide al propio servidor el tramo siguiente. Responde enseguida (202) y trabaja en segundo plano. */
-async function llamarTramo(origen: string, cadena: string, enfriar: boolean, limite: number): Promise<void> {
+/**
+ * Pide el tramo siguiente. Primero por Postgres (pg_net), que llama desde fuera y no cuenta para el límite de cinco funciones
+ * encadenadas de Vercel; se comprueba que el siguiente tramo arrancó y, si no, o si pg_net no está instalado, se llama directo al
+ * propio servidor (que responde enseguida con 202 y trabaja en segundo plano).
+ */
+async function llamarTramo(origen: string, cadena: string, enfriar: boolean, limite: number, turno: number): Promise<void> {
+  if (await avisarPorBaseDeDatos(`${origen}${RUTA_TRAMO}`, cadena, enfriar, turno)) {
+    // El aviso de Postgres tarda uno o dos segundos en salir; se espera a ver que el tramo siguiente tomó su turno.
+    const paso = Math.min(1_500, ESPERA_AVISO_MS / 3);
+    for (let espera = 0; limite - Date.now() > 3_500 && espera < ESPERA_AVISO_MS; espera += paso) {
+      await esperar(paso);
+      const { carga } = await leerCarga();
+      if (!carga || !carga.activa || carga.cadena !== cadena) return; // la detuvieron
+      if ((carga.estado.turno ?? 0) >= turno) return;
+    }
+    // No llegó a tiempo: se sigue por el camino directo (si el aviso llega después, su turno ya estará usado y se descarta).
+  }
   const ficha = await createPurposeToken(PROPOSITO_CARGA, 300);
   let ultimo: unknown = new Error("sin respuesta");
   for (let intento = 1; intento <= 3; intento++) {
@@ -177,12 +222,16 @@ async function llamarTramo(origen: string, cadena: string, enfriar: boolean, lim
         method: "POST",
         // El Origin hace falta: las rutas de /api que escriben (src/proxy.ts) solo aceptan peticiones del propio sitio.
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${ficha}`, Origin: origen },
-        body: JSON.stringify({ cadena, enfriar }),
+        body: JSON.stringify({ cadena, enfriar, turno }),
         cache: "no-store",
         signal: AbortSignal.timeout(Math.min(15_000, margen)),
       });
       // 409: ya no es la carga vigente (la detuvieron o empezó otra): no hay nada que seguir.
       if (r.ok || r.status === 409) return;
+      if (r.status === 508) {
+        ultimo = new LimiteDeCadena("HTTP 508");
+        break;
+      }
       ultimo = new Error(`HTTP ${r.status}`);
       if (r.status < 500 && r.status !== 429) break;
     } catch (e) {

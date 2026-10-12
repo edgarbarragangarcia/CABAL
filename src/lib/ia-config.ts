@@ -275,6 +275,24 @@ async function claveDe(proveedor: Proveedor, escrita?: string) {
   return proveedor === "anthropic" ? process.env.ANTHROPIC_API_KEY : undefined;
 }
 
+/**
+ * Proveedor y clave para vectorizar textos (embeddings). Claude no ofrece vectores, así que se usa Gemini u OpenAI: el configurado si
+ * es uno de ellos y, si no, el que tenga clave guardada en Configuración. `null`: no hay ninguna.
+ */
+export async function claveParaVectores(preferido?: "gemini" | "openai"): Promise<{ proveedor: "gemini" | "openai"; clave: string } | null> {
+  const g = await leer();
+  const orden: ("gemini" | "openai")[] = preferido ? [preferido] : g?.proveedor === "openai" ? ["openai", "gemini"] : ["gemini", "openai"];
+  for (const proveedor of orden) {
+    try {
+      const clave = await claveDe(proveedor);
+      if (clave) return { proveedor, clave };
+    } catch {
+      /* la clave guardada no se pudo leer (cambió ADMIN_SESSION_SECRET): se prueba con la otra */
+    }
+  }
+  return null;
+}
+
 /** Modelos de texto que ofrece el proveedor a esta clave, consultados en su API. */
 export async function listarModelos(proveedor: Proveedor, escrita?: string): Promise<string[]> {
   const clave = await claveDe(proveedor, escrita);

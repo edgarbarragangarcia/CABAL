@@ -123,7 +123,11 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  if (isMutation) {
+  // Las APIs del panel ya exigen la sesión (arriba) y las usa una sola persona, a veces con muchas peticiones seguidas (subir un
+  // archivo por partes, cargar resultados...): el límite por minuto es para los formularios públicos. El inicio de sesión sí lo conserva.
+  const esApiDelPanel = pathname.startsWith("/api/admin/") && pathname !== "/api/admin/login";
+
+  if (isMutation && !esApiDelPanel) {
     const ip = getClientIp(request);
     const result = await rateLimit(`${pathname}:${ip}`);
 

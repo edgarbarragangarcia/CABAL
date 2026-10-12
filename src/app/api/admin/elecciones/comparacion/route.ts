@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const { filas, ...resto } = c;
     return NextResponse.json(
       { ...resto, transferencia: calcularTransferencia(filas) },
-      { headers: { "Cache-Control": c.pendientes ? "no-store" : "private, max-age=600" } }
+      { headers: { "Cache-Control": c.pendientes || c.sinGuardar ? "no-store" : "private, max-age=600" } }
     );
   } catch (err) {
     return NextResponse.json(

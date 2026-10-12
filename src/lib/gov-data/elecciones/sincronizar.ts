@@ -20,8 +20,11 @@ export const PARES: ParElectoral[] = ELECCIONES.flatMap((e) =>
   e.corporaciones.map((c) => ({ eleccion: e.id, corporacion: c.sigla, eleccionNombre: e.nombre, corporacionNombre: c.nombre, fecha: e.fecha }))
 );
 
-/** Hasta qué nivel se guarda: 2 = país y departamentos, 3 = más los municipios, 5 = más zonas, localidades y comunas. */
-export const NIVELES_SINCRONIZACION = [2, 3, 5] as const;
+/**
+ * Hasta qué nivel se guarda: 2 = país y departamentos, 3 = más los municipios, 5 = más zonas, localidades y comunas, 6 = más los
+ * puestos de votación (unos 13.000 por elección: se carga cargo por cargo). Las mesas no se guardan.
+ */
+export const NIVELES_SINCRONIZACION = [2, 3, 5, 6] as const;
 
 /** Con pocas peticiones a la vez y una pausa entre ellas: el firewall de la Registraduría corta a quien pide más de unas 13.000 por hora. */
 const CONCURRENCIA = 2;
@@ -31,6 +34,12 @@ const PRESUPUESTO_MS = 38_000;
 const FALLOS_PARA_PARAR = 6;
 const SUBIR_CADA = 20;
 const INTENTOS_SIN_RESULTADO = 12;
+/**
+ * Un territorio «no publicado» (la fuente responde 404 o la página de la aplicación en vez del archivo) se pide hasta tres veces
+ * antes de darlo por bueno: con la carga a buen ritmo la fuente a veces responde así a archivos que sí existen (Valledupar en el
+ * Senado, un departamento entero en la Cámara...), y quedaría guardado como definitivo.
+ */
+const INTENTOS_CONFIRMAR_NO_PUBLICADO = 3;
 /** Lo que puede alargarse una petición ya empezada cuando se acaba el tiempo del lote (con la fuente lenta o colgada). */
 const COLA_MS = 12_000;
 
@@ -179,7 +188,12 @@ export async function sincronizarLote(p: { eleccion?: string; corporacion?: stri
       if (sinResultadoDondeDebia >= INTENTOS_SIN_RESULTADO && conResultadoAntes + (guardados - guardadosAntes) + porSubir.length === 0) return;
       try {
         // Siempre con el mapa de ganadores y sin la caché de Next: lo que se guarda aquí es la copia completa.
-        const r = await resultadoEnVivo(eleccion, corporacion.sigla, t.codigo, data.partidos, geo, true, true, limite + COLA_MS);
+        let r = await resultadoEnVivo(eleccion, corporacion.sigla, t.codigo, data.partidos, geo, true, true, limite + COLA_MS);
+        // Los datos de datos.gov.co (Congreso 2018) no tienen este problema: una consulta vacía es vacía.
+        for (let intento = 1; !r && eleccion.fuente !== "socrata" && intento < INTENTOS_CONFIRMAR_NO_PUBLICADO && Date.now() < limite + COLA_MS - 4_000; intento++) {
+          await esperar(700 * intento);
+          r = await resultadoEnVivo(eleccion, corporacion.sigla, t.codigo, data.partidos, geo, true, true, limite + COLA_MS);
+        }
         if (!r && t.nivel >= corporacion.nivelEleccion) sinResultadoDondeDebia++;
         (r ? porSubir : sinPublicar).push(filaDe(eleccion, corporacion, t, r, true));
         seguidos = 0;

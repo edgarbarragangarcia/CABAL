@@ -241,7 +241,7 @@ export function AnalizadorTab() {
         <div className="mt-3 flex max-h-[560px] flex-wrap gap-2 overflow-y-auto">
           {loading && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Consultando la Registraduría...
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Consultando Supabase...
             </p>
           )}
           {!loading && disponibles.map((t, i) => <Chip key={i} t={t} onAdd={agregar} eleccionId={cargo?.eleccion} />)}
@@ -452,7 +452,9 @@ export function AnalizadorTab() {
           </div>
         )}
         {vista && !vista.resultado && (
-          <p className="mt-4 text-sm text-muted-foreground">La Registraduría no publica resultados de este cargo para {lugar}.</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            {vista.sinGuardar ? `El resultado de este cargo para ${lugar} todavía no está guardado en Supabase.` : `La Registraduría no publica resultados de este cargo para ${lugar}.`}
+          </p>
         )}
       </section>
     </div>

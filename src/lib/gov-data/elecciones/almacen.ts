@@ -58,6 +58,16 @@ export function reiniciarInterruptor() {
   avisado = false;
 }
 
+/**
+ * Por qué no se puede leer de Supabase ahora mismo (o `null` si se puede). Sirve para decir la verdad cuando algo no aparece:
+ * no es lo mismo «todavía no está guardado» que «Supabase no respondió».
+ */
+export function motivoSinLectura(): string | null {
+  if (!getSupabaseServerClient()) return "Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).";
+  if (Date.now() < apagadoHasta) return "Supabase no respondió hace un momento; intenta de nuevo en unos segundos.";
+  return null;
+}
+
 // ------------------------------------------------------------ lectura ---
 
 /**
@@ -228,8 +238,10 @@ export type DetalleCarga = {
   corporacion?: string;
   iniciadaEn?: string;
   terminadaEn?: string;
-  /** Cómo terminó: listo, detenida a pedido, o por un problema (ver `mensaje`). */
-  fin?: "listo" | "detenida" | "error";
+  /** Cómo terminó: listo, detenida a pedido, en pausa (límite de la plataforma: se retoma) o por un problema (ver `mensaje`). */
+  fin?: "listo" | "detenida" | "pausa" | "error";
+  /** Número del último tramo empezado: un aviso repetido o atrasado (que trae un número ya usado) se descarta. */
+  turno?: number;
   lotes?: number;
   guardados?: number;
   vacios?: number;
@@ -258,6 +270,32 @@ export async function leerCarga(): Promise<{ tabla: boolean; carga: FilaCarga | 
   if (!data) return { tabla: true, carga: null };
   const f = data as Fila;
   return { tabla: true, carga: { activa: !!f.activa, cadena: f.cadena ?? null, ultimoLoteEn: f.ultimo_lote_en ?? null, estado: (f.estado ?? {}) as DetalleCarga } };
+}
+
+let sinAvisoHasta = 0;
+
+/** ¿Está instalado el aviso automático entre tramos (pg_net y la función `carga_siguiente`)? */
+export async function avisoAutomaticoDisponible(): Promise<boolean> {
+  const c = getSupabaseServerClient();
+  if (!c) return false;
+  const { data, error } = await c.rpc("carga_aviso_disponible");
+  return !error && data === true;
+}
+
+/**
+ * Pide a Postgres (extensión pg_net, función `carga_siguiente` de supabase/elecciones.sql) que llame desde fuera a la aplicación para
+ * el siguiente tramo. Esa llamada no viene de otra función de Vercel, así que no cuenta para el límite de cinco funciones
+ * encadenadas (HTTP 508) y la carga puede seguir sola todo el tiempo que haga falta. `false` = no está instalada (o falló): se sigue
+ * por el camino directo.
+ */
+export async function avisarPorBaseDeDatos(url: string, cadena: string, enfriar: boolean, turno: number): Promise<boolean> {
+  if (Date.now() < sinAvisoHasta) return false;
+  const c = getSupabaseServerClient();
+  if (!c) return false;
+  const { error } = await c.rpc("carga_siguiente", { p_url: url, p_cadena: cadena, p_enfriar: enfriar, p_turno: turno });
+  if (!error) return true;
+  sinAvisoHasta = Date.now() + 10 * 60_000;
+  return false;
 }
 
 /** Empieza una carga nueva: reemplaza la fila (y con ella cualquier carga anterior, que al no ser ya la vigente se corta sola). */
@@ -303,6 +341,18 @@ export async function coberturaGuardada(): Promise<CoberturaNivel[]> {
   const { data, error } = await c.rpc("cobertura_electoral");
   if (error) throw errorDeTablas(error);
   return ((data ?? []) as Fila[]).map((f) => ({ eleccion: f.eleccion, corporacion: f.corporacion, nivel: f.nivel ?? null, guardados: Number(f.guardados) || 0, vacios: Number(f.vacios) || 0, ultima: f.ultima ?? null }));
+}
+
+/**
+ * Borra las marcas de «la fuente no publica este territorio» (filas sin datos): al volver a cargar se piden de nuevo y solo quedan
+ * así las que la fuente confirma. Es el arreglo para marcas puestas por un fallo pasajero. Devuelve cuántas quitó.
+ */
+export async function olvidarNoPublicados(): Promise<number> {
+  const c = getSupabaseServerClient();
+  if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
+  const { data, error } = await c.from(TABLA).delete().eq("vacio", true).select("ambito");
+  if (error) throw errorDeTablas(error);
+  return (data ?? []).length;
 }
 
 /** Códigos de territorio ya guardados (incluidos los que la fuente no publica) hasta cierto nivel. */

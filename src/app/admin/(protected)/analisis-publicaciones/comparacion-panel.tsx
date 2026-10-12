@@ -21,6 +21,8 @@ type Respuesta = {
   b: { nombre?: string; partido?: string; clave: string };
   total: number;
   pendientes: number;
+  /** Territorios que no están guardados en Supabase en una de las dos elecciones. */
+  sinGuardar?: number;
   noSoportado: boolean;
   transferencia: Transferencia;
 };
@@ -174,10 +176,15 @@ export function ComparacionPanel({
       )}
       {(error || faltan > 0) && (
         <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-red-700 dark:text-red-300">
-          {error ?? `La Registraduría no respondió por ${fmt(faltan)} territorios; puede estar limitando las consultas.`}
+          {error ?? `No se pudo leer ${fmt(faltan)} territorios.`}
           <button type="button" onClick={retry} className="rounded-full border border-border bg-surface px-2.5 py-0.5 font-medium text-foreground">
             Reintentar
           </button>
+        </p>
+      )}
+      {!!data?.sinGuardar && !loading && (
+        <p className="mt-3 text-xs text-amber-800 dark:text-amber-300">
+          {fmt(data.sinGuardar)} de {fmt(data.total)} territorios todavía no están guardados en Supabase en alguna de las dos elecciones: no entran en la comparación.
         </p>
       )}
       {data?.noSoportado && (

@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod";
 
-import { asegurarCatalogo, estadoAlmacen, reiniciarInterruptor } from "@/lib/gov-data/elecciones/almacen";
+import { asegurarCatalogo, estadoAlmacen, olvidarNoPublicados, reiniciarInterruptor } from "@/lib/gov-data/elecciones/almacen";
 import { detenerCarga, ejecutarTramo, estadoDeCarga, iniciarCarga } from "@/lib/gov-data/elecciones/carga";
 import { SQL_CARGA_ELECTORAL, SQL_ELECCIONES } from "@/lib/gov-data/elecciones/sql";
 import { NIVELES_SINCRONIZACION, PARES, estadoSincronizacion, sincronizarLote } from "@/lib/gov-data/elecciones/sincronizar";
@@ -19,9 +19,10 @@ const editorSql = () => {
 async function cargaEnSegundoPlano() {
   try {
     const e = await estadoDeCarga();
-    return e.disponible ? e : { ...e, sql: SQL_CARGA_ELECTORAL, editorSql: editorSql() };
+    // Sin la tabla, o sin el aviso automático, el panel muestra el SQL (es el mismo bloque y se puede repetir).
+    return e.disponible && e.aviso ? e : { ...e, sql: SQL_CARGA_ELECTORAL, editorSql: editorSql() };
   } catch (err) {
-    return { disponible: false, carga: null, error: err instanceof Error ? err.message : "No se pudo leer la carga." };
+    return { disponible: false, aviso: false, carga: null, error: err instanceof Error ? err.message : "No se pudo leer la carga." };
   }
 }
 
@@ -57,6 +58,7 @@ const cargoValido = (v: { eleccion?: string; corporacion?: string }) => PARES.so
 const accion = z.union([
   alcance.extend({ accion: z.literal("iniciar") }),
   z.object({ accion: z.literal("detener") }),
+  z.object({ accion: z.literal("revisar-no-publicados") }),
   alcance.extend({ accion: z.literal("lote").optional() }),
 ]);
 
@@ -73,6 +75,12 @@ export async function POST(req: Request) {
     if (a.accion === "detener") {
       await detenerCarga();
       return NextResponse.json({ ok: true, carga: await estadoDeCarga() });
+    }
+    if (a.accion === "revisar-no-publicados") {
+      // No se toca nada mientras una carga esté en marcha: pisaría lo que va guardando.
+      const { carga } = await estadoDeCarga();
+      if (carga?.enMarcha) return NextResponse.json({ error: "Hay una carga en marcha: detenla o espera a que termine." }, { status: 409 });
+      return NextResponse.json({ ok: true, quitados: await olvidarNoPublicados() });
     }
     if (a.accion === "iniciar") {
       const inicio = await iniciarCarga(a);

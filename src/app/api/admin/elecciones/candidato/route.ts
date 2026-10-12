@@ -26,7 +26,7 @@ export async function GET(req: Request) {
       candidato,
     });
     // Si quedaron territorios sin consultar, el navegador vuelve a pedirla: no se cachea a medias.
-    const cache = votos.pendientes ? "no-store" : "private, max-age=600";
+    const cache = votos.pendientes || votos.sinGuardar ? "no-store" : "private, max-age=600";
     return NextResponse.json(votos, { headers: { "Cache-Control": cache } });
   } catch (err) {
     return NextResponse.json(

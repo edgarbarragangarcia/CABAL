@@ -209,8 +209,10 @@ function useVotosCandidato(url: string | null) {
   return {
     data: actual?.data,
     error: actual?.error,
-    /** Tras todas las tandas, la Registraduría no respondió por algunos territorios. */
+    /** Tras todas las tandas, no se pudo leer algún territorio. */
     faltantes: actual?.agotado ? (actual.data?.pendientes ?? 0) : 0,
+    /** Territorios que todavía no están guardados en Supabase (no se piden a la fuente). */
+    sinGuardar: actual?.data?.sinGuardar ?? 0,
     loading: !!url && !actual?.error && !actual?.agotado && (!actual?.data || actual.data.pendientes > 0),
     retry: () => setIntento((n) => n + 1),
   };
@@ -738,7 +740,7 @@ export function ExploradorElectoral() {
             </p>
             <p className="mt-2 text-xl font-bold tracking-tight sm:text-2xl">{encabezado}</p>
             <p className="mt-1 text-xs text-white/80">
-              {vista?.fuente ?? "Preconteo oficial de la Registraduría Nacional del Estado Civil"}
+              {vista?.fuente ?? "Preconteo oficial de la Registraduría Nacional del Estado Civil · copia guardada en Supabase"}
               {r?.corte ? ` · corte ${r.corte}` : ""}
               {vista?.origen && (
                 <span
@@ -836,13 +838,19 @@ export function ExploradorElectoral() {
               <X className="size-3.5" aria-hidden="true" />
               Dejar de seguir
             </button>
+            {votos.sinGuardar > 0 && !votos.loading && !votos.error && (
+              <p className="flex w-full flex-wrap items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+                <Database className="size-3.5" aria-hidden="true" />
+                {fmt(votos.sinGuardar)} de {fmt(votos.data?.hijos.length ?? 0)} territorios todavía no están guardados en Supabase: sus votos no se cuentan aquí.
+              </p>
+            )}
             {(votos.loading || votos.error || votos.faltantes > 0) && (
               <p className="flex w-full flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 {votos.error || votos.faltantes > 0 ? (
                   <>
                     <span className="text-red-700 dark:text-red-300">
                       {votos.error ??
-                        `La Registraduría no respondió por ${fmt(votos.faltantes)} de ${fmt(votos.data?.hijos.length ?? 0)}; puede estar limitando las consultas.`}
+                        `No se pudo leer ${fmt(votos.faltantes)} de ${fmt(votos.data?.hijos.length ?? 0)} territorios.`}
                     </span>
                     <button
                       type="button"
@@ -867,9 +875,22 @@ export function ExploradorElectoral() {
         {vista && !r && !loading && (
           <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-400/15 to-orange-400/5 p-3 text-xs text-amber-800 dark:text-amber-300">
             <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            La Registraduría no publica resultados de {vista.corporacion.nombre} para{" "}
-            {vista.ambito.nivel === 1 ? "todo el país" : titulo(vista.ambito.nombre)}
-            {vista.ambito.nivel === 7 ? " (no hay detalle por mesa en esta elección)" : ""}.
+            {vista.sinGuardar ? (
+              <>
+                {`El resultado de ${vista.corporacion.nombre} para ${vista.ambito.nivel === 1 ? "todo el país" : titulo(vista.ambito.nombre)} todavía no está guardado en Supabase. `}
+                {vista.ambito.nivel === 7
+                  ? "Las mesas no se guardan, así que no se muestran."
+                  : vista.ambito.nivel === 6
+                    ? "Esta pantalla solo lee de Supabase: los puestos se guardan desde Análisis > Datos con la opción «Con puestos de votación», cargo por cargo."
+                    : "Esta pantalla solo lee de Supabase: se guarda desde Análisis > Datos."}
+              </>
+            ) : (
+              <>
+                La Registraduría no publica resultados de {vista.corporacion.nombre} para{" "}
+                {vista.ambito.nivel === 1 ? "todo el país" : titulo(vista.ambito.nombre)}
+                {vista.ambito.nivel === 7 ? " (no hay detalle por mesa en esta elección)" : ""}.
+              </>
+            )}
           </p>
         )}
 
@@ -1163,7 +1184,7 @@ export function ExploradorElectoral() {
               )
             ) : loading ? (
               <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Consultando la Registraduría...
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Consultando Supabase...
               </p>
             ) : null}
           </div>

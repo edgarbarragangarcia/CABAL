@@ -19,8 +19,8 @@ export async function GET(req: Request) {
       ambito: searchParams.get("a"),
       dane: searchParams.get("dane"),
     });
-    // Resultados cerrados: pueden cachearse en el navegador sin problema.
-    return NextResponse.json(vista, { headers: { "Cache-Control": "private, max-age=600" } });
+    // Resultados cerrados: pueden cachearse en el navegador sin problema (salvo que falte guardarlos: eso puede cambiar enseguida).
+    return NextResponse.json(vista, { headers: { "Cache-Control": vista.sinGuardar ? "no-store" : "private, max-age=600" } });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "No fue posible cargar los resultados." },

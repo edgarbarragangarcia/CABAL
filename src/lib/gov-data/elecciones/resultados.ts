@@ -3,7 +3,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 
 import { ELECCIONES_DATA, GEOS } from "@/data/elecciones";
-import { guardarEnSegundoPlano, leerGuardado, leerGuardados } from "./almacen";
+import { guardarEnSegundoPlano, leerGuardado, leerGuardados, motivoSinLectura } from "./almacen";
 import { filaDe, type Territorio } from "./almacen-puro";
 import { findEleccion, type CorporacionInfo, type EleccionInfo } from "./catalogo";
 import { alReves, mismaPersona, normalizar as normalizarTexto, type FilaComparacion, type Lado } from "./comparacion";
@@ -109,6 +109,8 @@ export type VistaElectoral = {
   fuente: string;
   /** De dónde salió `resultado`: la copia guardada en Supabase, o la fuente en vivo (y entonces se guarda de paso para la próxima). */
   origen: "supabase" | "vivo";
+  /** Este territorio todavía no está guardado en Supabase (`resultado` es null porque falta, no porque la fuente no lo publique). */
+  sinGuardar?: boolean;
 };
 
 // -------------------------------------------------------- geografía ---
@@ -375,6 +377,21 @@ export function territorioDe(geo: Geografia, codigo: string): Territorio {
   return { codigo };
 }
 
+/**
+ * Votaciones lee SOLO de Supabase: la fuente (Registraduría o datos.gov.co) únicamente alimenta la copia, ya sea con la carga de
+ * Análisis > Datos o con «Guardar en Supabase». Con la variable ELECCIONES_FUENTE_EN_VIVO=1 se vuelve al comportamiento anterior
+ * (si no está guardado, pedirlo a la fuente y guardarlo de paso): válvula de escape por si hiciera falta.
+ */
+const fuenteEnVivoPermitida = () => process.env.ELECCIONES_FUENTE_EN_VIVO === "1";
+
+/** Lo pedido no está guardado en Supabase (y no se va a pedir a la fuente). */
+export class NoGuardadoError extends Error {
+  constructor(motivo?: string | null) {
+    super(motivo ?? "Todavía no está guardado en Supabase. Se guarda desde Análisis > Datos.");
+    this.name = "NoGuardadoError";
+  }
+}
+
 /** Pide un territorio a la fuente y lo guarda en Supabase de paso, para que la próxima vez no haga falta. */
 async function pedirYGuardar(
   eleccion: EleccionInfo,
@@ -407,6 +424,7 @@ async function resultadoDeConOrigen(
 ): Promise<{ resultado: Resultado | null; origen: "supabase" | "vivo" }> {
   const guardado = previos ? (previos.has(codigo) ? previos.get(codigo) : undefined) : await leerGuardado(eleccion, sigla, codigo, conMapa);
   if (guardado !== undefined) return { resultado: guardado, origen: "supabase" };
+  if (!fuenteEnVivoPermitida()) throw new NoGuardadoError(motivoSinLectura());
   try {
     return { resultado: await pedirYGuardar(eleccion, sigla, codigo, partidos, geo, conMapa), origen: "vivo" };
   } catch (err) {
@@ -557,7 +575,16 @@ async function contexto(params: ParamsAmbito) {
 
 export async function getVistaElectoral(params: ParamsAmbito): Promise<VistaElectoral> {
   const { eleccion, corporacion, data, geo, codigo, ambito, ruta, hijos } = await contexto(params);
-  const { resultado, origen } = await resultadoDeConOrigen(eleccion, corporacion.sigla, codigo, data.partidos, geo, true);
+  let resultado: Resultado | null = null;
+  let origen: "supabase" | "vivo" = "supabase";
+  let sinGuardar = false;
+  try {
+    ({ resultado, origen } = await resultadoDeConOrigen(eleccion, corporacion.sigla, codigo, data.partidos, geo, true));
+  } catch (err) {
+    // Falta en Supabase: la vista se arma igual (ruta y lista de hijos) y dice que falta, en vez de fallar entera.
+    if (!(err instanceof NoGuardadoError)) throw err;
+    sinGuardar = true;
+  }
 
   // Del país y los departamentos, `mapagan` ya trae el ganador de cada hijo.
   // Más abajo se consulta cada hijo, si no son demasiados.
@@ -571,7 +598,7 @@ export async function getVistaElectoral(params: ParamsAmbito): Promise<VistaElec
     const guardados = await leerGuardados(eleccion, corporacion.sigla, hijos.map((h) => h.codigo), false);
     const faltan = hijos.filter((h) => !guardados.has(h.codigo));
     const vivos = new Map<string, Resultado | null>();
-    if (faltan.length > 0) {
+    if (faltan.length > 0 && fuenteEnVivoPermitida()) {
       origenVista = "vivo";
       const limite = Date.now() + TOPE_HIJOS_MS;
       await mapLimit(faltan, 4, async (h) => {
@@ -597,10 +624,15 @@ export async function getVistaElectoral(params: ParamsAmbito): Promise<VistaElec
     ganadoresHijos,
     resultado,
     origen: origenVista,
-    fuente:
-      eleccion.fuente === "socrata"
+    ...(sinGuardar ? { sinGuardar: true } : {}),
+    // La fuente de los datos es la Registraduría, pero lo que se muestra es la copia guardada en Supabase.
+    fuente: fuenteEnVivoPermitida()
+      ? eleccion.fuente === "socrata"
         ? "Resultados oficiales de la Registraduría publicados en datos.gov.co, mesa a mesa (no incluyen el departamento del Cesar ni el censo)"
-        : `Preconteo oficial de la Registraduría Nacional del Estado Civil (${eleccion.host}.registraduria.gov.co)`,
+        : `Preconteo oficial de la Registraduría Nacional del Estado Civil (${eleccion.host}.registraduria.gov.co)`
+      : eleccion.fuente === "socrata"
+        ? "Resultados oficiales de la Registraduría (datos.gov.co, mesa a mesa; no incluyen el departamento del Cesar ni el censo) · copia guardada en Supabase"
+        : "Preconteo oficial de la Registraduría Nacional del Estado Civil · copia guardada en Supabase",
   };
 }
 
@@ -624,6 +656,8 @@ export type VotosCandidato = {
   hijos: VotosHijo[];
   /** Hijos que no alcanzaron a consultarse: la siguiente llamada los completa (los demás ya están en caché). */
   pendientes: number;
+  /** Hijos que todavía no están guardados en Supabase (no se piden a la fuente): volver a pedir no los trae, hay que guardarlos. */
+  sinGuardar: number;
 };
 
 /** Tiempo de consulta por llamada: Vercel corta la función a los 60 s. */
@@ -650,9 +684,12 @@ export async function getVotosCandidato(
 
   const propio = delCandidato(await resultadoDe(eleccion, corporacion.sigla, codigo, data.partidos, geo));
   const limite = Date.now() + PRESUPUESTO_MS;
+  const enVivo = fuenteEnVivoPermitida();
   const previos = await leerGuardadosEnTandas(eleccion, corporacion.sigla, hijos.map((h) => h.codigo), false);
   const votosHijos = await mapLimit(hijos, 6, async (h): Promise<VotosHijo> => {
     const base = { codigo: h.codigo, nombre: h.nombre, nivel: h.nivel, ...(h.dane ? { dane: h.dane } : {}) };
+    // Solo Supabase: lo que no está guardado queda sin votos (y se cuenta aparte), sin pedirlo a la fuente.
+    if (!enVivo) return previos.has(h.codigo) ? { ...base, ...delCandidato(previos.get(h.codigo) ?? null) } : { ...base, votos: null, pct: "" };
     if (Date.now() > limite) return { ...base, votos: null, pct: "" };
     try {
       return { ...base, ...delCandidato(await resultadoDe(eleccion, corporacion.sigla, h.codigo, data.partidos, geo, false, previos)) };
@@ -661,11 +698,13 @@ export async function getVotosCandidato(
     }
   });
 
+  const sinVotos = votosHijos.filter((h) => h.votos === null).length;
   return {
     ambito,
     ...propio,
     hijos: votosHijos,
-    pendientes: votosHijos.filter((h) => h.votos === null).length,
+    pendientes: enVivo ? sinVotos : 0,
+    sinGuardar: enVivo ? 0 : sinVotos,
   };
 }
 
@@ -681,6 +720,8 @@ export type DatosOportunidad = {
   /** Puestos consultados hasta ahora; si faltan, la siguiente llamada los completa (los demás ya están en caché). */
   puestos: PuestoDatos[];
   pendientes: number;
+  /** Puestos que todavía no están guardados en Supabase (no se piden a la fuente): hay que guardarlos para analizarlos. */
+  sinGuardar: number;
   /** El ámbito tiene más puestos de los que se analizan; hay que elegir uno más pequeño. */
   demasiados: boolean;
   /** La fuente no trae el censo (Congreso 2018): no hay abstención ni oportunidad. */
@@ -696,10 +737,10 @@ export async function getDatosOportunidad(
   params: ParamsAmbito & { circunscripcion: string; partido: string; candidato: string }
 ): Promise<DatosOportunidad> {
   const { eleccion, corporacion, data, geo, codigo, ambito } = await contexto(params);
-  if (eleccion.fuente === "socrata") return { ambito, total: 0, puestos: [], pendientes: 0, demasiados: false, sinCenso: true };
+  if (eleccion.fuente === "socrata") return { ambito, total: 0, puestos: [], pendientes: 0, sinGuardar: 0, demasiados: false, sinCenso: true };
   const idx = geo.byCode.get(codigo);
   if (idx === undefined || ambito.nivel < 3) {
-    return { ambito, total: 0, puestos: [], pendientes: 0, demasiados: ambito.nivel < 3 };
+    return { ambito, total: 0, puestos: [], pendientes: 0, sinGuardar: 0, demasiados: ambito.nivel < 3 };
   }
 
   // Todos los puestos (nivel 6) bajo el ámbito, con la zona donde están.
@@ -709,7 +750,7 @@ export async function getDatosOportunidad(
     for (const h of geo.children.get(i) ?? []) bajar(h, geo.rows[i][2] === 4 ? geo.rows[i][1] : zona);
   };
   bajar(idx, "");
-  if (lista.length > MAX_PUESTOS_OPORTUNIDAD) return { ambito, total: lista.length, puestos: [], pendientes: 0, demasiados: true };
+  if (lista.length > MAX_PUESTOS_OPORTUNIDAD) return { ambito, total: lista.length, puestos: [], pendientes: 0, sinGuardar: 0, demasiados: true };
 
   const delCandidato = (r: Resultado | null) => {
     const circ =
@@ -719,18 +760,23 @@ export async function getDatosOportunidad(
       ?.votos ?? 0;
   };
   const limite = Date.now() + PRESUPUESTO_MS;
+  const enVivo = fuenteEnVivoPermitida();
+  const previos = await leerGuardadosEnTandas(eleccion, corporacion.sigla, lista.map(({ i }) => geo.rows[i][0]), false);
   const filas = await mapLimit(lista, 6, async ({ i, zona }): Promise<PuestoDatos | null> => {
-    if (Date.now() > limite) return null;
     const [cod, nombre] = geo.rows[i];
+    // Solo Supabase: un puesto que no está guardado simplemente no entra (y se cuenta aparte).
+    if (!enVivo && !previos.has(cod)) return null;
+    if (Date.now() > limite) return null;
     try {
-      const r = await resultadoDe(eleccion, corporacion.sigla, cod, data.partidos, geo);
+      const r = await resultadoDe(eleccion, corporacion.sigla, cod, data.partidos, geo, false, previos);
       return r ? { codigo: cod, nombre, zona, censo: r.censo, votantes: r.votantes, votos: delCandidato(r) } : null;
     } catch {
       return null;
     }
   });
   const puestos = filas.filter((f): f is PuestoDatos => f !== null);
-  return { ambito, total: lista.length, puestos, pendientes: lista.length - puestos.length, demasiados: false };
+  const sinGuardar = enVivo ? 0 : lista.filter(({ i }) => !previos.has(geo.rows[i][0])).length;
+  return { ambito, total: lista.length, puestos, pendientes: enVivo ? lista.length - puestos.length : 0, sinGuardar, demasiados: false };
 }
 
 // -------------------------------------------------------- comparación ---
@@ -748,6 +794,8 @@ export type Comparacion = {
   total: number;
   /** Territorios sin consultar todavía: la siguiente llamada los completa. */
   pendientes: number;
+  /** Territorios que no están guardados en Supabase en una de las dos elecciones (no se piden a la fuente). */
+  sinGuardar: number;
   /** Solo se comparan país, departamentos y municipios. */
   noSoportado: boolean;
 };
@@ -801,7 +849,7 @@ export async function getComparacion(params: {
   const ca = await contexto({ eleccion: params.a.eleccion, corporacion: params.a.corporacion, ambito: null, dane });
   const claveA = `${ca.eleccion.id}|${ca.corporacion.sigla}`;
   const claveB = `${cb.eleccion.id}|${cb.corporacion.sigla}`;
-  const vacio = { ambito: cb.ambito, a: { clave: claveA }, b: { clave: claveB }, filas: [], total: 0, pendientes: 0 };
+  const vacio = { ambito: cb.ambito, a: { clave: claveA }, b: { clave: claveB }, filas: [], total: 0, pendientes: 0, sinGuardar: 0 };
   if (cb.ambito.nivel > 3 || ca.ambito.nivel !== cb.ambito.nivel) return { ...vacio, noSoportado: true };
 
   const bogota = dane === "11001";
@@ -817,7 +865,14 @@ export async function getComparacion(params: {
     leerGuardadosEnTandas(ca.eleccion, ca.corporacion.sigla, pares.map((x) => x.ha.codigo), false),
     leerGuardadosEnTandas(cb.eleccion, cb.corporacion.sigla, pares.map((x) => x.hb.codigo), false),
   ]);
+  const enVivo = fuenteEnVivoPermitida();
+  let sinGuardar = 0;
   const filas = await mapLimit(pares, 6, async ({ ha, hb }): Promise<FilaComparacion | null> => {
+    // Solo Supabase: si falta en cualquiera de las dos elecciones no se compara (y se cuenta aparte).
+    if (!enVivo && !(previosA.has(ha.codigo) && previosB.has(hb.codigo))) {
+      sinGuardar++;
+      return null;
+    }
     if (Date.now() > limite) return null;
     try {
       const [ra, rb] = await Promise.all([
@@ -848,7 +903,8 @@ export async function getComparacion(params: {
     b: invertir ? izq : der,
     filas: invertir ? alReves(listas) : listas,
     total: pares.length,
-    pendientes: pares.length - listas.length,
+    pendientes: enVivo ? pares.length - listas.length : 0,
+    sinGuardar,
     noSoportado: false,
   };
 }

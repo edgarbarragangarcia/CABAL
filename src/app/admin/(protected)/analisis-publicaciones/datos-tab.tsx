@@ -33,7 +33,7 @@ type VistaCarga = {
   corporacion?: string;
   iniciadaEn?: string;
   terminadaEn?: string;
-  fin?: "listo" | "detenida" | "error";
+  fin?: "listo" | "detenida" | "pausa" | "error";
   lotes?: number;
   guardados?: number;
   vacios?: number;
@@ -43,16 +43,17 @@ type VistaCarga = {
   pendientes?: number | null;
   total?: number | null;
 };
-type EstadoCarga = { disponible: boolean; carga: VistaCarga | null; sql?: string; editorSql?: string; error?: string };
+type EstadoCarga = { disponible: boolean; /** El aviso automático entre tramos (pg_net) está instalado. */ aviso?: boolean; carga: VistaCarga | null; sql?: string; editorSql?: string; error?: string };
 type Estado = { configurada: boolean; tabla: boolean; pares: Par[]; sql?: string; editorSql?: string; error?: string; carga?: EstadoCarga };
 type Lote = { guardados: number; vacios: number; errores: number; limitada: boolean; errorBase?: string; mensaje?: string; actual: string | null; pendientes: number; total: number; terminado: boolean };
-type Profundidad = 2 | 3 | 5;
+type Profundidad = 2 | 3 | 5 | 6;
 type Seleccion = { eleccion?: string; corporacion?: string };
 
 const PROFUNDIDADES: { nivel: Profundidad; texto: string }[] = [
   { nivel: 2, texto: "País y departamentos" },
   { nivel: 3, texto: "Hasta municipios" },
   { nivel: 5, texto: "Con zonas, localidades y comunas" },
+  { nivel: 6, texto: "Con puestos de votación" },
 ];
 
 const tarjeta = "rounded-2xl border border-border bg-surface shadow-sm";
@@ -143,7 +144,22 @@ export function DatosTab() {
           if (completo) return setEstado(d as Estado);
           const carga = (d as { carga: EstadoCarga }).carga;
           // Si la carga acaba de terminar (o se cortó), se trae también la tabla de cobertura: que no quede con cifras viejas.
-          const todo = carga.carga?.enMarcha === false ? await pedir<Estado>("/api/admin/elecciones/almacen", "GET") : null;
+          let todo = carga.carga?.enMarcha === false ? await pedir<Estado>("/api/admin/elecciones/almacen", "GET") : null;
+          // Pausa por el límite de cinco tramos seguidos de Vercel: con la pantalla abierta, se retoma sola.
+          const pausada = todo?.carga?.carga;
+          if (pausada?.fin === "pausa" && pausada.nivelMax) {
+            try {
+              await pedir("/api/admin/elecciones/almacen", "POST", {
+                accion: "iniciar",
+                nivelMax: pausada.nivelMax,
+                ...(pausada.eleccion ? { eleccion: pausada.eleccion } : {}),
+                ...(pausada.corporacion ? { corporacion: pausada.corporacion } : {}),
+              });
+              todo = await pedir<Estado>("/api/admin/elecciones/almacen", "GET");
+            } catch {
+              /* no se pudo retomar: queda la pausa a la vista, con su botón */
+            }
+          }
           if (!cancelado) setEstado((prev) => todo ?? (prev ? { ...prev, carga } : prev));
         })
         .catch(() => { /* un fallo suelto no importa: el siguiente intento lo corrige */ });
@@ -163,6 +179,26 @@ export function DatosTab() {
     } finally {
       setIniciando(false);
     }
+  }
+
+  /**
+   * Quita las marcas de «no publicado» y vuelve a cargar: solo quedan así las que la fuente confirma (tres intentos). Así se corrigen
+   * las que se guardaron por un fallo pasajero (p. ej. un departamento entero que sí existe).
+   */
+  async function revisarNoPublicados() {
+    setAviso(null);
+    setIniciando(true);
+    try {
+      await pedir("/api/admin/elecciones/almacen", "POST", { accion: "revisar-no-publicados" });
+      await recargar();
+    } catch (e) {
+      setAviso({ ok: false, texto: e instanceof Error ? e.message : "No fue posible revisar los no publicados." });
+      setIniciando(false);
+      return;
+    }
+    setIniciando(false);
+    if (cargaDisponible) await iniciarSegundoPlano();
+    else await sincronizar();
   }
 
   async function detenerSegundoPlano() {
@@ -235,6 +271,8 @@ export function DatosTab() {
   const hechos = pares.reduce((s, p) => s + avance(p, profundidad).hechos, 0);
   const faltan = Math.max(0, total - hechos);
   const guardadoTotal = pares.reduce((s, p) => s + suma(p.guardados, 0, 99), 0);
+  /** Territorios guardados como «la fuente no los publica»: algunos pueden ser fallos pasajeros de la descarga. */
+  const noPublicados = pares.reduce((s, p) => s + suma(p.vacios, 0, 99), 0);
   /** Cargos que ya se leen de Supabase sin tocar la fuente hasta el municipio (lo que se recorre navegando Votaciones). */
   const completosHastaMunicipios = pares.filter((p) => { const a = avance(p, 3); return a.esperados > 0 && a.hechos >= a.esperados; }).length;
   const pct = total > 0 ? Math.round((hechos / total) * 100) : 0;
@@ -244,7 +282,7 @@ export function DatosTab() {
   const ocupado = !!corriendo || iniciando || enMarcha;
   const ritmoCarga = c && enMarcha ? ritmoDe(c) : null;
   /** La última carga quedó a medias (la cortó un error o la cadena se interrumpió): se retoma con «Continuar». */
-  const aMedias = !!c && !enMarcha && (c.activa || c.fin === "error");
+  const aMedias = !!c && !enMarcha && (c.activa || c.fin === "error" || c.fin === "pausa");
 
   return (
     // `contain: inline-size`: el SQL y la tabla (con su desplazamiento propio) no deben ensanchar la página.
@@ -256,7 +294,7 @@ export function DatosTab() {
           <div className="min-w-[min(100%,16rem)] flex-1">
             <h2 className="font-display text-lg font-semibold">Resultados electorales en Supabase</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Votaciones lee de Supabase: aquí se guarda la copia de totales, partidos, candidatos y el ganador de cada territorio, de todas las elecciones y cargos. Lo guardado se lee desde Supabase (más rápido y sin depender de que la Registraduría responda); lo que todavía no está se pide a la fuente y se guarda de paso. La carga en segundo plano lo va guardando sola en el servidor, sin que tengas que dejar esta pantalla abierta.
+              Votaciones lee solo de Supabase, sin consultar a la Registraduría al mostrar: aquí se guarda la copia de totales, partidos, candidatos y el ganador de cada territorio, de todas las elecciones y cargos. Lo que no esté guardado no se muestra y se avisa. La Registraduría solo se consulta para llenar esta copia, con la carga de abajo, que corre en el servidor sin que tengas que dejar esta pantalla abierta.
             </p>
           </div>
           <button type="button" onClick={recargar} disabled={!!corriendo} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ring-1 ring-border hover:bg-surface-muted disabled:opacity-50"><RefreshCw className="size-4" /> Actualizar</button>
@@ -299,8 +337,9 @@ export function DatosTab() {
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 {profundidad === 2 && "Lo esencial: lo que se ve al abrir una elección y su mapa por departamentos (cada departamento trae al ganador de sus municipios). Son pocas consultas."}
-                {profundidad === 3 && "Agrega el detalle de cada municipio: con esto, navegar Votaciones hasta el municipio ya no consulta a la Registraduría. Son decenas de miles de consultas: tarda horas (el servidor las hace solo), ocupa bastante espacio en Supabase y la Registraduría puede limitar el ritmo. Se puede detener y seguir cuando quieras."}
+                {profundidad === 3 && "Agrega el detalle de cada municipio: con esto, Votaciones muestra completo cualquier país, departamento o municipio. Son decenas de miles de consultas: tarda horas, ocupa bastante espacio en Supabase y la Registraduría puede limitar el ritmo. Se puede detener y seguir cuando quieras."}
                 {profundidad === 5 && "Agrega también zonas, localidades de Bogotá y comunas (las JAL se eligen por comuna). Es muy pesado: úsalo solo si de verdad hace falta."}
+                {profundidad === 6 && "Agrega los puestos de votación (unos 13.000 por elección): sirven para el análisis por puesto y para ver el detalle dentro de cada municipio. Es lo más pesado: úsalo cargo por cargo con el botón «Guardar» de cada fila, no con «Cargar todo»."}
               </p>
             </div>
 
@@ -338,7 +377,7 @@ export function DatosTab() {
                   {c.actual ? `Cargando ${c.actual}…` : "Empezando la carga…"}
                 </p>
                 <p className="text-xs">
-                  En el servidor, sin necesidad de esta pantalla: puedes cerrarla y volver más tarde. Tramo {numero(c.lotes ?? 0)} · {numero((c.guardados ?? 0) + (c.vacios ?? 0))} territorios guardados en esta carga
+                  Corre en el servidor: con esta pantalla abierta sigue sola hasta terminar; si la cierras, avanza unos minutos y queda en pausa hasta que vuelvas. Tramo {numero(c.lotes ?? 0)} · {numero((c.guardados ?? 0) + (c.vacios ?? 0))} territorios guardados en esta carga
                   {ritmoCarga ? ` · ${ritmoCarga.toFixed(1).replace(".", ",")} por segundo${faltan > 0 ? ` · faltan unos ${duracion(faltan / ritmoCarga)}` : ""}` : ""}.
                 </p>
               </div>
@@ -346,23 +385,36 @@ export function DatosTab() {
             {aMedias && c && (
               <div role="status" className="flex flex-wrap items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-                <p className="min-w-0 flex-1">{c.fin === "error" && c.mensaje ? c.mensaje : `La carga se interrumpió${c.ultimoLoteEn ? ` (${hace(c.ultimoLoteEn)})` : ""}. Lo guardado queda en Supabase; pulsa «Continuar la carga» para seguir donde iba.`}</p>
+                <p className="min-w-0 flex-1">{(c.fin === "error" || c.fin === "pausa") && c.mensaje ? c.mensaje : `La carga se interrumpió${c.ultimoLoteEn ? ` (${hace(c.ultimoLoteEn)})` : ""}. Lo guardado queda en Supabase; pulsa «Continuar la carga» para seguir donde iba.`}</p>
               </div>
             )}
             {c && !enMarcha && !aMedias && c.fin && c.mensaje && (
               <p role="status" className={`rounded-xl px-4 py-3 text-sm ${c.fin === "listo" ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300" : "bg-surface-muted text-muted-foreground"}`}>{c.mensaje}</p>
             )}
+            {noPublicados > 0 && !ocupado && (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl bg-surface-muted/70 px-4 py-3 text-sm">
+                <TriangleAlert className="size-4 shrink-0 text-amber-600" aria-hidden="true" />
+                <p className="min-w-0 flex-1 text-muted-foreground">
+                  <b className="text-foreground">{numero(noPublicados)}</b> territorios figuran como «no publicados» por la Registraduría. Algunos pueden ser fallos pasajeros de la descarga (por ejemplo, un departamento que sí tiene resultados): al revisarlos se piden de nuevo, tres veces cada uno, y solo quedan así los que la fuente confirma.
+                </p>
+                <button type="button" onClick={revisarNoPublicados} className="rounded-full px-4 py-2 text-xs font-semibold ring-1 ring-border hover:bg-surface-muted">Revisarlos</button>
+              </div>
+            )}
             {aviso && <p role="status" className={`rounded-xl px-4 py-3 text-sm ${aviso.ok ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/10 text-rose-800 dark:text-rose-300"}`}>{aviso.texto}</p>}
           </section>
 
-          {estado.carga && !estado.carga.disponible && (
+          {estado.carga && (!estado.carga.disponible || estado.carga.aviso === false) && (
             <section className={`${tarjeta} space-y-3 border-amber-400/50 p-5`}>
-              <h3 className="font-display text-lg font-semibold">Un paso más para cargar sin dejar esta pantalla abierta</h3>
+              <h3 className="font-display text-lg font-semibold">{estado.carga.disponible ? "Para que la carga siga sola, sin pausas" : "Un paso más para cargar sin dejar esta pantalla abierta"}</h3>
               {estado.carga.error ? (
                 <p className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-800 dark:text-rose-300">{estado.carga.error}</p>
               ) : (
                 <>
-                  <p className="text-sm text-muted-foreground">Falta una tabla pequeña donde el servidor anota el avance de la carga (se crea una sola vez). Copia este SQL y ejecútalo en el editor SQL de Supabase. Mientras tanto puedes guardar desde esta pantalla, que debe quedar abierta.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {estado.carga.disponible
+                      ? "Vercel solo deja que cinco tramos seguidos se llamen entre sí, así que sin esto la carga avanza unos minutos y se pausa (se retoma sola mientras esta pantalla esté abierta). Este SQL activa el aviso automático de Supabase (pg_net): la carga sigue sola hasta terminar, aunque cierres la pantalla. Se ejecuta una sola vez en el editor SQL de Supabase."
+                      : "Falta una tabla pequeña donde el servidor anota el avance de la carga y el aviso automático de Supabase (pg_net) que la hace seguir sola hasta terminar. Copia este SQL y ejecútalo una sola vez en el editor SQL de Supabase. Mientras tanto puedes guardar desde esta pantalla, que debe quedar abierta."}
+                  </p>
                   <pre className="max-h-48 overflow-auto rounded-xl bg-[#0f1613] p-4 text-xs leading-relaxed text-emerald-100">{estado.carga.sql}</pre>
                   <div className="flex flex-wrap items-center gap-3">
                     <button type="button" onClick={() => { navigator.clipboard?.writeText(estado.carga?.sql ?? ""); setCopiadoCarga(true); setTimeout(() => setCopiadoCarga(false), 1600); }} className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground">{copiadoCarga ? <Check className="size-4" /> : <Copy className="size-4" />}{copiadoCarga ? "Copiado" : "Copiar SQL"}</button>
@@ -420,7 +472,7 @@ export function DatosTab() {
               </table>
             </div>
             <p className="border-t border-border bg-surface-muted/40 px-4 py-3 text-xs text-muted-foreground">
-              Los puestos y las mesas no se descargan en bloque (son más de cien mil por elección): se guardan solos cuando los consultas en Votaciones. En el Senado y la Cámara, los municipios y niveles inferiores guardan solo los candidatos con votos.
+              Los puestos y las mesas no se descargan en bloque (son más de cien mil por elección), así que Votaciones no los muestra mientras no estén guardados; lo mismo pasa con el análisis por puesto. En el Senado y la Cámara, los municipios y niveles inferiores guardan solo los candidatos con votos.
             </p>
           </section>
 

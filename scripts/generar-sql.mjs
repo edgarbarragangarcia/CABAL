@@ -37,4 +37,20 @@ function plantilla(nombre, ruta, texto) {
   writeFileSync(new URL("src/lib/portales/sql.ts", raiz), salida);
 }
 
-console.log("Listo: src/lib/gov-data/elecciones/sql.ts y src/lib/portales/sql.ts regenerados.");
+// -- Documentos (vectores)
+{
+  const sql = leer("supabase/documentos.sql");
+  const salida =
+    "/** Copia exacta de supabase/documentos.sql: la pestaña Documentos la muestra para pegarla en el editor SQL de Supabase. */\n" + plantilla("SQL_DOCUMENTOS", "supabase/documentos.sql", sql);
+  writeFileSync(new URL("src/lib/documentos/sql.ts", raiz), salida);
+}
+
+// -- Territorio (conflicto y problemas por municipio)
+{
+  const sql = leer("supabase/territorio.sql");
+  const salida =
+    "/** Copia exacta de supabase/territorio.sql: la sección Territorio la muestra para pegarla en el editor SQL de Supabase. */\n" + plantilla("SQL_TERRITORIO", "supabase/territorio.sql", sql);
+  writeFileSync(new URL("src/lib/territorio/sql.ts", raiz), salida);
+}
+
+console.log("Listo: sql.ts de elecciones, portales, documentos y territorio regenerados.");

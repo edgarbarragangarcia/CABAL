@@ -43,6 +43,7 @@ import {
   type RedCrmResponse,
 } from "@/lib/crm/types";
 import { demoSnapshot } from "@/lib/crm/demo";
+import { TerritorioPanel } from "./territorio-panel";
 import { OTHER_COMMUNITY_COLOR, RedCrmGraph, communityColor } from "./red-crm-graph";
 
 const DIMENSION_ICON: Record<Dimension, LucideIcon> = {
@@ -131,7 +132,13 @@ export function PrediccionesTab() {
     );
   }
   if (body.status === "configurar") {
-    return <RedCrm snapshot={demoSnapshot()} demo={body.falta} onRefresh={refresh} refreshing={loading} />;
+    const demo = demoSnapshot();
+    return (
+      <div className="space-y-8">
+        <TerritorioPanel snapshot={demo} demo />
+        <RedCrm snapshot={demo} demo={body.falta} onRefresh={refresh} refreshing={loading} />
+      </div>
+    );
   }
   if (body.status === "error") {
     return (
@@ -153,7 +160,12 @@ export function PrediccionesTab() {
       </div>
     );
   }
-  return <RedCrm snapshot={body.snapshot} onRefresh={refresh} refreshing={loading} />;
+  return (
+    <div className="space-y-8">
+      <TerritorioPanel snapshot={body.snapshot} demo={false} />
+      <RedCrm snapshot={body.snapshot} onRefresh={refresh} refreshing={loading} />
+    </div>
+  );
 }
 
 function RetryButton({ onClick, busy, label }: { onClick: () => void; busy: boolean; label: string }) {

@@ -42,8 +42,9 @@ export async function GET(req: Request) {
         perfil,
         total: votos.hijos.length,
         pendientes: votos.pendientes,
+        sinGuardar: votos.sinGuardar,
       },
-      { headers: { "Cache-Control": votos.pendientes ? "no-store" : "private, max-age=600" } }
+      { headers: { "Cache-Control": votos.pendientes || votos.sinGuardar ? "no-store" : "private, max-age=600" } }
     );
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "No fue posible cargar el contexto." }, { status: 502 });

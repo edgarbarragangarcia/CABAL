@@ -2,23 +2,23 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Database, MessageSquareText, Network, ShieldCheck, Vote } from "lucide-react";
+import { Database, Library, Network, ShieldCheck, Vote } from "lucide-react";
 
 import { AvalesTab } from "./avales-tab";
 import { CabalResultados } from "./cabal-resultados";
 import { DatosTab } from "./datos-tab";
+import { DocumentosTab } from "./documentos-tab";
 import { ExploradorElectoral } from "./explorador-electoral";
 import { PrediccionesTab } from "./predicciones-tab";
-import { PreguntasTab } from "./preguntas-tab";
 
-type TabId = "votaciones" | "predicciones" | "avales" | "preguntas" | "datos";
+type TabId = "votaciones" | "predicciones" | "avales" | "datos" | "documentos";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Red Cabal", icon: Network },
   { id: "avales", label: "Avales", icon: ShieldCheck },
-  { id: "preguntas", label: "Preguntar", icon: MessageSquareText },
-  { id: "datos", label: "Datos", icon: Database },
+  { id: "datos", label: "Datos electorales", icon: Database },
+  { id: "documentos", label: "Documentos", icon: Library },
 ];
 
 /** Votaciones: todas las elecciones y candidatos, o el seguimiento de Cabal. */
@@ -53,6 +53,12 @@ function Votaciones() {
 
 export function AnalisisTabs({ header }: { header: React.ReactNode }) {
   const [tab, setTab] = React.useState<TabId>("votaciones");
+  // Las pestañas de carga (datos y documentos) se quedan montadas una vez abiertas: tienen trabajo en curso que no debe cortarse al cambiar de pestaña.
+  const [abiertas, setAbiertas] = React.useState<ReadonlySet<TabId>>(new Set());
+  const irA = (id: TabId) => {
+    setTab(id);
+    setAbiertas((a) => (a.has(id) ? a : new Set(a).add(id)));
+  };
 
   return (
     <div>
@@ -72,7 +78,7 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setTab(t.id)}
+                onClick={() => irA(t.id)}
                 className={
                   active
                     ? "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 border-brand px-4 py-2.5 text-sm font-semibold text-brand"
@@ -91,8 +97,8 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
         {tab === "votaciones" && <Votaciones />}
         {tab === "predicciones" && <PrediccionesTab />}
         {tab === "avales" && <AvalesTab />}
-        {tab === "preguntas" && <PreguntasTab />}
-        {tab === "datos" && <DatosTab />}
+        {abiertas.has("datos") && <div hidden={tab !== "datos"}><DatosTab /></div>}
+        {abiertas.has("documentos") && <div hidden={tab !== "documentos"}><DocumentosTab /></div>}
       </div>
     </div>
   );

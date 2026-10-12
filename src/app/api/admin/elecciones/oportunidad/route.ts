@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     const { puestos, ...resto } = datos;
     return NextResponse.json(
       { ...resto, oportunidad: calcularOportunidad(puestos) },
-      { headers: { "Cache-Control": datos.pendientes ? "no-store" : "private, max-age=600" } }
+      { headers: { "Cache-Control": datos.pendientes || datos.sinGuardar ? "no-store" : "private, max-age=600" } }
     );
   } catch (err) {
     return NextResponse.json(
