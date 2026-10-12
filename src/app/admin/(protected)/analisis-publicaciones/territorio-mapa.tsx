@@ -34,7 +34,7 @@ const W = 640;
 const H = 560;
 
 /** Mapa para elegir un lugar con un clic: cada departamento, municipio o localidad es un botón. */
-export function TerritorioMapa({ url, idDe, alElegir }: { url: string; idDe: (c: string) => string; alElegir: (id: string) => void }) {
+export function TerritorioMapa({ url, idDe, alElegir, valores }: { url: string; idDe: (c: string) => string; alElegir: (id: string) => void; /** Votos por código del lugar: pinta más oscuro donde hay más. */ valores?: Record<string, number> | null }) {
   const [res, setRes] = React.useState<{ url: string; fc: FeatureCollection<Geometry, Props> | null } | null>(null);
   const [sobre, setSobre] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -55,6 +55,9 @@ export function TerritorioMapa({ url, idDe, alElegir }: { url: string; idDe: (c:
   if (fc === undefined) return <div className="grid h-72 place-items-center text-sm text-muted-foreground">Cargando el mapa…</div>;
   if (fc === null) return <p className="text-sm text-muted-foreground">No hay mapa para este lugar: usa la lista.</p>;
   const actual = formas.find((f) => f.code === sobre);
+  const max = valores ? Math.max(0, ...Object.values(valores)) : 0;
+  const fmt = (n: number) => n.toLocaleString("es-CO");
+  const valorDe = (code: string) => (valores ? valores[code] ?? valores[code.padStart(5, "0")] : undefined);
   return (
     <div className="relative mx-auto max-w-xl">
       <svg viewBox={`0 0 ${W} ${H}`} role="group" aria-label="Mapa para elegir un lugar" className="h-auto w-full">
@@ -71,14 +74,22 @@ export function TerritorioMapa({ url, idDe, alElegir }: { url: string; idDe: (c:
             onMouseLeave={() => setSobre(null)}
             onFocus={() => setSobre(f.code)}
             onBlur={() => setSobre(null)}
-            className="cursor-pointer fill-brand/25 stroke-surface outline-none transition-colors hover:fill-brand focus-visible:fill-brand"
+            style={valores ? { fillOpacity: valorDe(f.code) === undefined ? 0.06 : 0.1 + 0.85 * Math.sqrt(max > 0 ? valorDe(f.code)! / max : 0) } : { fillOpacity: 0.25 }}
+            className="cursor-pointer fill-brand stroke-surface outline-none transition-[fill-opacity] hover:stroke-foreground focus-visible:stroke-foreground"
             strokeWidth={1}
           />
         ))}
       </svg>
       <p className="mt-1 h-6 text-center text-sm font-semibold" aria-live="polite">
-        {actual ? titulo(actual.name) : <span className="font-normal text-muted-foreground">Pasa el cursor sobre el mapa y haz clic para elegir.</span>}
+        {actual ? <>{titulo(actual.name)}{valores && <span className="font-normal text-muted-foreground"> · {valorDe(actual.code) === undefined ? "sin resultado guardado" : `${fmt(valorDe(actual.code)!)} votos`}</span>}</> : <span className="font-normal text-muted-foreground">Pasa el cursor sobre el mapa y haz clic para elegir.</span>}
       </p>
+      {valores && max > 0 && (
+        <div className="mt-1 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+          <span>0</span>
+          <span aria-hidden="true" className="h-2 w-40 rounded-full" style={{ background: "linear-gradient(to right, color-mix(in srgb, var(--brand) 10%, transparent), var(--brand))" }} />
+          <span>{fmt(max)} votos</span>
+        </div>
+      )}
     </div>
   );
 }

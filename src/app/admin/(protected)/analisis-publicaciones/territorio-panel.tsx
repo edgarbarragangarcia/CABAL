@@ -318,10 +318,26 @@ function Elegir({ lugar, alElegir, compacto = false }: { lugar: Lugar; alElegir:
 /** El mapa para elegir con un clic y, a su lado, la lista con filtro para quien prefiere escribir. */
 function Explorar({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => void }) {
   const mapa = mapaDe(lugar.id, lugar.nivel);
+  const [eleccion, setEleccion] = React.useState("congreso-2022");
+  const pinta = lugar.nivel === "pais" ? "co" : lugar.nivel === "departamento" ? lugar.id : null;
+  const votos = usePeticion<{ votos: Record<string, number>; guardados: number; elecciones: { id: string; titulo: string }[] }>(pinta ? `/api/admin/territorio/mapa?id=${pinta}&eleccion=${eleccion}` : null);
   if (!mapa) return <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} />;
+  const v = votos.estado === "listo" && votos.data.guardados > 0 ? votos.data : null;
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <TerritorioMapa url={mapa.url} idDe={mapa.idDe} alElegir={alElegir} />
+      <div className="space-y-3">
+        {pinta && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-semibold">Pintado por los votos de María Fernanda Cabal en</span>
+            {(votos.estado === "listo" ? votos.data.elecciones : [{ id: "congreso-2022", titulo: "Senado 2022" }, { id: "congreso-2018", titulo: "Senado 2018" }]).map((e) => (
+              <button key={e.id} type="button" onClick={() => setEleccion(e.id)} className={`rounded-full px-3 py-1 font-semibold ${eleccion === e.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border text-muted-foreground hover:text-foreground"}`}>{e.titulo}</button>
+            ))}
+            {votos.estado === "listo" && votos.data.guardados === 0 && <span className="text-muted-foreground">Aún no hay resultados guardados de esta elección en Supabase.</span>}
+            {votos.estado === "error" && <span className="text-muted-foreground">{votos.error}</span>}
+          </div>
+        )}
+        <TerritorioMapa url={mapa.url} idDe={mapa.idDe} alElegir={alElegir} valores={v?.votos ?? null} />
+      </div>
       <div className="lg:max-h-[36rem] lg:overflow-y-auto lg:pr-1">
         <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} compacto />
       </div>
