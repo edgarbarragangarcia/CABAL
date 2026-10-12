@@ -2,23 +2,22 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Database, Library, Network, ShieldCheck, Vote } from "lucide-react";
+import { LayoutDashboard, Network, ShieldCheck, Vote } from "lucide-react";
+
+import { CentroDeControl } from "@/components/admin/centro-control";
 
 import { AvalesTab } from "./avales-tab";
 import { CabalResultados } from "./cabal-resultados";
-import { DatosTab } from "./datos-tab";
-import { DocumentosTab } from "./documentos-tab";
 import { ExploradorElectoral } from "./explorador-electoral";
 import { PrediccionesTab } from "./predicciones-tab";
 
-type TabId = "votaciones" | "predicciones" | "avales" | "datos" | "documentos";
+type TabId = "centro" | "votaciones" | "predicciones" | "avales";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
+  { id: "centro", label: "Centro de control", icon: LayoutDashboard },
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Red Cabal", icon: Network },
   { id: "avales", label: "Avales", icon: ShieldCheck },
-  { id: "datos", label: "Datos electorales", icon: Database },
-  { id: "documentos", label: "Documentos", icon: Library },
 ];
 
 /** Votaciones: todas las elecciones y candidatos, o el seguimiento de Cabal. */
@@ -52,13 +51,8 @@ function Votaciones() {
 }
 
 export function AnalisisTabs({ header }: { header: React.ReactNode }) {
-  const [tab, setTab] = React.useState<TabId>("votaciones");
-  // Las pestañas de carga (datos y documentos) se quedan montadas una vez abiertas: tienen trabajo en curso que no debe cortarse al cambiar de pestaña.
-  const [abiertas, setAbiertas] = React.useState<ReadonlySet<TabId>>(new Set());
-  const irA = (id: TabId) => {
-    setTab(id);
-    setAbiertas((a) => (a.has(id) ? a : new Set(a).add(id)));
-  };
+  const [tab, setTab] = React.useState<TabId>("centro");
+  const irA = (id: TabId) => setTab(id);
 
   return (
     <div>
@@ -94,11 +88,10 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
       </div>
 
       <div className="mt-6">
+        {tab === "centro" && <CentroDeControl />}
         {tab === "votaciones" && <Votaciones />}
         {tab === "predicciones" && <PrediccionesTab />}
         {tab === "avales" && <AvalesTab />}
-        {abiertas.has("datos") && <div hidden={tab !== "datos"}><DatosTab /></div>}
-        {abiertas.has("documentos") && <div hidden={tab !== "documentos"}><DocumentosTab /></div>}
       </div>
     </div>
   );

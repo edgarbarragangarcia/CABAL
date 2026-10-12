@@ -4,15 +4,15 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, GraduationCap, LayoutDashboard, LayoutTemplate, LogOut, Menu, Newspaper, Settings, Users, X } from "lucide-react";
+import { BarChart3, Database, GraduationCap, LayoutTemplate, LogOut, Menu, Newspaper, Settings, Users, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 const NAV = [
-  { href: "/admin", label: "Centro de control", icon: LayoutDashboard },
   { href: "/admin/analisis-publicaciones", label: "Análisis", icon: BarChart3 },
+  { href: "/admin/fuente-de-la-verdad", label: "Fuente de la verdad", icon: Database },
   { href: "/admin/lms", label: "LMS", icon: GraduationCap },
   { href: "/admin/redactor", label: "Redactor", icon: Newspaper },
   { href: "/admin/comunidad", label: "Comunidad", icon: Users },
@@ -43,7 +43,7 @@ export function AdminShell({
   const Nav = (
     <nav className="flex flex-1 flex-col gap-2">
       {NAV.map((item) => {
-        const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+        const active = pathname.startsWith(item.href);
         const Icon = item.icon;
         return (
           <Link
@@ -99,7 +99,7 @@ export function AdminShell({
           <nav className="flex flex-1 flex-col gap-2">
             {NAV.map((item) => {
               const active =
-                item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+                pathname.startsWith(item.href);
               const Icon = item.icon;
               return (
                 <Link
