@@ -189,7 +189,7 @@ export async function guardarFilas(filas: FilaResultado[], reemplazar: boolean):
 
 function errorDeTablas(e: ErrorSb) {
   const falta = faltaTabla(e);
-  return Object.assign(new Error(falta ? "Faltan las tablas de resultados: ejecuta supabase/elecciones.sql en Supabase." : (e.message ?? "No se pudo guardar en Supabase.")), { falta });
+  return Object.assign(new Error(falta ? "Faltan las tablas de resultados: ejecuta supabase/elecciones.sql en Supabase." : (e.message || "Supabase no respondió (error temporal); se vuelve a intentar.")), { falta });
 }
 
 const pendientes = new Map<string, FilaResultado>();
@@ -490,7 +490,7 @@ export async function estadoAlmacen(): Promise<EstadoAlmacen> {
       if (!error) break;
       if (intento < 3) await pausa(1_500);
     }
-    if (error) return faltaTabla(error) ? { configurada: true, tabla: false } : { configurada: true, tabla: false, error: error.message };
+    if (error) return faltaTabla(error) ? { configurada: true, tabla: false } : { configurada: true, tabla: false, error: error.message || "Supabase no respondió (error temporal). Vuelve a intentar en un momento." };
   }
   return { configurada: true, tabla: true };
 }

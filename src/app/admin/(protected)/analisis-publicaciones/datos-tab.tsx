@@ -64,7 +64,7 @@ const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function pedir<T>(url: string, metodo: "GET" | "POST", cuerpo?: unknown): Promise<T> {
   const r = await fetch(url, { method: metodo, headers: cuerpo ? { "Content-Type": "application/json" } : undefined, body: cuerpo ? JSON.stringify(cuerpo) : undefined, cache: "no-store" });
   const b = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(b.error ?? `No fue posible completar la acción (${r.status}).`);
+  if (!r.ok) throw new Error(b.error || `No fue posible completar la acción (${r.status}).`);
   return b as T;
 }
 
@@ -118,14 +118,26 @@ export function DatosTab() {
     try {
       setEstado(await pedir<Estado>("/api/admin/elecciones/almacen", "GET"));
     } catch (e) {
-      setEstado({ configurada: true, tabla: false, pares: [], error: e instanceof Error ? e.message : "No se pudo leer." });
+      setEstado({ configurada: true, tabla: false, pares: [], error: (e instanceof Error && e.message) || "Supabase no respondió. Vuelve a intentar en un momento." });
     }
   }, []);
   React.useEffect(() => {
     let cancelado = false;
-    pedir<Estado>("/api/admin/elecciones/almacen", "GET")
-      .catch((e): Estado => ({ configurada: true, tabla: false, pares: [], error: e instanceof Error ? e.message : "No se pudo leer." }))
-      .then((d) => { if (!cancelado) setEstado(d); });
+    // Si Supabase tropieza al abrir, se vuelve a preguntar unas veces antes de mostrar un error (casi siempre es pasajero).
+    (async () => {
+      let ultimo = "";
+      for (let intento = 0; intento < 4 && !cancelado; intento++) {
+        try {
+          const d = await pedir<Estado>("/api/admin/elecciones/almacen", "GET");
+          if (!cancelado) setEstado(d);
+          return;
+        } catch (e) {
+          ultimo = (e instanceof Error && e.message) || "Supabase no respondió. Vuelve a intentar en un momento.";
+          await esperar(2500 * (intento + 1));
+        }
+      }
+      if (!cancelado) setEstado({ configurada: true, tabla: false, pares: [], error: ultimo });
+    })();
     return () => { cancelado = true; };
   }, []);
 

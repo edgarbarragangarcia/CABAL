@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     const [pares, carga] = await Promise.all([estadoSincronizacion(), cargaEnSegundoPlano()]);
     return NextResponse.json({ ...estado, pares, carga });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "No fue posible leer el estado." }, { status: 502 });
+    return NextResponse.json({ error: (e instanceof Error && e.message) || "Supabase no respondió (error temporal). Vuelve a intentar en un momento." }, { status: 502 });
   }
 }
 
