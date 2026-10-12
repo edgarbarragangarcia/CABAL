@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Network, ShieldCheck, Vote } from "lucide-react";
+import { Eye, LayoutDashboard, Network, ShieldCheck, Vote } from "lucide-react";
 
+import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
 import { MonitoreoSecciones } from "@/components/admin/monitoreo-secciones";
 
 import { AvalesTab } from "./avales-tab";
@@ -28,7 +29,7 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
       {/* Título y pestañas quedan fijos arriba al hacer scroll. Los márgenes
           negativos cubren el padding de <main> (y el fondo tapa el
           contenido que pasa por debajo), así que en reposo se ve igual. */}
-      <div className="sticky top-0 z-30 -mx-4 -mt-4 bg-surface-muted px-4 pt-4 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 lg:-mx-8 lg:-mt-8 lg:px-8 lg:pt-8">
+      <div className="sticky top-0 z-30 -mx-3 -mt-3 bg-surface-muted px-3 pt-3 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 lg:-mx-8 lg:-mt-8 lg:px-8 lg:pt-8">
         {header}
 
         {/* En pantallas angostas las pestañas se desplazan de lado en vez de ensanchar la
@@ -57,10 +58,27 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
       </div>
 
       <div className="mt-6">
-        {tab === "centro" && <MonitoreoSecciones />}
+        {tab === "centro" && (
+          <Lienzo>
+            <Portada icono={LayoutDashboard} etiqueta="Prensa y redes" titulo="Monitoreo" descripcion="Qué se dice de María Fernanda Cabal en la prensa, qué publica ella en redes y qué hacen otros políticos. La información se trae al abrir y con el botón Actualizar.">
+              <ChipPortada icono={Eye}>Tres miradas: prensa, redes de María Fernanda y otros políticos</ChipPortada>
+            </Portada>
+            <MonitoreoSecciones />
+          </Lienzo>
+        )}
         {tab === "votaciones" && <ExploradorElectoral />}
-        {tab === "predicciones" && <PrediccionesTab />}
-        {tab === "avales" && <AvalesTab />}
+        {tab === "predicciones" && (
+          <Lienzo>
+            <Portada icono={Network} etiqueta="Territorio y comunidad" titulo="Red Cabal" descripcion="Elige un lugar, de lo general a lo particular, y mira cómo le fue a María Fernanda Cabal, qué problemas tiene y quiénes la siguen allí." />
+            <PrediccionesTab />
+          </Lienzo>
+        )}
+        {tab === "avales" && (
+          <Lienzo>
+            <Portada icono={ShieldCheck} etiqueta="Verificación de aspirantes" titulo="Avales" descripcion="Hojas de vida, contratación pública y relaciones de quienes aspiran a un aval. Los datos salen de fuentes oficiales y no son un certificado de inhabilidades." />
+            <AvalesTab />
+          </Lienzo>
+        )}
       </div>
     </div>
   );

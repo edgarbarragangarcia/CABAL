@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, Check, Circle, ExternalLink, Rocket, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Check, Circle, ExternalLink, Eye, FileText, Megaphone, MousePointerClick, Rocket, Sparkles, UserPlus, Users } from "lucide-react";
+
+import { Kpis } from "@/components/admin/estilo-cabal";
 
 import type { AjustesPortal, ResumenPortal } from "@/lib/portales/cms/tipos";
 import type { Portal } from "@/lib/portales/store";
@@ -11,16 +13,6 @@ import { botonPrimario, botonSecundario, numero, pedir, tarjeta } from "./comun"
 /** Resumen del portal: sus cifras, el camino de visita a afiliado y lo que falta para que esté listo. */
 
 const porcentaje = (parte: number, total: number) => (total > 0 ? `${((parte / total) * 100).toFixed(1).replace(".", ",")} %` : "—");
-
-function Cifra({ titulo, valor, detalle }: { titulo: string; valor: string; detalle?: string }) {
-  return (
-    <div className={`${tarjeta} p-4`}>
-      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{titulo}</p>
-      <p className="mt-1 font-display text-3xl font-semibold tabular-nums">{valor}</p>
-      {detalle && <p className="mt-0.5 text-xs text-muted-foreground">{detalle}</p>}
-    </div>
-  );
-}
 
 /** Cuántas personas hay en el CRM del portal (si todavía no se crearon las tablas, no muestra nada). */
 function useCrm(portalId: string) {
@@ -77,14 +69,17 @@ export function ResumenPanel({ portal, resumen, ajustes, ir, desplegar }: { port
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
-        <Cifra titulo="Visitas · 30 días" valor={numero(resumen.vistas30d)} detalle="Inicio, listado y artículos" />
-        <Cifra titulo="Clics en «Súmate»" valor={numero(resumen.cta30d)} detalle={`${porcentaje(resumen.cta30d, resumen.vistas30d)} de las visitas · 30 días`} />
-        <Cifra titulo="Afiliados traídos" valor={numero(resumen.adeptos)} detalle={`${numero(resumen.adeptos30d)} en los últimos 30 días`} />
-        <Cifra titulo="Artículos" valor={numero(resumen.publicados)} detalle={`${numero(resumen.borradores)} en borrador · ${numero(resumen.lecturas)} lecturas`} />
-        <Cifra titulo="Anuncios en emisión" valor={numero(resumen.anunciosActivos)} detalle="Entre todos los espacios" />
-        <Cifra titulo="Clics en anuncios" valor={numero(resumen.anuncioClics30d)} detalle="Últimos 30 días" />
-      </div>
+      <Kpis
+        columnas={3}
+        items={[
+          { etiqueta: "Visitas · 30 días", valor: numero(resumen.vistas30d), detalle: "Inicio, listado y artículos", icono: Eye },
+          { etiqueta: "Clics en «Súmate»", valor: numero(resumen.cta30d), detalle: `${porcentaje(resumen.cta30d, resumen.vistas30d)} de las visitas · 30 días`, icono: MousePointerClick },
+          { etiqueta: "Afiliados traídos", valor: numero(resumen.adeptos), detalle: `${numero(resumen.adeptos30d)} en los últimos 30 días`, icono: UserPlus },
+          { etiqueta: "Artículos", valor: numero(resumen.publicados), detalle: `${numero(resumen.borradores)} en borrador · ${numero(resumen.lecturas)} lecturas`, icono: FileText },
+          { etiqueta: "Anuncios en emisión", valor: numero(resumen.anunciosActivos), detalle: "Entre todos los espacios", icono: Megaphone },
+          { etiqueta: "Clics en anuncios", valor: numero(resumen.anuncioClics30d), detalle: "Últimos 30 días", icono: MousePointerClick },
+        ]}
+      />
 
       <section className={`${tarjeta} p-5`}>
         <h3 className="font-display text-lg font-semibold">Del visitante al afiliado</h3>

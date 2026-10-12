@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Check, Copy, Download, ExternalLink, Loader2, Mail, MessageCircle, Phone, Plus, Search, ShieldCheck, Trash2, TriangleAlert, Upload, UserPlus, Users, X } from "lucide-react";
 
+import { Kpis } from "@/components/admin/estilo-cabal";
 import { ETAPAS, ORIGENES, TIPOS_INTERACCION, resumenCrmVacio, type Contacto, type Etapa, type Interaccion, type ResumenCrm } from "@/lib/portales/crm/tipos";
 import type { Portal } from "@/lib/portales/store";
 import { botonPrimario, botonSecundario, campo, etiquetaCampo, hace, mensajeDe, numero, pedir, tarjeta } from "./comun";
@@ -37,16 +38,6 @@ function whatsapp(tel: string): string | null {
   if (d.length === 10) return `https://wa.me/57${d}`;
   if (d.length >= 11 && d.length <= 15) return `https://wa.me/${d}`;
   return null;
-}
-
-function Cifra({ titulo, valor, detalle }: { titulo: string; valor: string; detalle?: string }) {
-  return (
-    <div className={`${tarjeta} p-4`}>
-      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{titulo}</p>
-      <p className="mt-1 font-display text-3xl font-semibold tabular-nums">{valor}</p>
-      {detalle && <p className="mt-0.5 text-xs text-muted-foreground">{detalle}</p>}
-    </div>
-  );
 }
 
 export function CrmPanel({ portal }: { portal: Portal }) {
@@ -173,12 +164,14 @@ function Contactos({ portal, resumen, cambio }: { portal: Portal; resumen: Resum
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Cifra titulo="Personas en la comunidad" valor={numero(resumen.total)} detalle={`${numero(resumen.nuevos30d)} nuevas en 30 días`} />
-        <Cifra titulo="Participan" valor={numero(resumen.porEtapa.activo + resumen.porEtapa.lider)} detalle={`${numero(resumen.porEtapa.lider)} líderes`} />
-        <Cifra titulo="Autorizaron comunicaciones" valor={numero(resumen.conConsentimiento)} detalle={resumen.total > 0 ? `${Math.round((resumen.conConsentimiento / resumen.total) * 100)} % de la base` : "—"} />
-        <Cifra titulo="Ya son afiliados" valor={numero(resumen.afiliados)} detalle="a la comunidad de María Fernanda Cabal" />
-      </div>
+      <Kpis
+        items={[
+          { etiqueta: "Personas en la comunidad", valor: numero(resumen.total), detalle: `${numero(resumen.nuevos30d)} nuevas en 30 días`, icono: Users },
+          { etiqueta: "Participan", valor: numero(resumen.porEtapa.activo + resumen.porEtapa.lider), detalle: `${numero(resumen.porEtapa.lider)} líderes`, icono: UserPlus },
+          { etiqueta: "Autorizaron comunicaciones", valor: numero(resumen.conConsentimiento), detalle: resumen.total > 0 ? `${Math.round((resumen.conConsentimiento / resumen.total) * 100)} % de la base` : "—", icono: ShieldCheck },
+          { etiqueta: "Ya son afiliados", valor: numero(resumen.afiliados), detalle: "a la comunidad de María Fernanda Cabal", icono: Mail },
+        ]}
+      />
 
       <section className={`${tarjeta} space-y-4 p-5`}>
         <div>

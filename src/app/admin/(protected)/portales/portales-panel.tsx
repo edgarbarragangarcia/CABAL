@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Check, Copy, ExternalLink, Eye, FileText, History, Layers, LayoutDashboard, Loader2, Megaphone, Monitor, Pause, Pencil, Play, Plus, Rocket, Settings2, Smartphone, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Eye, FileText, History, Layers, LayoutDashboard, LayoutTemplate, Loader2, Megaphone, MousePointerClick, Monitor, Pause, Pencil, Play, Plus, Rocket, Settings2, Smartphone, Trash2, UserPlus, Users, X } from "lucide-react";
+
+import { Kpis } from "@/components/admin/estilo-cabal";
 
 import { PortalView } from "@/components/portales/portal-view";
 import { COLORES_SUGERIDOS, PLANTILLAS, SECCIONES, configDemo, configPorDefecto, plantillaPorId, slugPortal, type ConfigPortal, type PlantillaId } from "@/lib/portales/plantillas";
@@ -335,7 +337,7 @@ export function PortalesPanel() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <div role="tablist" aria-label="Portales" className="inline-flex rounded-full bg-surface p-1 shadow-sm ring-1 ring-border">
+        <div role="tablist" aria-label="Portales" className="flex max-w-full flex-wrap gap-1 rounded-3xl bg-surface p-1 shadow-sm ring-1 ring-border sm:rounded-full">
           {subs.map((s) => (
             <button key={s.id} type="button" role="tab" aria-selected={sub === s.id} onClick={() => { setSub(s.id); if (s.id !== "portales") setAbierto(null); }} className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold transition ${sub === s.id ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`}>
               <s.icono className="size-4" />{s.texto}{s.n !== undefined && <span className={`rounded-full px-1.5 text-[11px] ${sub === s.id ? "bg-white/20" : "bg-surface-muted"}`}>{s.n}</span>}
@@ -458,17 +460,16 @@ export function PortalesPanel() {
         />
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            {[
-              ["Portales", portales.length, `${cuenta("publicado")} en línea · ${cuenta("borrador")} en borrador`],
-              ["Artículos publicados", portales.reduce((t, x) => t + (resumen[x.id]?.publicados ?? 0), 0), "Entre todos los portales"],
-              ["Visitas · 30 días", portales.reduce((t, x) => t + (resumen[x.id]?.vistas30d ?? 0), 0), "Inicio, listados y artículos"],
-              ["Clics en «Súmate»", portales.reduce((t, x) => t + (resumen[x.id]?.cta30d ?? 0), 0), "Últimos 30 días"],
-              ["Afiliados traídos", portales.reduce((t, x) => t + (resumen[x.id]?.adeptos ?? 0), 0), `${portales.reduce((t, x) => t + (resumen[x.id]?.adeptos30d ?? 0), 0)} en los últimos 30 días`],
-            ].map(([t, n, d]) => (
-              <div key={String(t)} className={`${tarjeta} p-4`}><p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{t}</p><p className="mt-1 font-display text-3xl font-semibold tabular-nums">{Number(n).toLocaleString("es-CO")}</p><p className="mt-0.5 text-xs text-muted-foreground">{d}</p></div>
-            ))}
-          </div>
+          <Kpis
+            columnas={4}
+            items={[
+              { etiqueta: "Portales", valor: portales.length.toLocaleString("es-CO"), detalle: `${cuenta("publicado")} en línea · ${cuenta("borrador")} en borrador`, icono: LayoutTemplate },
+              { etiqueta: "Artículos publicados", valor: portales.reduce((t, x) => t + (resumen[x.id]?.publicados ?? 0), 0).toLocaleString("es-CO"), detalle: "Entre todos los portales", icono: FileText },
+              { etiqueta: "Visitas · 30 días", valor: portales.reduce((t, x) => t + (resumen[x.id]?.vistas30d ?? 0), 0).toLocaleString("es-CO"), detalle: "Inicio, listados y artículos", icono: Eye },
+              { etiqueta: "Clics en «Súmate»", valor: portales.reduce((t, x) => t + (resumen[x.id]?.cta30d ?? 0), 0).toLocaleString("es-CO"), detalle: "Últimos 30 días", icono: MousePointerClick },
+              { etiqueta: "Afiliados traídos", valor: portales.reduce((t, x) => t + (resumen[x.id]?.adeptos ?? 0), 0).toLocaleString("es-CO"), detalle: `${portales.reduce((t, x) => t + (resumen[x.id]?.adeptos30d ?? 0), 0)} en los últimos 30 días`, icono: Users },
+            ]}
+          />
           {portales.length === 0 ? (
             <div className={`${tarjeta} grid place-items-center gap-3 p-14 text-center`}>
               <Rocket className="size-9 text-muted-foreground" />

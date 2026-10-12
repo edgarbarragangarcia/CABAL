@@ -4,8 +4,9 @@ import * as React from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpenText, Layers, Plus, Trash2, X } from "lucide-react";
+import { BookOpenText, GraduationCap, Layers, Plus, Rocket, Trash2, X } from "lucide-react";
 
+import { Lienzo, Portada, Kpis } from "@/components/admin/estilo-cabal";
 import { Button } from "@/components/ui/button";
 import { useLmsCourses } from "@/lib/lms-store";
 
@@ -111,17 +112,28 @@ export default function LmsPage() {
         </Dialog.Root>
       </div>
 
+      <Lienzo className="mt-6">
+      <Portada icono={GraduationCap} etiqueta="Formación" titulo="Cursos y contenido formativo" descripcion="Arma cursos con módulos y lecciones, publícalos cuando estén listos y se ven en el sitio público." />
+      <Kpis
+        items={[
+          { etiqueta: "Cursos", valor: courses.length, detalle: "en el catálogo", icono: GraduationCap },
+          { etiqueta: "Publicados", valor: courses.filter((c) => c.status === "publicado").length, detalle: "visibles en el sitio", icono: Rocket },
+          { etiqueta: "Módulos", valor: courses.reduce((a, c) => a + c.modules.length, 0), detalle: "entre todos los cursos", icono: Layers },
+          { etiqueta: "Lecciones", valor: courses.reduce((a, c) => a + c.modules.reduce((b, m) => b + m.lessons.length, 0), 0), detalle: "de contenido", icono: BookOpenText },
+        ]}
+      />
+
       {ready && courses.length === 0 && (
-        <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
           Aún no hay cursos. Crea el primero con &ldquo;Nuevo curso&rdquo;.
         </div>
       )}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         {courses.map((course) => {
           const totalLessons = course.modules.reduce((a, m) => a + m.lessons.length, 0);
           return (
-            <div key={course.id} className="flex flex-col rounded-2xl border border-border bg-surface p-5">
+            <div key={course.id} className="flex min-w-0 flex-col rounded-2xl border border-border bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-start justify-between gap-3">
                 <h2 className="font-semibold leading-snug">{course.title}</h2>
                 <button
@@ -184,6 +196,7 @@ export default function LmsPage() {
           );
         })}
       </div>
+      </Lienzo>
     </div>
   );
 }

@@ -52,26 +52,23 @@ function LoginForm() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       onSubmit={onSubmit}
-      className="glass-panel w-full max-w-sm rounded-3xl p-8 text-foreground shadow-2xl"
+      className="glass-panel w-full max-w-sm rounded-3xl p-6 text-foreground shadow-2xl sm:p-8"
     >
-      <div className="flex items-center gap-2">
-        <Image
-          src="/logo-mark.png"
-          alt=""
-          width={36}
-          height={36}
-          className="size-9 shrink-0 object-contain"
-        />
-        <div>
-          <p className="text-sm font-semibold leading-tight">Escuela Libertad</p>
-          <p className="text-xs text-muted-foreground">Panel administrativo</p>
+      <div className="relative -mx-6 -mt-6 overflow-hidden rounded-t-3xl bg-gradient-to-br from-emerald-700 via-teal-600 to-sky-600 px-6 py-5 text-white sm:-mx-8 sm:-mt-8 sm:px-8">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-8 -bottom-12 size-36 rounded-full bg-white/10" />
+        <div aria-hidden="true" className="pointer-events-none absolute right-16 -top-10 size-24 rounded-full bg-amber-300/25 blur-xl" />
+        <div className="relative flex items-center gap-2.5">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/90">
+            <Image src="/logo-mark.png" alt="" width={32} height={32} className="size-8 object-contain" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold leading-tight">Escuela Libertad</p>
+            <p className="text-xs text-white/80">Panel administrativo</p>
+          </div>
         </div>
+        <h1 className="relative mt-4 text-xl font-bold tracking-tight">Iniciar sesión</h1>
+        <p className="relative mt-0.5 text-xs text-white/85">Acceso restringido al equipo de la fundación.</p>
       </div>
-
-      <h1 className="mt-6 text-xl font-semibold tracking-tight">Iniciar sesión</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Acceso restringido al equipo de la fundación.
-      </p>
 
       <div className="mt-6 space-y-4">
         <div>

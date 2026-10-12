@@ -1,5 +1,7 @@
 import { LayoutTemplate } from "lucide-react";
 
+import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
+
 import { PortalesPanel } from "./portales-panel";
 
 /**
@@ -14,7 +16,15 @@ export default function PortalesAdminPage() {
         <h1 className="flex items-center gap-2 text-2xl font-semibold"><LayoutTemplate className="size-6 text-brand" /> Portales</h1>
         <p className="mt-1 text-sm text-muted-foreground">Desde aquí operas los portales de salud, belleza, motos y carros, y cuidado en el hogar: artículos con IA, publicidad y cuántas personas traen a la comunidad de María Fernanda Cabal.</p>
       </div>
-      <PortalesPanel />
+      <Lienzo>
+        <Portada icono={LayoutTemplate} etiqueta="Centro de operaciones" titulo="Portales de comunidad" descripcion="Cada portal es una comunidad con su propio CMS y su propio CRM: noticias, eventos, boletines y la gente que se suma.">
+          <ChipPortada>Salud</ChipPortada>
+          <ChipPortada>Belleza</ChipPortada>
+          <ChipPortada>Motos y carros</ChipPortada>
+          <ChipPortada>Cuidado en el hogar</ChipPortada>
+        </Portada>
+        <PortalesPanel />
+      </Lienzo>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   Wand2,
 } from "lucide-react";
 
+import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
 import { Button } from "@/components/ui/button";
 import { colombiaDepartments } from "@/lib/colombia-departments";
 import { trendingTopics, getDepartmentMentions } from "@/lib/social-trends-mock";
@@ -55,7 +56,7 @@ export default function RedactorPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -72,7 +73,11 @@ export default function RedactorPage() {
         </span>
       </div>
 
-      <p className="mt-2 max-w-2xl rounded-xl border border-dashed border-border bg-surface-muted p-3 text-xs leading-relaxed text-muted-foreground">
+      <Lienzo className="mt-6">
+      <Portada icono={Wand2} etiqueta="Borradores" titulo="Propón un artículo" descripcion="Elige un tema en tendencia, una ciudad y un tono: el redactor arma un primer borrador para que lo revises y lo edites.">
+        <ChipPortada icono={FlaskConical}>Plantilla local, sin IA conectada</ChipPortada>
+      </Portada>
+      <p className="rounded-xl border border-dashed border-border bg-surface-muted p-3 text-xs leading-relaxed text-muted-foreground">
         Este borrador se arma con una plantilla local, no con un modelo de IA
         real — el proyecto aún no tiene configurada una clave de API (p. ej.
         <code className="mx-1 rounded bg-background px-1 py-0.5">ANTHROPIC_API_KEY</code>
@@ -82,7 +87,7 @@ export default function RedactorPage() {
 
       <form
         onSubmit={onGenerate}
-        className="mt-6 grid gap-4 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:grid-cols-3"
+        className="grid gap-4 rounded-2xl border border-border bg-surface p-4 shadow-sm sm:grid-cols-3 sm:p-5"
       >
         <div>
           <label className="text-xs font-medium text-muted-foreground">Tema en tendencia</label>
@@ -136,7 +141,7 @@ export default function RedactorPage() {
       </form>
 
       {draft && (
-        <div className="mt-6 rounded-2xl border border-border bg-surface p-6 shadow-sm">
+        <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand">
               <Sparkles className="size-3.5" aria-hidden="true" />
@@ -171,6 +176,7 @@ export default function RedactorPage() {
           </div>
         </div>
       )}
+      </Lienzo>
     </div>
   );
 }

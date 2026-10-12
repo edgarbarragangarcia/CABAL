@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import {
-  ArrowLeft, BarChart3, CalendarDays, Copy, ExternalLink, FileText, Files, Images, LineChart, Loader2, Mail, Megaphone, Pencil, Rocket, Settings2, TriangleAlert, Users,
+  ArrowLeft, BarChart3, CalendarDays, Copy, ExternalLink, FileText, Files, Images, LayoutTemplate, LineChart, Loader2, Mail, Megaphone, Pencil, Rocket, Settings2, TriangleAlert, Users,
 } from "lucide-react";
 
+import { Portada } from "@/components/admin/estilo-cabal";
 import { plantillaPorId } from "@/lib/portales/plantillas";
 import { ajustesPorDefecto, type AjustesPortal, type ResumenPortal } from "@/lib/portales/cms/tipos";
 import { tematicaDe } from "@/lib/portales/cms/tematicas";
@@ -103,20 +104,23 @@ export function PortalCms({ portal, resumen, volver, editarDiseno, desplegar, ca
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={volver} className={botonSecundario}><ArrowLeft className="size-4" /> Centro de operaciones</button>
-        <span className="size-3 rounded-full" style={{ background: portal.config.colorPrimario }} />
-        <div className="min-w-0">
-          <h2 className="truncate font-display text-xl leading-tight font-semibold">{portal.nombre}</h2>
-          <p className="text-xs text-muted-foreground">{pl.nombre} · {portal.config.ciudad || "sin ciudad"} · /p/{portal.slug}</p>
-        </div>
-        <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${e.clase}`}>{e.texto}{portal.version > 0 ? ` · v${portal.version}` : ""}</span>
-        <div className="ml-auto flex flex-wrap gap-2">
-          <button type="button" onClick={editarDiseno} className={botonSecundario}><Pencil className="size-4" /> Editar diseño</button>
-          <button type="button" onClick={desplegar} className={botonSecundario}><Rocket className="size-4" /> {portal.version > 0 ? "Volver a desplegar" : "Desplegar"}</button>
-          {portal.estado === "publicado" && <a href={`/p/${portal.slug}`} target="_blank" rel="noreferrer noopener" className={botonSecundario}>Ver el portal <ExternalLink className="size-4" /></a>}
-        </div>
-      </div>
+      <button type="button" onClick={volver} className={botonSecundario}><ArrowLeft className="size-4" /> Centro de operaciones</button>
+
+      <Portada
+        icono={LayoutTemplate}
+        etiqueta={`${pl.nombre} · ${portal.config.ciudad || "sin ciudad"}`}
+        titulo={portal.nombre}
+        descripcion={<>/p/{portal.slug}</>}
+        acciones={
+          <>
+            <button type="button" onClick={editarDiseno} className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"><Pencil className="size-4" /> Editar diseño</button>
+            <button type="button" onClick={desplegar} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:brightness-95"><Rocket className="size-4" /> {portal.version > 0 ? "Volver a desplegar" : "Desplegar"}</button>
+            {portal.estado === "publicado" && <a href={`/p/${portal.slug}`} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25">Ver el portal <ExternalLink className="size-4" /></a>}
+          </>
+        }
+      >
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur"><span className="size-2 rounded-full" style={{ background: portal.config.colorPrimario }} />{e.texto}{portal.version > 0 ? ` · v${portal.version}` : ""}</span>
+      </Portada>
 
       {estado && !estado.pro && pestana !== "resumen" && !REQUIEREN_PRO.includes(pestana) && (
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-amber-500/10 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200">

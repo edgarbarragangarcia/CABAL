@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Gauge, PenSquare, Users } from "lucide-react";
 
+import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
+
 import { DecisionTab } from "./decision-tab";
 import { PublicarTab } from "./publicar-tab";
 
@@ -30,8 +32,17 @@ export default function ComunidadAdminPage() {
         ))}
       </div>
 
-      {tab === "decision" && <DecisionTab irAPublicar={() => setTab("publicar")} />}
-      {tab === "publicar" && <PublicarTab />}
+      <Lienzo>
+        {tab === "decision" ? (
+          <Portada icono={Gauge} etiqueta="Panel de decisión" titulo="La comunidad de un vistazo" descripcion="Cuántos afiliados hay, dónde están, qué temas mueven la conversación y qué conviene publicar.">
+            <ChipPortada icono={Users}>Afiliados de la comunidad del partido y cuenta oficial</ChipPortada>
+          </Portada>
+        ) : (
+          <Portada icono={PenSquare} etiqueta="Publicar" titulo="Habla con la comunidad" descripcion="Publica desde la cuenta oficial de María Fernanda Cabal y mira cómo responde la gente." />
+        )}
+        {tab === "decision" && <DecisionTab irAPublicar={() => setTab("publicar")} />}
+        {tab === "publicar" && <PublicarTab />}
+      </Lienzo>
     </div>
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDownRight, ArrowUpRight, Loader2, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Eye, Loader2, Megaphone, Minus, MousePointerClick, UserPlus } from "lucide-react";
+
+import { Kpis } from "@/components/admin/estilo-cabal";
 
 import type { Analitica, PuntoDia } from "@/lib/portales/cms/analitica";
 import type { Portal } from "@/lib/portales/store";
@@ -12,20 +14,10 @@ import { mensajeDe, numero, pedir, tarjeta } from "./comun";
 const DIAS = [7, 30, 90] as const;
 
 function Variacion({ valor }: { valor: number | null }) {
-  if (valor === null) return <span className="text-xs text-muted-foreground">sin periodo anterior</span>;
-  if (valor === 0) return <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground"><Minus className="size-3" /> igual que antes</span>;
+  if (valor === null) return <span>sin periodo anterior</span>;
+  if (valor === 0) return <span className="inline-flex items-center gap-0.5"><Minus className="size-3" /> igual que antes</span>;
   const sube = valor > 0;
-  return <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${sube ? "text-emerald-600" : "text-rose-600"}`}>{sube ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}{Math.abs(valor)} % vs. periodo anterior</span>;
-}
-
-function Cifra({ titulo, valor, pie }: { titulo: string; valor: string; pie?: React.ReactNode }) {
-  return (
-    <div className={`${tarjeta} p-4`}>
-      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{titulo}</p>
-      <p className="mt-1 font-display text-3xl font-semibold tabular-nums">{valor}</p>
-      {pie && <div className="mt-0.5">{pie}</div>}
-    </div>
-  );
+  return <span className="inline-flex items-center gap-0.5 font-semibold">{sube ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}{Math.abs(valor)} % {sube ? "más" : "menos"} que el periodo anterior</span>;
 }
 
 /** Barras por día (visitas) con la línea de personas nuevas encima. SVG a mano: sin librería. */
@@ -119,12 +111,14 @@ export function AnaliticaPanel({ portal }: { portal: Portal }) {
 
       {datos && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Cifra titulo="Visitas" valor={numero(datos.totales.vistas)} pie={<Variacion valor={datos.cambios.vistas} />} />
-            <Cifra titulo="Personas nuevas" valor={numero(datos.totales.contactosNuevos)} pie={<Variacion valor={datos.cambios.contactos} />} />
-            <Cifra titulo="Clics en «Súmate»" valor={numero(datos.totales.cta)} pie={<span className="text-xs text-muted-foreground">{conversion.toFixed(1).replace(".", ",")} % de las visitas</span>} />
-            <Cifra titulo="Clics en anuncios" valor={numero(datos.totales.anuncioClics)} />
-          </div>
+          <Kpis
+            items={[
+              { etiqueta: "Visitas", valor: numero(datos.totales.vistas), detalle: <Variacion valor={datos.cambios.vistas} />, icono: Eye },
+              { etiqueta: "Personas nuevas", valor: numero(datos.totales.contactosNuevos), detalle: <Variacion valor={datos.cambios.contactos} />, icono: UserPlus },
+              { etiqueta: "Clics en «Súmate»", valor: numero(datos.totales.cta), detalle: `${conversion.toFixed(1).replace(".", ",")} % de las visitas`, icono: MousePointerClick },
+              { etiqueta: "Clics en anuncios", valor: numero(datos.totales.anuncioClics), detalle: "en el periodo", icono: Megaphone },
+            ]}
+          />
 
           <section className={`${tarjeta} p-5`}>
             <h4 className="mb-3 text-sm font-semibold">Visitas y personas nuevas, día por día</h4>

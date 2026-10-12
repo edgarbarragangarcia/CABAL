@@ -142,7 +142,7 @@ export function AdminShell({
       </aside>
 
       {/* Barra móvil */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 lg:hidden">
           <Link href="/admin" className="flex items-center gap-2">
             <Image
@@ -183,7 +183,7 @@ export function AdminShell({
           </div>
         )}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-3 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

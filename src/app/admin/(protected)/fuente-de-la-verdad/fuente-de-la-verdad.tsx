@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Database, Library } from "lucide-react";
 
+import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
+
 import { DatosTab } from "../analisis-publicaciones/datos-tab";
 import { DocumentosTab } from "../analisis-publicaciones/documentos-tab";
 
@@ -34,10 +36,19 @@ export function FuenteDeLaVerdad() {
           </button>
         ))}
       </div>
-      <div className="mt-6">
+      <Lienzo className="mt-6">
+        {tab === "datos" ? (
+          <Portada icono={Database} etiqueta="Datos electorales" titulo="Resultados guardados en Supabase" descripcion="La copia de todas las elecciones y cargos, de la que se alimentan Votaciones, Territorio y el resto del panel. La Registraduría solo se consulta para llenar esta copia.">
+            <ChipPortada icono={Database}>Se carga en el servidor, sin dejar la pantalla abierta</ChipPortada>
+          </Portada>
+        ) : (
+          <Portada icono={Library} etiqueta="Gestor documental" titulo="Documentos de la Fundación" descripcion="Carpetas, versiones, papelera e historial, con búsqueda por significado y preguntas con citas sobre cada documento.">
+            <ChipPortada icono={Library}>Los archivos se vectorizan para buscarlos por lo que dicen</ChipPortada>
+          </Portada>
+        )}
         {abiertas.has("datos") && <div hidden={tab !== "datos"}><DatosTab /></div>}
         {abiertas.has("documentos") && <div hidden={tab !== "documentos"}><DocumentosTab /></div>}
-      </div>
+      </Lienzo>
     </div>
   );
 }

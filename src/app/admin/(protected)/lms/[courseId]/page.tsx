@@ -3,8 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Clock, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpenText, Clock, Layers, Plus, Trash2 } from "lucide-react";
 
+import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
 import { Button } from "@/components/ui/button";
 import { useLmsCourses } from "@/lib/lms-store";
 
@@ -49,7 +50,7 @@ export default function CourseDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <Link
         href="/admin/lms"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -58,12 +59,13 @@ export default function CourseDetailPage() {
         LMS
       </Link>
 
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight">{course.title}</h1>
-      {course.description && (
-        <p className="mt-1 text-sm text-muted-foreground">{course.description}</p>
-      )}
+      <Lienzo className="mt-3">
+      <Portada icono={BookOpenText} etiqueta={`Curso · ${course.status}`} titulo={course.title} descripcion={course.description || "Módulos y lecciones del curso."}>
+        <ChipPortada icono={Layers}>{course.modules.length} módulos</ChipPortada>
+        <ChipPortada icono={BookOpenText}>{course.modules.reduce((a, m) => a + m.lessons.length, 0)} lecciones</ChipPortada>
+      </Portada>
 
-      <div className="mt-6 space-y-4">
+      <div className="mx-auto w-full max-w-3xl space-y-4">
         {course.modules.map((module) => (
           <div key={module.id} className="rounded-2xl border border-border bg-surface p-5">
             <div className="flex items-center justify-between">
@@ -142,7 +144,7 @@ export default function CourseDetailPage() {
 
       <form
         onSubmit={onAddModule}
-        className="mt-4 flex items-center gap-2 rounded-2xl border border-dashed border-border p-4"
+        className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-2xl border border-dashed border-border p-4"
       >
         <input
           value={newModuleTitle}
@@ -155,6 +157,7 @@ export default function CourseDetailPage() {
           Añadir módulo
         </Button>
       </form>
+      </Lienzo>
     </div>
   );
 }
