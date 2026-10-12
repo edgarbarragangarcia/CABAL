@@ -9,6 +9,8 @@ import { Pantalla } from "./pantallas";
 import { Ic, Malla, Telefono } from "./piezas";
 import { BOTON, Encabezado, Enlace, MarcoPortal, construirAmbiente, type Amb, type DatosCms } from "./marco";
 import { tematicaDe } from "@/lib/portales/cms/tematicas";
+import { aplicarNotas } from "@/lib/portales/diseno/css";
+import { SECCIONES_INICIO, type SeccionId } from "@/lib/portales/diseno/tipos";
 import { BandaUnete, EspacioAnuncio, SeccionArticulos, SeccionEventos, SeccionSuscribir } from "./cms";
 
 /**
@@ -52,7 +54,7 @@ function Hero({ a }: { a: Amb }) {
   const { c, t, id, k } = a;
   const [ini, fin] = partirTitulo(c.titulo);
   return (
-    <section className="relative isolate overflow-hidden">
+    <section data-region="hero" className="relative isolate overflow-hidden">
       <FondoHero id={id} />
       <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-5 pt-12 pb-20 @2xl:px-8 @4xl:grid-cols-[1.02fr_0.98fr] @4xl:pt-20 @4xl:pb-28">
         <div>
@@ -84,7 +86,7 @@ function Servicios({ a }: { a: Amb }) {
   const { t, k } = a;
   const [grande, ...resto] = t.servicios.items;
   return (
-    <section id={a.ancla("servicios")} className="scroll-mt-24 py-20">
+    <section data-region="cuerpo" id={a.ancla("servicios")} className="scroll-mt-24 py-20">
       <div className="mx-auto max-w-6xl px-5 @2xl:px-8">
         <Encabezado a={a} etiqueta="La comunidad" titulo={t.servicios.titulo} texto="Información útil, encuentros y gente con quien compartir." />
         <ul className="mt-12 grid gap-4 @xl:grid-cols-2 @4xl:auto-rows-[minmax(11.5rem,auto)] @4xl:grid-cols-4">
@@ -112,7 +114,7 @@ function Servicios({ a }: { a: Amb }) {
 function Pasos({ a }: { a: Amb }) {
   const { t, k, tema } = a;
   return (
-    <section id={a.ancla("pasos")} className="relative isolate scroll-mt-24 overflow-hidden py-20" style={{ background: tema.alterno }}>
+    <section data-region="cuerpo" id={a.ancla("pasos")} className="relative isolate scroll-mt-24 overflow-hidden py-20" style={{ background: tema.alterno }}>
       <div className="mx-auto max-w-6xl px-5 @2xl:px-8">
         <Encabezado a={a} etiqueta="Participa" titulo={t.pasos.titulo} />
         <ol className="relative mt-14 grid gap-10 @3xl:grid-cols-3 @3xl:gap-8">
@@ -133,7 +135,7 @@ function Pasos({ a }: { a: Amb }) {
 function Preguntas({ a }: { a: Amb }) {
   const { t, k } = a;
   return (
-    <section id={a.ancla("preguntas")} className="scroll-mt-24 py-20">
+    <section data-region="cuerpo" id={a.ancla("preguntas")} className="scroll-mt-24 py-20">
       <div className="mx-auto grid max-w-6xl gap-12 px-5 @2xl:px-8 @4xl:grid-cols-[0.8fr_1.2fr]">
         <Encabezado a={a} etiqueta="Dudas" titulo={t.preguntas.titulo} texto="Lo que más nos preguntan antes de sumarse." />
         <div className="space-y-3">
@@ -191,26 +193,26 @@ export function PortalView({ plantilla, config: c, demo = true, enlaces = true, 
   const hayArticulos = !!cms && cms.articulos.length > 0;
   const hayEventos = !!cms && cms.eventos.length > 0;
   const seccion = tematicaDe(plantilla).seccion.nombre;
-  const secciones = [
-    c.secciones.servicios && { id: "servicios", texto: "La comunidad" },
-    hayEventos && { id: "eventos", texto: "Eventos" },
-    hayArticulos && { id: "articulos", texto: seccion },
-    c.secciones.pasos && { id: "pasos", texto: "Cómo participar" },
-    { id: "suscribir", texto: "Súmate" },
-    c.secciones.preguntas && { id: "preguntas", texto: "Preguntas" },
-  ].filter(Boolean) as { id: string; texto: string }[];
-  const intereses = tematicaDe(plantilla).categorias.slice(0, 6);
+  const d = cms?.datos.diseno ?? null;
+  const disponibles: Record<SeccionId, { id: string; texto: string; nodo: React.ReactNode } | false> = {
+    servicios: c.secciones.servicios && { id: "servicios", texto: "La comunidad", nodo: <Servicios key="servicios" a={a} /> },
+    eventos: hayEventos && { id: "eventos", texto: "Eventos", nodo: <SeccionEventos key="eventos" a={a} eventos={cms.eventos} /> },
+    articulos: hayArticulos && { id: "articulos", texto: seccion, nodo: <SeccionArticulos key="articulos" a={a} articulos={aplicarNotas(cms.articulos, d?.notas ?? {}).slice(0, 3)} /> },
+    pasos: c.secciones.pasos && { id: "pasos", texto: "Cómo participar", nodo: <Pasos key="pasos" a={a} /> },
+    suscribir: { id: "suscribir", texto: "Súmate", nodo: <SeccionSuscribir key="suscribir" a={a} intereses={tematicaDe(plantilla).categorias.slice(0, 6)} /> },
+    preguntas: c.secciones.preguntas && { id: "preguntas", texto: "Preguntas", nodo: <Preguntas key="preguntas" a={a} /> },
+  };
+  // El editor del portal puede reordenar las secciones del inicio y ocultar las que no quiera.
+  const orden = d?.secciones.orden ?? (SECCIONES_INICIO.map((s) => s.id) as SeccionId[]);
+  const ocultas = new Set(d?.secciones.ocultas ?? []);
+  const visibles = orden.filter((id) => !ocultas.has(id)).map((id) => disponibles[id]).filter(Boolean) as { id: string; texto: string; nodo: React.ReactNode }[];
+  const secciones = visibles.map(({ id, texto }) => ({ id, texto }));
 
   return (
     <MarcoPortal a={a} vars={vars} secciones={secciones}>
       <Hero a={a} />
       {cms && <EspacioAnuncio a={a} espacio="cabecera" />}
-      {c.secciones.servicios && <Servicios a={a} />}
-      {hayEventos && <SeccionEventos a={a} eventos={cms.eventos} />}
-      {hayArticulos && <SeccionArticulos a={a} articulos={cms.articulos.slice(0, 3)} />}
-      {c.secciones.pasos && <Pasos a={a} />}
-      <SeccionSuscribir a={a} intereses={intereses} />
-      {c.secciones.preguntas && <Preguntas a={a} />}
+      {visibles.map((v) => v.nodo)}
       {cms && <EspacioAnuncio a={a} espacio="pie" />}
       {cms && <BandaUnete a={a} />}
       {a.contacto && <Contacto a={a} />}

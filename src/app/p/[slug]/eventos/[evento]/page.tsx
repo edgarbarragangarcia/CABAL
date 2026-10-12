@@ -32,7 +32,7 @@ export default async function EventoPage({ params }: Props) {
   if (!evento) notFound();
   const terminado = eventoTerminado(evento);
 
-  if (!esBot((await headers()).get("user-agent"))) registrarEvento(portal.id, "vista", { anuncioIds: anunciosMostrados(datos, "listado") });
+  if (!datos.vista && !esBot((await headers()).get("user-agent"))) registrarEvento(portal.id, "vista", { anuncioIds: anunciosMostrados(datos, "listado") });
   const { a, vars } = construirAmbiente({ plantilla: portal.plantilla, config: portal.config, demo: false, enlaces: true, idBase: "portal", cms: datos });
   const ld = {
     "@context": "https://schema.org",

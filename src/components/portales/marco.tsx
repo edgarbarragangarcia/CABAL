@@ -4,6 +4,9 @@ import { MapPin } from "@phosphor-icons/react/dist/ssr";
 import { PLANTILLAS, plantillaPorId, type ConfigPortal, type Plantilla, type PlantillaId } from "@/lib/portales/plantillas";
 import type { EspacioId } from "@/lib/portales/cms/tematicas";
 import type { AjustesPortal, Anuncio } from "@/lib/portales/cms/tipos";
+import { aplicarMenu, disenoCss } from "@/lib/portales/diseno/css";
+import type { DisenoPortal } from "@/lib/portales/diseno/tipos";
+import { AvisoBorrador, Emergente, SeleccionVista } from "./diseno-cliente";
 import { Ic, textoSobre } from "./piezas";
 
 /**
@@ -59,6 +62,14 @@ export type DatosCms = {
   hrefAnuncio: (id: string) => string;
   /** El anuncio que toca mostrar en cada espacio (si lo hay). */
   elegidos: Partial<Record<EspacioId, Anuncio>>;
+  /** El diseño del portal (colores, regiones, menú…); null = el de la plantilla tal cual. */
+  diseno?: DisenoPortal | null;
+  /** El administrador está viendo el borrador del diseño: no cuenta visitas ni lo ve nadie más. */
+  vista?: boolean;
+  /** Los últimos titulares, para el cintillo. */
+  titulares?: { titulo: string; href: string }[];
+  /** Para avisar del borrador y salir de la vista previa. */
+  portalId?: string;
 };
 
 /** Todo lo que comparten las secciones: la plantilla, la configuración, el tema y cómo se arman los enlaces. */
@@ -106,11 +117,24 @@ export type OpcionesAmbiente = {
 export function construirAmbiente(o: OpcionesAmbiente): { a: Amb; vars: React.CSSProperties } {
   const c = o.config;
   const t = plantillaPorId(o.plantilla) ?? PLANTILLAS[0];
-  const tema = TEMAS[t.id];
-  const p = c.colorPrimario;
+  let tema = TEMAS[t.id];
+  const d = o.cms?.diseno ?? null;
+  // El diseño puede forzar el modo claro u oscuro y cambiar los colores de ese modo; el acento reemplaza al color del portal.
+  let p = c.colorPrimario;
+  let sec = tema.sec;
+  if (d) {
+    const modo = d.base.modo === "plantilla" ? (tema.oscuro ? "oscuro" : "claro") : d.base.modo;
+    if ((modo === "oscuro") !== tema.oscuro) {
+      tema = modo === "oscuro" ? { ...tema, oscuro: true, fondo: "#0a0c10", texto: "#eef2f7", alterno: "#0e1117" } : { ...tema, oscuro: false, fondo: "#f7f8fa", texto: "#10161d", alterno: "#ffffff" };
+    }
+    const m = d.base[modo];
+    tema = { ...tema, ...(m.fondo ? { fondo: m.fondo } : {}), ...(m.texto ? { texto: m.texto } : {}), ...(m.alterno ? { alterno: m.alterno } : {}) };
+    if (m.acento) p = m.acento;
+    if (m.acento2) sec = m.acento2;
+  }
   const vars = {
     "--p": p,
-    "--p2": `color-mix(in oklab, ${p} 52%, ${tema.sec})`,
+    "--p2": `color-mix(in oklab, ${p} 52%, ${sec})`,
     "--ps": `color-mix(in oklab, ${p} 9%, white)`,
     "--pm": `color-mix(in oklab, ${p} 55%, white)`,
     "--pd": `color-mix(in oklab, ${p} 62%, black)`,
@@ -140,13 +164,14 @@ export function construirAmbiente(o: OpcionesAmbiente): { a: Amb; vars: React.CS
 }
 
 /** En la vista previa del panel los enlaces no deben navegar: se dibujan como un `span` con la misma apariencia. */
-export function Enlace({ a, href, className, children }: { a: Amb; href: string; className: string; children: React.ReactNode }) {
-  return a.enlaces ? <a href={href} className={className}>{children}</a> : <span className={className}>{children}</span>;
+export function Enlace({ a, href, className, children, region, nota }: { a: Amb; href: string; className: string; children: React.ReactNode; /** Región editable a la que pertenece (diseño del portal). */ region?: string; /** Id de la nota: su estilo propio del diseño. */ nota?: string }) {
+  const attrs = { ...(region ? { "data-region": region } : {}), ...(nota ? { "data-nota": nota } : {}) };
+  return a.enlaces ? <a href={href} className={className} {...attrs}>{children}</a> : <span className={className} {...attrs}>{children}</span>;
 }
 
 export function Encabezado({ a, etiqueta, titulo, texto }: { a: Amb; etiqueta: string; titulo: string; texto?: string }) {
   return (
-    <div className="max-w-2xl">
+    <div data-region="encabezado" className="max-w-2xl">
       <span className={`inline-flex items-center rounded-full px-3.5 py-1.5 text-[0.68rem] font-bold tracking-[0.16em] uppercase ${a.k.etiqueta}`}>{etiqueta}</span>
       <h2 className={`mt-4 text-[clamp(1.9rem,5.2cqi,3rem)] leading-[1.08] text-balance ${a.tit}`}>{titulo}</h2>
       {texto && <p className={`mt-3 text-[1.02rem] ${a.k.suave}`}>{texto}</p>}
@@ -155,21 +180,25 @@ export function Encabezado({ a, etiqueta, titulo, texto }: { a: Amb; etiqueta: s
 }
 
 type ItemNav = { href: string; texto: string };
+type ItemMenuNav = ItemNav & { id: string };
 
 /** El encabezado flotante: logo, enlaces y un botón de acción (en el inicio, la acción del portal; en los artículos, sumarse). */
 export function Cabecera({ a, secciones, accion }: { a: Amb; secciones: { id: string; texto: string }[]; accion?: ItemNav }) {
   const { c, t, k } = a;
-  const nav: ItemNav[] = [
-    ...(a.cms ? [{ href: a.cms.urlBase, texto: "Inicio" }] : []),
-    ...secciones.map((s) => ({ href: `${a.inicio}#${a.ancla(s.id)}`, texto: s.texto })),
+  const navBase: ItemMenuNav[] = [
+    ...(a.cms ? [{ id: "inicio", href: a.cms.urlBase, texto: "Inicio" }] : []),
+    // «Artículos» y «Eventos» tienen el mismo identificador en el inicio y en las demás páginas: el menú del diseño vale en ambas.
+    ...secciones.map((s) => ({ id: s.id === "articulos" || s.id === "eventos" ? s.id : `seccion:${s.id}`, href: `${a.inicio}#${a.ancla(s.id)}`, texto: s.texto })),
     // En el inicio, «Artículos» ya viene entre las secciones (baja hasta ellos); en las demás páginas lleva al listado.
-    ...(a.cms?.articulos && !secciones.some((s) => s.id === "articulos") ? [{ href: `${a.cms.urlBase}/articulos`, texto: "Artículos" }] : []),
-    ...(a.cms?.eventos && !secciones.some((s) => s.id === "eventos") ? [{ href: `${a.cms.urlBase}/eventos`, texto: "Eventos" }] : []),
-    ...(a.cms?.paginas ?? []).map((p) => ({ href: `${a.cms!.urlBase}/pagina/${p.slug}`, texto: p.titulo })),
+    ...(a.cms?.articulos && !secciones.some((s) => s.id === "articulos") ? [{ id: "articulos", href: `${a.cms.urlBase}/articulos`, texto: "Artículos" }] : []),
+    ...(a.cms?.eventos && !secciones.some((s) => s.id === "eventos") ? [{ id: "eventos", href: `${a.cms.urlBase}/eventos`, texto: "Eventos" }] : []),
+    ...(a.cms?.paginas ?? []).map((p) => ({ id: `pagina:${p.slug}`, href: `${a.cms!.urlBase}/pagina/${p.slug}`, texto: p.titulo })),
   ];
+  // El editor puede reordenar, renombrar u ocultar los enlaces del menú.
+  const nav = aplicarMenu(navBase, a.cms?.diseno?.menu ?? []);
   const boton = accion ?? { href: a.hrefCta, texto: a.textoCta };
   return (
-    <header className="sticky top-0 z-30 px-3 pt-3 @2xl:px-6">
+    <header data-region="navbar" className="sticky top-0 z-30 px-3 pt-3 @2xl:px-6">
       <div className={`mx-auto flex max-w-6xl items-center gap-3 rounded-full border py-2 pr-2 pl-3 backdrop-blur-xl ${k.cabecera}`}>
         <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[var(--p)] to-[var(--p2)] text-[var(--sobre)] shadow-[0_10px_20px_-10px_var(--p)]"><Ic id={t.icono} weight="duotone" className="size-6" /></span>
         <div className="min-w-0 leading-tight">
@@ -188,7 +217,7 @@ export function Cabecera({ a, secciones, accion }: { a: Amb; secciones: { id: st
 export function Pie({ a }: { a: Amb }) {
   const { c, t, tema, cms } = a;
   return (
-    <footer className="border-t border-white/10 bg-[#0c1017] text-white/70">
+    <footer data-region="pie" className="border-t border-white/10 bg-[#0c1017] text-white/70">
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-14 @2xl:px-8 @3xl:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-2xl bg-gradient-to-br from-[var(--p)] to-[var(--p2)] text-[var(--sobre)]"><Ic id={t.icono} weight="duotone" className="size-6" /></span><p className={`text-lg font-bold text-white ${tema.serif ? "font-display" : ""}`}>{c.nombre}</p></div>
@@ -221,15 +250,55 @@ export function Pie({ a }: { a: Amb }) {
   );
 }
 
+/** El cintillo de titulares (o de mensajes propios) bajo el encabezado, en movimiento continuo y detenido al pasar el cursor. */
+function Cintillo({ a }: { a: Amb }) {
+  const d = a.cms?.diseno;
+  const c = d?.cintillo;
+  if (!d || !c?.activo) return null;
+  const items: { texto: string; href: string | null }[] =
+    c.origen === "mensajes"
+      ? c.mensajes.map((m) => ({ texto: m, href: null }))
+      : (a.cms?.titulares ?? []).slice(0, c.cantidad).map((t) => ({ texto: t.titulo, href: t.href }));
+  if (items.length === 0) return null;
+  // De 1 (lento) a 10 (rápido): más titulares, más tiempo para recorrerlos.
+  const segundos = Math.max(8, Math.round((items.length * 9 * (11 - c.velocidad)) / 4));
+  const fila = (clave: string) => (
+    <ul key={clave} aria-hidden={clave === "b" ? true : undefined} className="flex shrink-0 items-center">
+      {items.map((it, i) => (
+        <li key={`${clave}${i}`} className="flex shrink-0 items-center gap-6 pr-6 text-sm font-medium whitespace-nowrap">
+          {it.href ? <Enlace a={a} href={it.href} className="hover:underline">{it.texto}</Enlace> : <span>{it.texto}</span>}
+          <span aria-hidden="true" className="opacity-50">◆</span>
+        </li>
+      ))}
+    </ul>
+  );
+  return (
+    <div role="region" aria-label="Titulares" data-cintillo className="relative z-20 mt-3 flex items-center overflow-hidden border-y border-black/10 bg-[var(--p)] text-[var(--sobre)]">
+      <style>{`@keyframes portal-cintillo{from{transform:translateX(0)}to{transform:translateX(-50%)}}[data-cintillo] .pista{animation:portal-cintillo ${segundos}s linear infinite}[data-cintillo]:hover .pista{animation-play-state:paused}@media (prefers-reduced-motion:reduce){[data-cintillo] .pista{animation:none;overflow-x:auto}}`}</style>
+      <span className="z-10 shrink-0 bg-black/25 px-4 py-2 text-xs font-bold tracking-[0.14em] uppercase">{c.etiqueta}</span>
+      <div className="min-w-0 flex-1 overflow-hidden py-2 pl-4">
+        <div className="pista flex w-max">{fila("a")}{fila("b")}</div>
+      </div>
+    </div>
+  );
+}
+
 /** El portal completo alrededor de su contenido: raíz con las variables de color, cinta de demostración, encabezado y pie. */
 export function MarcoPortal({ a, vars, secciones, accion, children }: { a: Amb; vars: React.CSSProperties; secciones: { id: string; texto: string }[]; accion?: ItemNav; children: React.ReactNode }) {
+  const d = a.cms?.diseno ?? null;
+  const vista = !!a.cms?.vista;
   return (
     // `overflow-x-clip` (y no `hidden`): recorta lo que se sale a los lados sin volver este bloque el contenedor de scroll, así el encabezado sí se queda pegado al desplazarse.
-    <div style={vars} className="@container relative isolate w-full overflow-x-clip bg-[var(--fondo)] text-[var(--texto)]">
+    <div data-portal-root data-modo={a.tema.oscuro ? "oscuro" : "claro"} style={vars} className="@container relative isolate w-full overflow-x-clip bg-[var(--fondo)] text-[var(--texto)]">
+      {d && <style>{disenoCss(d)}</style>}
       {a.demo && <div className="bg-[#0c1017] px-4 py-1.5 text-center text-[0.7rem] font-medium tracking-wide text-white/80">Portal de demostración · el contenido es de ejemplo</div>}
       <Cabecera a={a} secciones={secciones} accion={accion} />
+      <Cintillo a={a} />
       {children}
       <Pie a={a} />
+      {d && a.cms && <Emergente config={d.emergente} portal={a.cms.urlBase} vista={vista} />}
+      {vista && <SeleccionVista />}
+      {vista && a.cms?.portalId && <AvisoBorrador portalId={a.cms.portalId} />}
     </div>
   );
 }

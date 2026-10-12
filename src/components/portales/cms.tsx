@@ -3,6 +3,7 @@ import { ArrowRight, CalendarBlank, Clock, MapPin, Sparkle, UsersThree, VideoCam
 
 import { minutosDeLectura, parsearMarkdown, posicionAnuncioEnArticulo, type Bloque, type Trozo } from "@/lib/portales/cms/puro";
 import { tematicaDe, type EspacioId } from "@/lib/portales/cms/tematicas";
+import { aplicarNotas } from "@/lib/portales/diseno/css";
 import type { Articulo, ArticuloLista } from "@/lib/portales/cms/tipos";
 import type { Evento } from "@/lib/portales/crm/tipos";
 import type { Pagina } from "@/lib/portales/cms/paginas-tipos";
@@ -58,11 +59,11 @@ export function TarjetaArticulo({ a, art, grande = false }: { a: Amb; art: Artic
   const cms = a.cms;
   const href = cms ? `${cms.urlBase}/articulos/${art.slug}` : "#";
   return (
-    <Enlace a={a} href={href} className={`group flex h-full flex-col overflow-hidden rounded-[1.75rem] transition duration-300 hover:-translate-y-1 ${a.k.tarjeta}`}>
-      <Portada a={a} semilla={art.slug} etiqueta={art.categoria || undefined} url={art.portadaUrl} alt={art.portadaAlt} className={grande ? "aspect-[16/8]" : "aspect-[16/9]"} />
+    <Enlace a={a} href={href} region="tarjetas" nota={art.id} className={`group flex h-full flex-col overflow-hidden rounded-[1.75rem] transition duration-300 hover:-translate-y-1 ${a.k.tarjeta}`}>
+      <Portada a={a} semilla={art.slug} etiqueta={art.categoria || undefined} url={art.portadaUrl} alt={art.portadaAlt} className={`portada-nota ${grande ? "aspect-[16/8]" : "aspect-[16/9]"}`} />
       <span className="flex flex-1 flex-col gap-2 p-6">
         <span className={`text-xs font-semibold ${a.k.suave}`}>{fechaLarga(art.publicadoEn)}</span>
-        <span className={`${grande ? "text-2xl" : "text-lg"} leading-snug font-bold text-balance ${a.tema.serif ? "font-display font-normal" : ""}`}>{art.titulo}</span>
+        <span className={`titulo-nota ${grande ? "text-2xl" : "text-lg"} leading-snug font-bold text-balance ${a.tema.serif ? "font-display font-normal" : ""}`}>{art.titulo}</span>
         {art.resumen && <span className={`line-clamp-3 text-sm leading-relaxed ${a.k.suave}`}>{art.resumen}</span>}
         <span className="mt-auto inline-flex items-center gap-1.5 pt-3 text-sm font-bold text-[var(--p)]">Leer artículo <ArrowRight weight="bold" className="size-3.5 transition group-hover:translate-x-1" /></span>
       </span>
@@ -75,7 +76,7 @@ export function SeccionArticulos({ a, articulos }: { a: Amb; articulos: Articulo
   const seccion = tematicaDe(a.id).seccion;
   const cms = a.cms!;
   return (
-    <section id={a.ancla("articulos")} className="scroll-mt-24 py-20" style={{ background: a.tema.alterno }}>
+    <section id={a.ancla("articulos")} data-region="cuerpo" className="scroll-mt-24 py-20" style={{ background: a.tema.alterno }}>
       <div className="mx-auto max-w-6xl px-5 @2xl:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <Encabezado a={a} etiqueta="Artículos" titulo={seccion.nombre} texto={seccion.descripcion} />
@@ -230,7 +231,7 @@ export function VistaArticulo({ a, articulo, relacionados, lateral }: { a: Amb; 
   return (
     <>
       <EspacioAnuncio a={a} espacio="cabecera" />
-      <article className="mx-auto max-w-6xl px-5 pt-10 pb-20 @2xl:px-8">
+      <article data-region="cuerpo" className="mx-auto max-w-6xl px-5 pt-10 pb-20 @2xl:px-8">
         <div className="mx-auto max-w-3xl @4xl:mx-0 @4xl:max-w-none">
           <Enlace a={a} href={`${cms.urlBase}/articulos`} className={`inline-flex items-center gap-1.5 text-sm font-semibold ${a.k.suave} hover:text-[var(--p)]`}>← Todos los artículos</Enlace>
         </div>
@@ -267,7 +268,7 @@ export function VistaArticulo({ a, articulo, relacionados, lateral }: { a: Amb; 
         </div>
       </article>
       {relacionados.length > 0 && (
-        <section className="py-16" style={{ background: a.tema.alterno }}>
+        <section data-region="cuerpo" className="py-16" style={{ background: a.tema.alterno }}>
           <div className="mx-auto max-w-6xl px-5 @2xl:px-8">
             <h2 className={`text-3xl ${a.tit}`}>Sigue leyendo</h2>
             <ul className="mt-8 grid gap-5 @2xl:grid-cols-2 @4xl:grid-cols-3">{relacionados.map((r) => <li key={r.id}><TarjetaArticulo a={a} art={r} /></li>)}</ul>
@@ -283,12 +284,14 @@ export function VistaArticulo({ a, articulo, relacionados, lateral }: { a: Amb; 
 export function VistaListado({ a, articulos, categorias, actual, etiqueta = "" }: { a: Amb; articulos: ArticuloLista[]; categorias: string[]; actual: string; etiqueta?: string }) {
   const cms = a.cms!;
   const seccion = tematicaDe(a.id).seccion;
-  const [primero, ...resto] = articulos;
+  // El diseño del portal puede ocultar notas y fijar el orden de otras.
+  const lista = aplicarNotas(articulos, a.cms?.diseno?.notas ?? {});
+  const [primero, ...resto] = lista;
   const chip = (activa: boolean) => `rounded-full border px-4 py-1.5 text-sm font-semibold transition ${activa ? "border-transparent bg-[var(--p)] text-[var(--sobre)]" : `${a.k.pildora} hover:text-[var(--p)]`}`;
   return (
     <>
       <EspacioAnuncio a={a} espacio="cabecera" />
-      <section className="mx-auto max-w-6xl px-5 pt-12 pb-20 @2xl:px-8">
+      <section data-region="cuerpo" className="mx-auto max-w-6xl px-5 pt-12 pb-20 @2xl:px-8">
         <Encabezado a={a} etiqueta="Artículos" titulo={seccion.nombre} texto={seccion.descripcion} />
         {categorias.length > 1 && (
           <ul className="mt-8 flex flex-wrap gap-2">
@@ -299,7 +302,7 @@ export function VistaListado({ a, articulos, categorias, actual, etiqueta = "" }
         {etiqueta && (
           <p className={`mt-6 flex flex-wrap items-center gap-3 text-sm ${a.k.suave}`}>Artículos con la etiqueta <b className="text-[var(--texto)]">#{etiqueta}</b> <Enlace a={a} href={`${cms.urlBase}/articulos`} className="font-semibold text-[var(--p)] hover:underline">Ver todos</Enlace></p>
         )}
-        {articulos.length === 0 ? (
+        {lista.length === 0 ? (
           <p className={`mt-12 rounded-2xl p-8 text-center ${a.k.tarjeta} ${a.k.suave}`}>{etiqueta || actual ? "No hay artículos con ese filtro." : "Todavía no hay artículos en esta sección. Vuelve pronto."}</p>
         ) : (
           <div className="mt-10 grid gap-8 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -336,7 +339,7 @@ export function TarjetaEvento({ a, ev }: { a: Amb; ev: Evento }) {
   const cms = a.cms;
   const lleno = ev.cupo !== null && ev.inscritos >= ev.cupo;
   return (
-    <Enlace a={a} href={cms ? `${cms.urlBase}/eventos/${ev.slug}` : "#"} className={`group flex h-full gap-5 rounded-[1.75rem] p-5 transition duration-300 hover:-translate-y-1 ${a.k.tarjeta}`}>
+    <Enlace a={a} href={cms ? `${cms.urlBase}/eventos/${ev.slug}` : "#"} region="tarjetas" className={`group flex h-full gap-5 rounded-[1.75rem] p-5 transition duration-300 hover:-translate-y-1 ${a.k.tarjeta}`}>
       <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[var(--p)] to-[var(--pd)] text-center text-[var(--sobre)]">
         <span className="leading-none"><span className="block text-[0.65rem] font-bold tracking-wide uppercase">{mes(ev.iniciaEn)}</span><span className="block text-2xl font-extrabold">{dia(ev.iniciaEn)}</span></span>
       </span>
@@ -358,7 +361,7 @@ export function SeccionEventos({ a, eventos }: { a: Amb; eventos: Evento[] }) {
   const cms = a.cms!;
   if (eventos.length === 0) return null;
   return (
-    <section id={a.ancla("eventos")} className="scroll-mt-24 py-20">
+    <section data-region="cuerpo" id={a.ancla("eventos")} className="scroll-mt-24 py-20">
       <div className="mx-auto max-w-6xl px-5 @2xl:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <Encabezado a={a} etiqueta="Agenda" titulo="Próximos encuentros" texto="Eventos de la comunidad: inscríbete y participa." />
@@ -376,7 +379,7 @@ export function SeccionSuscribir({ a, intereses }: { a: Amb; intereses: string[]
   const slug = cms ? cms.urlBase.replace(/^\/p\//, "") : "";
   const oscuro = a.tema.oscuro;
   return (
-    <section id={a.ancla("suscribir")} className="scroll-mt-24 py-20" style={{ background: a.tema.alterno }}>
+    <section data-region="cuerpo" id={a.ancla("suscribir")} className="scroll-mt-24 py-20" style={{ background: a.tema.alterno }}>
       <div className="mx-auto grid max-w-6xl gap-10 px-5 @2xl:px-8 @4xl:grid-cols-[0.9fr_1.1fr] @4xl:items-center">
         <div>
           <Encabezado a={a} etiqueta="Sé parte" titulo={`Únete a ${a.c.nombre}`} texto="Recibe novedades, guías e invitaciones a los encuentros. Es gratis y puedes salirte cuando quieras." />
@@ -405,7 +408,7 @@ export function VistaAgenda({ a, proximos, pasados }: { a: Amb; proximos: Evento
   return (
     <>
       <EspacioAnuncio a={a} espacio="cabecera" />
-      <section className="mx-auto max-w-6xl px-5 pt-12 pb-20 @2xl:px-8">
+      <section data-region="cuerpo" className="mx-auto max-w-6xl px-5 pt-12 pb-20 @2xl:px-8">
         <Encabezado a={a} etiqueta="Agenda" titulo="Eventos de la comunidad" texto="Encuentros, charlas, foros y jornadas. Inscríbete y participa." />
         {proximos.length === 0 ? (
           <p className={`mt-10 rounded-2xl p-8 text-center ${a.k.tarjeta} ${a.k.suave}`}>No hay eventos programados por ahora. Súmate a la comunidad y te avisamos cuando haya uno.</p>
@@ -436,7 +439,7 @@ export function VistaEvento({ a, evento, terminado }: { a: Amb; evento: Evento; 
   return (
     <>
       <EspacioAnuncio a={a} espacio="cabecera" />
-      <article className="mx-auto max-w-6xl px-5 pt-10 pb-20 @2xl:px-8">
+      <article data-region="cuerpo" className="mx-auto max-w-6xl px-5 pt-10 pb-20 @2xl:px-8">
         <Enlace a={a} href={`${cms.urlBase}/eventos`} className={`inline-flex items-center gap-1.5 text-sm font-semibold ${a.k.suave} hover:text-[var(--p)]`}>← Toda la agenda</Enlace>
         <div className="mt-6 grid gap-12 @4xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="max-w-3xl">
@@ -482,7 +485,7 @@ export function VistaPagina({ a, pagina }: { a: Amb; pagina: Pick<Pagina, "titul
   return (
     <>
       <EspacioAnuncio a={a} espacio="cabecera" />
-      <article className="mx-auto max-w-3xl px-5 pt-12 pb-20 @2xl:px-8">
+      <article data-region="cuerpo" className="mx-auto max-w-3xl px-5 pt-12 pb-20 @2xl:px-8">
         <h1 className={`text-[clamp(2rem,5.6cqi,3.2rem)] leading-[1.08] text-balance ${a.tit}`}>{pagina.titulo}</h1>
         {pagina.resumen && <p className={`mt-5 text-xl leading-relaxed ${a.k.suave}`}>{pagina.resumen}</p>}
         {pagina.portadaUrl && <Portada a={a} semilla={pagina.slug} url={pagina.portadaUrl} alt={pagina.titulo} className="mt-8 aspect-[16/8] rounded-[2rem]" />}

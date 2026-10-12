@@ -42,7 +42,7 @@ export default async function ArticuloPage({ params }: Props) {
   const { sitio, art } = hallado;
   const { portal, ajustes, datos, recientes } = sitio;
 
-  if (!esBot((await headers()).get("user-agent"))) {
+  if (!datos.vista && !esBot((await headers()).get("user-agent"))) {
     registrarEvento(portal.id, "vista", { articuloId: art.id, anuncioIds: anunciosMostrados(datos, "articulo") });
   }
   const { a, vars } = construirAmbiente({ plantilla: portal.plantilla, config: portal.config, demo: false, enlaces: true, idBase: "portal", cms: datos });

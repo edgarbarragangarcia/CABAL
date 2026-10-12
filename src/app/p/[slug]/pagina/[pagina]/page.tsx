@@ -33,7 +33,7 @@ export default async function PaginaPublica({ params }: Props) {
   if (!h) notFound();
   const { sitio, pagina } = h;
   const { portal, ajustes, datos } = sitio;
-  if (!esBot((await headers()).get("user-agent"))) registrarEvento(portal.id, "vista", { anuncioIds: anunciosMostrados(datos, "listado") });
+  if (!datos.vista && !esBot((await headers()).get("user-agent"))) registrarEvento(portal.id, "vista", { anuncioIds: anunciosMostrados(datos, "listado") });
   const { a, vars } = construirAmbiente({ plantilla: portal.plantilla, config: portal.config, demo: false, enlaces: true, idBase: "portal", cms: datos });
   return (
     <main className="min-h-dvh bg-[#0c1017]">

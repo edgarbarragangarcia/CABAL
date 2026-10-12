@@ -39,7 +39,7 @@ export default async function PortalPublicoPage({ params }: Props) {
       </main>
     );
 
-  if (!esBot((await headers()).get("user-agent"))) {
+  if (!sitio.datos.vista && !esBot((await headers()).get("user-agent"))) {
     registrarEvento(sitio.portal.id, "vista", { anuncioIds: anunciosMostrados(sitio.datos, "inicio") });
   }
   return (

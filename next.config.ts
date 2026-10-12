@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { securityHeaders } from "./src/config/security-headers";
+import { securityHeaders, securityHeadersPortales } from "./src/config/security-headers";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -21,6 +21,11 @@ const nextConfig: NextConfig = {
         // Aplica las cabeceras de seguridad OWASP a todas las rutas.
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        // Los portales públicos se pueden enmarcar desde el propio sitio (vista previa del editor de diseño).
+        source: "/p/:path*",
+        headers: securityHeadersPortales,
       },
     ];
   },

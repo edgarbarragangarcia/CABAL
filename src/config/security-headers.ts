@@ -65,3 +65,13 @@ export const securityHeaders = [
     value: "1; mode=block",
   },
 ];
+
+/**
+ * Los portales públicos (/p/*) pueden mostrarse dentro del propio sitio: el editor de diseño del panel los enseña en un marco con
+ * el borrador aplicado. Solo el mismo origen puede enmarcarlos (nadie más): las demás rutas siguen sin poder enmarcarse.
+ */
+export const securityHeadersPortales = securityHeaders.map((h) => {
+  if (h.key === "X-Frame-Options") return { ...h, value: "SAMEORIGIN" };
+  if (h.key === "Content-Security-Policy") return { ...h, value: h.value.replace("frame-ancestors 'none'", "frame-ancestors 'self'") };
+  return h;
+});

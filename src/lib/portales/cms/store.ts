@@ -371,7 +371,10 @@ export async function leerAjustes(portalId: string): Promise<AjustesPortal> {
 }
 
 export async function guardarAjustes(portalId: string, ajustes: AjustesPortal): Promise<AjustesPortal> {
-  const { error } = await db().from("portal_ajustes").upsert({ portal_id: portalId, ajustes, actualizado_en: new Date().toISOString() }, { onConflict: "portal_id" });
+  // El diseño del portal (diseno, disenoBorrador…) vive en el mismo JSON: se conserva lo que no sean estos ajustes.
+  const { data: previo } = await db().from("portal_ajustes").select("ajustes").eq("portal_id", portalId).maybeSingle();
+  const resto = (previo?.ajustes ?? {}) as Record<string, unknown>;
+  const { error } = await db().from("portal_ajustes").upsert({ portal_id: portalId, ajustes: { ...resto, ...ajustes }, actualizado_en: new Date().toISOString() }, { onConflict: "portal_id" });
   if (error) throw fallo(error);
   return ajustes;
 }

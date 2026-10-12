@@ -33,7 +33,7 @@ export default async function ArticulosPage({ params, searchParams }: Props) {
   const etiqueta = q.etiqueta?.slice(0, 30) ?? "";
   const articulos = categoria || etiqueta ? await articulosPublicados(portal.id, { categoria: categoria || undefined, etiqueta: etiqueta || undefined, limite: 60 }).catch(() => []) : recientes;
 
-  if (!esBot((await headers()).get("user-agent"))) registrarEvento(portal.id, "vista", { anuncioIds: anunciosMostrados(datos, "listado") });
+  if (!datos.vista && !esBot((await headers()).get("user-agent"))) registrarEvento(portal.id, "vista", { anuncioIds: anunciosMostrados(datos, "listado") });
   const { a, vars } = construirAmbiente({ plantilla: portal.plantilla, config: portal.config, demo: false, enlaces: true, idBase: "portal", cms: datos });
   const categorias = [...new Set(recientes.map((r) => r.categoria).filter(Boolean))];
   return (

@@ -13,6 +13,7 @@ import { paginasPublicadas } from "./paginas";
 import type { Pagina } from "./paginas-tipos";
 import { eventosPublicados } from "../crm/store";
 import type { Evento } from "../crm/tipos";
+import { disenoParaSitio, vistaBorradorActiva } from "../diseno/store";
 
 /**
  * Lo que necesita el sitio público de un portal para armarse: el portal, sus ajustes, sus artículos más recientes y los anuncios
@@ -43,13 +44,16 @@ export const cargarSitio = cache(async (slug: string): Promise<Sitio | null> => 
   if (!portal || portal.estado === "borrador") return null;
   if (portal.estado === "pausado") return { estado: "pausado", portal };
 
-  const [ajustes, recientes, anuncios, todosEventos, paginas] = await Promise.all([
+  // La vista previa del editor (solo el administrador, con su cookie) dibuja el borrador y no cuenta visitas.
+  const vista = await vistaBorradorActiva(portal.id);
+  const [ajustes, recientes, anuncios, todosEventos, paginas, diseno] = await Promise.all([
     leerAjustes(portal.id),
     articulosPublicados(portal.id, { limite: 30 }).catch(() => [] as ArticuloLista[]),
     anunciosVigentes(portal.id).catch(() => []),
     // Sin las tablas del CRM, el portal sale igual: simplemente sin agenda.
     eventosPublicados(portal.id, { limite: 40 }).catch(() => [] as Evento[]),
     paginasPublicadas(portal.id).catch(() => [] as Pagina[]),
+    disenoParaSitio(portal.id, vista),
   ]);
   const { proximos } = separarEventos(todosEventos);
   const urlBase = `/p/${portal.slug}`;
@@ -63,6 +67,10 @@ export const cargarSitio = cache(async (slug: string): Promise<Sitio | null> => 
     hrefUnete: `${urlBase}/unete`,
     hrefAnuncio: (id) => `${urlBase}/anuncio/${id}`,
     elegidos: elegirPorEspacio(anuncios, () => Math.random()),
+    diseno,
+    vista,
+    portalId: portal.id,
+    titulares: recientes.slice(0, 12).map((r) => ({ titulo: r.titulo, href: `${urlBase}/articulos/${r.slug}` })),
   };
   return { estado: "en-linea", portal, ajustes, recientes, eventos: proximos, paginas, datos };
 });

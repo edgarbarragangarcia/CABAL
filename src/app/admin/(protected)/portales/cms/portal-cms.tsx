@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import {
-  ArrowLeft, BarChart3, CalendarDays, Copy, ExternalLink, FileText, Files, Images, LayoutTemplate, LineChart, Loader2, Mail, Megaphone, Pencil, Rocket, Settings2, TriangleAlert, Users,
+  ArrowLeft, BarChart3, CalendarDays, Copy, ExternalLink, FileText, Files, Images, LayoutTemplate, LineChart, Loader2, Mail, Megaphone, Palette, Pencil, Rocket, Settings2, TriangleAlert, Users,
 } from "lucide-react";
 
 import { Portada } from "@/components/admin/estilo-cabal";
@@ -16,6 +16,7 @@ import { ArticulosPanel } from "./articulos-panel";
 import { BoletinesPanel } from "./boletines-panel";
 import { botonPrimario, botonSecundario, mensajeDe, pedir, tarjeta } from "./comun";
 import { CrmPanel } from "./crm-panel";
+import { DisenoPanel } from "./diseno-panel";
 import { EventosPanel } from "./eventos-panel";
 import { MediosPanel } from "./medios-panel";
 import { PaginasPanel } from "./paginas-panel";
@@ -29,7 +30,7 @@ import { Avisos, useAvisos } from "./toasts";
  * operaciones. El menú de la izquierda agrupa el trabajo: panorama, contenido, comunidad, crecimiento y configuración.
  */
 
-type Pestana = "resumen" | "analitica" | "articulos" | "paginas" | "medios" | "comunidad" | "eventos" | "boletines" | "publicidad" | "ajustes";
+type Pestana = "resumen" | "analitica" | "articulos" | "paginas" | "medios" | "comunidad" | "eventos" | "boletines" | "publicidad" | "diseno" | "ajustes";
 type Estado = { pro: boolean; correo: { listo: boolean; desde: string | null }; sql?: string; editorSql?: string } | null;
 
 const ETIQUETA_ESTADO: Record<EstadoPortal, { texto: string; clase: string }> = {
@@ -59,7 +60,7 @@ export function PortalCms({ portal, resumen, volver, editarDiseno, desplegar, ca
   const [pestana, setPestana] = React.useState<Pestana>(() => {
     if (typeof window === "undefined") return "resumen";
     const h = window.location.hash.replace("#", "") as Pestana;
-    return (["resumen", "analitica", "articulos", "paginas", "medios", "comunidad", "eventos", "boletines", "publicidad", "ajustes"] as Pestana[]).includes(h) ? h : "resumen";
+    return (["resumen", "analitica", "articulos", "paginas", "medios", "comunidad", "eventos", "boletines", "publicidad", "diseno", "ajustes"] as Pestana[]).includes(h) ? h : "resumen";
   });
   const [iaAlAbrir, setIaAlAbrir] = React.useState(false);
   const [ajustes, setAjustes] = React.useState<AjustesPortal | null>(null);
@@ -98,7 +99,7 @@ export function PortalCms({ portal, resumen, volver, editarDiseno, desplegar, ca
     { titulo: "Contenido", items: [{ id: "articulos", texto: tematica.seccion.nombre, icono: FileText, n: resumen.publicados }, { id: "paginas", texto: "Páginas", icono: Files }, { id: "medios", texto: "Medios", icono: Images }] },
     { titulo: "Comunidad", items: [{ id: "comunidad", texto: "Personas", icono: Users }, { id: "eventos", texto: "Eventos", icono: CalendarDays }, { id: "boletines", texto: "Boletines", icono: Mail }] },
     { titulo: "Crecimiento", items: [{ id: "publicidad", texto: "Publicidad", icono: Megaphone, n: resumen.anunciosActivos }] },
-    { titulo: "Configuración", items: [{ id: "ajustes", texto: "Ajustes", icono: Settings2 }] },
+    { titulo: "Configuración", items: [{ id: "diseno", texto: "Diseño del sitio", icono: Palette }, { id: "ajustes", texto: "Ajustes", icono: Settings2 }] },
   ];
   const pro = !!estado?.pro;
 
@@ -168,6 +169,7 @@ export function PortalCms({ portal, resumen, volver, editarDiseno, desplegar, ca
               {pestana === "eventos" && <EventosPanel portal={portal} />}
               {pestana === "boletines" && <BoletinesPanel portal={portal} avisar={avisar} />}
               {pestana === "publicidad" && <PublicidadPanel portal={portal} ajustes={ajustes} cambio={cambio} />}
+              {pestana === "diseno" && <DisenoPanel portal={portal} />}
               {pestana === "ajustes" && <AjustesPanel portal={portal} ajustes={ajustes} guardado={setAjustes} />}
             </>
           )}
