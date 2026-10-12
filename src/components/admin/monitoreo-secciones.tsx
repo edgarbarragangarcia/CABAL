@@ -27,26 +27,21 @@ function Marca({ children }: { children: React.ReactNode }) {
   return <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 align-middle text-[10px] font-semibold text-rose-700 dark:text-rose-300"><AtSign className="size-3" aria-hidden="true" />{children}</span>;
 }
 
-function Titulo({ children, ayuda }: { children: React.ReactNode; ayuda?: string }) {
-  return (
-    <div className="mt-4 first:mt-3">
-      <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{children}</p>
-      {ayuda && <p className="text-[11px] text-muted-foreground">{ayuda}</p>}
-    </div>
-  );
-}
+type Vista = "videos" | "dicho" | "cruces" | "prensa";
 
-function Titulares({ lista, marca, vacio, max = 4 }: { lista: NoticiaMarcada[]; marca: string; vacio: string; max?: number }) {
-  if (lista.length === 0) return <p className="mt-1 text-xs text-muted-foreground">{vacio}</p>;
+function Titulares({ lista, marca, vacio, max = 5 }: { lista: NoticiaMarcada[]; marca: string; vacio: string; max?: number }) {
+  if (lista.length === 0) return <p className="py-3 text-xs text-muted-foreground">{vacio}</p>;
   // Primero los que nombran a María Fernanda.
   const orden = [...lista.filter((n) => n.nombra), ...lista.filter((n) => !n.nombra)].slice(0, max);
   return (
-    <ul className="mt-1 space-y-1.5">
+    <ul className="divide-y divide-border">
       {orden.map((n) => (
-        <li key={n.enlace} className="text-xs">
-          <a href={n.enlace} target="_blank" rel="noreferrer" className="font-medium hover:underline">{n.titulo}</a>
-          {n.nombra && marca && <Marca>{marca}</Marca>}
-          <span className="text-muted-foreground"> · {n.medio} · {hace(n.fecha)}</span>
+        <li key={n.enlace} className="py-2 text-xs">
+          <a href={n.enlace} target="_blank" rel="noreferrer" className="line-clamp-2 font-medium hover:underline">{n.titulo}</a>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+            {n.medio} · {hace(n.fecha)}
+            {n.nombra && marca && <Marca>{marca}</Marca>}
+          </span>
         </li>
       ))}
     </ul>
@@ -56,76 +51,90 @@ function Titulares({ lista, marca, vacio, max = 4 }: { lista: NoticiaMarcada[]; 
 function Tarjeta({ p }: { p: DatosPersonaje }) {
   const r = p.resumen;
   const propios = r.videosQueLaNombran + r.publicacionesQueLaNombran;
+  const cruzan = r.cruces + r.declaracionesQueLaNombran;
+  const inicial: Vista = propios > 0 ? "videos" : cruzan > 0 ? "cruces" : "videos";
+  const [vista, setVista] = React.useState<Vista>(inicial);
   const estado =
     propios > 0
-      ? { tono: "bg-rose-500/10 text-rose-800 dark:text-rose-200", texto: `La nombra en ${propios} ${propios === 1 ? "publicación propia" : "publicaciones propias"} (últimos 30 días)` }
-      : r.declaracionesQueLaNombran > 0
-        ? { tono: "bg-sky-500/10 text-sky-900 dark:text-sky-200", texto: `No la nombra en sus videos; la prensa los cruza con ella (${r.cruces + r.declaracionesQueLaNombran} ${r.cruces + r.declaracionesQueLaNombran === 1 ? "noticia" : "noticias"})` }
-        : r.cruces > 0
-          ? { tono: "bg-sky-500/10 text-sky-900 dark:text-sky-200", texto: `No la nombra en sus videos; la prensa los cruza con ella (${r.cruces} ${r.cruces === 1 ? "noticia" : "noticias"} en 30 días)` }
-          : { tono: "bg-surface-muted text-muted-foreground", texto: "No la nombra en lo que se pudo revisar" };
+      ? { tono: "bg-rose-500/10 text-rose-800 dark:text-rose-200", texto: `La nombra en ${propios} ${propios === 1 ? "publicación propia" : "publicaciones propias"} (30 días)` }
+      : cruzan > 0
+        ? { tono: "bg-sky-500/10 text-sky-900 dark:text-sky-200", texto: `No la nombra en sus videos · ${cruzan} ${cruzan === 1 ? "noticia los cruza" : "noticias los cruzan"} con ella` }
+        : { tono: "bg-surface-muted text-muted-foreground", texto: "No la nombra en lo que se pudo revisar" };
+  const nVideos = p.videos.estado === "ok" ? p.videos.items.length : 0;
+  const pestañas: { id: Vista; label: string; n: number }[] = [
+    { id: "videos", label: "Videos", n: nVideos },
+    { id: "dicho", label: "Lo que dice", n: p.declaraciones.length },
+    { id: "cruces", label: "Cruces", n: p.cruces.length },
+    { id: "prensa", label: "Prensa", n: p.prensa.length },
+  ];
+  const sinPrensa = p.prensaConsultada ? "Sin titulares esta semana." : "No se pudo consultar la prensa ahora.";
   return (
-    <section className="min-w-0 rounded-2xl border border-border p-4">
+    <section className="flex min-w-0 flex-col rounded-2xl border border-border p-4">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h4 className="text-sm font-semibold">{p.nombre}</h4>
+        <h4 className="text-base font-semibold">{p.nombre}</h4>
         <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{BANDO[p.bando]}</span>
         <a href={`https://x.com/${p.x}`} target="_blank" rel="noreferrer" className="ml-auto text-[11px] font-semibold text-brand hover:underline">@{p.x}</a>
       </div>
       <p className={`mt-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${estado.tono}`}>{estado.texto}</p>
 
-      <Titulo ayuda={`Canal oficial: ${p.canal.nombre}. Se revisan el título y la descripción de cada video.`}>Lo que publica en YouTube</Titulo>
-      {p.videos.estado === "error" ? (
-        <p className="mt-1 text-xs text-red-600">No se pudo leer el canal: {p.videos.error}</p>
-      ) : p.videos.items.length === 0 ? (
-        <p className="mt-1 text-xs text-muted-foreground">Sin videos en los últimos 30 días{p.videos.ultimo ? ` (el último fue ${hace(p.videos.ultimo)})` : ""}.</p>
-      ) : (
-        <ul className="mt-1 space-y-2">
-          {p.videos.items.map((v) => (
-            <li key={v.id} className="text-xs">
-              <a href={v.enlace} target="_blank" rel="noreferrer" className="line-clamp-2 font-medium hover:underline">{v.titulo}</a>
-              {v.nombra && <Marca>La nombra en el {v.donde}</Marca>}
-              {v.contexto && <span className="mt-0.5 block border-l-2 border-rose-400/60 pl-2 text-muted-foreground italic">«{v.contexto}»</span>}
-              <span className="text-muted-foreground">{hace(v.fecha)} · {miles(v.vistas)} vistas</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {p.videos.estado === "ok" && p.videos.items.length > 0 && (
-        <p className="mt-1 text-[11px] text-muted-foreground">{p.videos.nombran} de {p.videos.revisados} videos de los últimos 30 días la nombran.</p>
-      )}
+      <div role="tablist" aria-label={`Fuentes de ${p.nombre}`} className="mt-3 flex gap-1 overflow-x-auto rounded-full bg-surface-muted p-1 [scrollbar-width:none]">
+        {pestañas.map((t) => (
+          <button key={t.id} type="button" role="tab" aria-selected={vista === t.id} onClick={() => setVista(t.id)} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${vista === t.id ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            {t.label} <span className="tabular-nums opacity-70">{t.n}</span>
+          </button>
+        ))}
+      </div>
 
-      {p.publicaciones.estado === "ok" && (
-        <>
-          <Titulo>Lo que publica en X</Titulo>
-          {p.publicaciones.items.length === 0 ? <p className="mt-1 text-xs text-muted-foreground">Sin publicaciones en los últimos 7 días.</p> : (
-            <ul className="mt-1 space-y-2">
-              {p.publicaciones.items.slice(0, 4).map((t) => (
-                <li key={t.id} className="text-xs">
-                  <a href={t.enlace} target="_blank" rel="noreferrer" className="line-clamp-3 font-medium hover:underline">{t.texto}</a>
-                  {t.nombra && <Marca>La nombra</Marca>}
-                  <span className="block text-muted-foreground">{hace(t.fecha)} · {t.me_gusta.toLocaleString("es-CO")} me gusta · {t.compartidos.toLocaleString("es-CO")} compartidos</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-      {p.publicaciones.estado === "error" && <p className="mt-2 text-xs text-red-600">X: {p.publicaciones.error}</p>}
+      <div className="mt-1 min-h-40 flex-1">
+        {vista === "videos" && (
+          <>
+            <p className="pt-2 text-[11px] text-muted-foreground">Canal <a href={p.canal.enlace} target="_blank" rel="noreferrer" className="font-semibold hover:underline">{p.canal.nombre}</a> · se revisa título y descripción.</p>
+            {p.videos.estado === "error" ? (
+              <p className="py-3 text-xs text-red-600">No se pudo leer el canal: {p.videos.error}</p>
+            ) : p.videos.items.length === 0 ? (
+              <p className="py-3 text-xs text-muted-foreground">Sin videos en los últimos 30 días{p.videos.ultimo ? ` (el último fue ${hace(p.videos.ultimo)})` : ""}.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {p.videos.items.map((v) => (
+                  <li key={v.id} className="py-2 text-xs">
+                    <a href={v.enlace} target="_blank" rel="noreferrer" className="line-clamp-2 font-medium hover:underline">{v.titulo}</a>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+                      {hace(v.fecha)} · {miles(v.vistas)} vistas
+                      {v.nombra && <Marca>La nombra en el {v.donde}</Marca>}
+                    </span>
+                    {v.contexto && <span className="mt-1 block border-l-2 border-rose-400/60 pl-2 text-[11px] text-muted-foreground italic">«{v.contexto}»</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {p.videos.estado === "ok" && p.videos.revisados > 0 && <p className="text-[11px] text-muted-foreground">{p.videos.nombran} de {p.videos.revisados} videos de 30 días la nombran.</p>}
+            {p.publicaciones.estado === "ok" && p.publicaciones.items.slice(0, 3).map((t) => (
+              <p key={t.id} className="mt-2 text-xs"><a href={t.enlace} target="_blank" rel="noreferrer" className="line-clamp-2 font-medium hover:underline">{t.texto}</a>{t.nombra && <Marca>La nombra</Marca>}</p>
+            ))}
+            {p.publicaciones.estado === "error" && <p className="mt-2 text-xs text-red-600">X: {p.publicaciones.error}</p>}
+          </>
+        )}
+        {vista === "dicho" && (
+          <>
+            <p className="pt-2 text-[11px] text-muted-foreground">Titulares con trinó, dijo, respondió… Se buscan por palabras: no todos son palabras suyas.</p>
+            <Titulares lista={p.declaraciones} marca="Menciona a María Fernanda" vacio={sinPrensa} />
+          </>
+        )}
+        {vista === "cruces" && (
+          <>
+            <p className="pt-2 text-[11px] text-muted-foreground">Noticias de 30 días donde aparecen los dos; el titular dice quién habla de quién.</p>
+            <Titulares lista={p.cruces} marca="" vacio="Sin noticias que los crucen en 30 días." />
+          </>
+        )}
+        {vista === "prensa" && (
+          <>
+            <p className="pt-2 text-[11px] text-muted-foreground">Otras noticias de la semana sobre {p.nombre}.</p>
+            <Titulares lista={p.prensa} marca="Menciona a María Fernanda" vacio={sinPrensa} />
+          </>
+        )}
+      </div>
 
-      <Titulo ayuda="Titulares de la semana con verbos como trinó, dijo o respondió. Se buscan por palabras: no todos son palabras suyas.">Lo que dice, según la prensa</Titulo>
-      <Titulares lista={p.declaraciones} marca="Menciona a María Fernanda" vacio={p.prensaConsultada ? "Sin declaraciones reportadas esta semana." : "No se pudo consultar la prensa ahora."} />
-
-      {p.cruces.length > 0 && (
-        <>
-          <Titulo ayuda="Noticias de los últimos 30 días donde aparecen los dos, en cualquiera de los dos sentidos: quién habla de quién se ve en el titular.">Cruces con María Fernanda</Titulo>
-          <Titulares lista={p.cruces} marca="" vacio="" />
-        </>
-      )}
-
-      <Titulo>En la prensa</Titulo>
-      <Titulares lista={p.prensa} marca="Menciona a María Fernanda" vacio={p.prensaConsultada ? "Sin otras noticias esta semana." : "No se pudo consultar la prensa ahora."} />
-
-      <a href={p.busquedaX} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-[11px] font-semibold hover:bg-surface-muted">
+      <a href={p.busquedaX} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 self-start rounded-full border border-border px-3 py-1 text-[11px] font-semibold hover:bg-surface-muted">
         <Search className="size-3" aria-hidden="true" /> Buscar «Cabal» en su cuenta de X <ExternalLink className="size-3" aria-hidden="true" />
       </a>
     </section>
