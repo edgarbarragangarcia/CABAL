@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { motion, useReducedMotion, useScroll, useTransform, type MotionValue } from "framer-motion";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -46,7 +46,8 @@ function splitStat(value: string) {
  */
 const INCLINACION = 0.5095;
 const RADIO = 96;
-const X0 = "50% - 120px";
+// `--dx` lo mueve el scroll: el borde izquierdo del panel avanza hacia la izquierda hasta cubrir la pantalla.
+const X0 = "50% - 120px + var(--dx, 0px)";
 const ALTO_HERO = "max(100svh, 44rem)";
 
 function poligonoPanel() {
@@ -84,14 +85,14 @@ const ICONOS_PANEL: { Icono: Icon; clase: string }[] = [
   { Icono: Student, clase: "left-[86%] top-[80%] size-24 -rotate-6" },
 ];
 
-function PanelOscuro() {
+function PanelOscuro({ dx }: { dx?: MotionValue<string> }) {
   return (
     <motion.div
       aria-hidden
       initial={{ x: 120, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 1.2, ease: EASE }}
-      style={{ clipPath: PANEL }}
+      style={{ clipPath: PANEL, ...(dx ? { "--dx": dx } : {}) } as React.CSSProperties}
       className="pointer-events-none absolute inset-0 hidden bg-[linear-gradient(155deg,#0c5a3f_0%,#06281c_55%,#031610_100%)] lg:block"
     >
       {/* Luz tras el retrato: separa el pelo y el saco oscuros del fondo */}
@@ -233,21 +234,75 @@ function Trayectoria() {
   );
 }
 
+/* ───────────────────────────── Hero con scroll ───────────────────────────── */
+
+const MQ_SCROLL = "(min-width: 1024px) and (prefers-reduced-motion: no-preference)";
+function suscribirMQ(cb: () => void) {
+  const mq = window.matchMedia(MQ_SCROLL);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+/** El efecto de scroll solo corre en pantallas anchas y sin «reducir movimiento»: en el resto el hero es el de siempre. */
+function useScrollActivo() {
+  return React.useSyncExternalStore(suscribirMQ, () => window.matchMedia(MQ_SCROLL).matches, () => false);
+}
+
+const MOMENTOS: { verbo: string; area: string; texto: string; href: string; cta: string; rango: [number, number, number, number] }[] = [
+  { verbo: "Formamos", area: "Academia", texto: "Cursos, talleres y formación para quienes quieren entender y defender la libertad.", href: "/academia", cta: "Conoce la Academia", rango: [0.4, 0.5, 0.6, 0.68] },
+  { verbo: "Investigamos", area: "Observatorios", texto: "Datos, análisis legislativo y económico para decidir con evidencia.", href: "/academia/observatorio-legislativo", cta: "Ver los observatorios", rango: [0.64, 0.72, 0.8, 0.88] },
+  { verbo: "Acompañamos", area: "Comunidad", texto: "Una red de personas que trabaja unida por el futuro de Colombia.", href: "/unete", cta: "Únete a la comunidad", rango: [0.82, 0.9, 0.98, 1] },
+];
+
+function Momento({ m, progreso, indice }: { m: (typeof MOMENTOS)[number]; progreso: MotionValue<number>; indice: number }) {
+  const opacity = useTransform(progreso, m.rango, [0, 1, 1, indice === MOMENTOS.length - 1 ? 1 : 0]);
+  const y = useTransform(progreso, m.rango, [48, 0, 0, indice === MOMENTOS.length - 1 ? 0 : -48]);
+  const eventos = useTransform(opacity, (o) => (o > 0.5 ? "auto" : "none"));
+  return (
+    <motion.div style={{ opacity, y, pointerEvents: eventos }} className="absolute inset-0 grid place-items-center">
+      <div className="max-w-xl px-8 text-[#f1efe9]">
+        <span className="inline-flex items-center gap-2.5 text-xs font-semibold tracking-[0.2em] text-[#e0bd7c] uppercase">
+          <span className="h-px w-10 bg-[#e0bd7c]/60" aria-hidden="true" />
+          {String(indice + 1).padStart(2, "0")} · {m.area}
+        </span>
+        <p className="mt-5 font-display text-[clamp(3rem,6vw,5.5rem)] font-bold leading-none tracking-[-0.03em]">{m.verbo}</p>
+        <p className="mt-6 max-w-md text-lg leading-relaxed text-[#f1efe9]/80">{m.texto}</p>
+        <Link href={m.href} className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#e0bd7c] px-6 py-3 text-sm font-semibold text-[#1c1405] transition-transform hover:translate-x-0.5">
+          {m.cta} <ArrowRight weight="bold" className="size-4" aria-hidden="true" />
+        </Link>
+      </div>
+    </motion.div>
+  );
+}
+
 /* ───────────────────────────────────── Hero ───────────────────────────────────── */
 
 export function Hero() {
   const marquee = [...cabalBills, ...cabalBills];
+  const activo = useScrollActivo();
+  const pista = React.useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: pista, offset: ["start start", "end end"] });
+  // 0 → 0,12 reposo · 0,12 → 0,45 el panel avanza y cubre la pantalla · 0,4 → 1 los tres momentos
+  const dx = useTransform(scrollYProgress, [0.12, 0.45], ["0vw", "-100vw"]);
+  const textoOpacity = useTransform(scrollYProgress, [0.08, 0.28], [1, 0]);
+  const textoY = useTransform(scrollYProgress, [0.08, 0.28], [0, -70]);
+  const retratoX = useTransform(scrollYProgress, [0.12, 0.5], ["0vw", "-25vw"]);
+  const retratoEscala = useTransform(scrollYProgress, [0.12, 0.5], [1, 1.12]);
+  const declaracionOpacity = useTransform(scrollYProgress, [0.06, 0.2], [1, 0]);
+  const indicador = useTransform(scrollYProgress, [0, 0.06], [1, 0]);
 
   return (
-    <section className="relative isolate overflow-hidden text-foreground">
+    <section className="relative isolate text-foreground">
+      {/* Con el efecto activo, la pista es alta y el bloque principal queda fijo mientras el scroll lo conduce */}
+      <div ref={pista} className={activo ? "relative h-[420svh]" : "relative"}>
+      <div className={activo ? "sticky top-0 h-svh overflow-hidden" : "overflow-hidden"}>
       {/* Bloque principal: el panel oscuro y los adornos viven solo aquí, no debajo de la franja de cifras */}
-      <div className="relative isolate">
+      <div className="relative isolate h-full">
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 [background:radial-gradient(45%_40%_at_6%_12%,rgba(179,137,60,0.1),transparent_70%),radial-gradient(40%_40%_at_30%_100%,rgba(10,79,55,0.07),transparent_70%)]" />
-      <PanelOscuro />
+      <PanelOscuro dx={activo ? dx : undefined} />
       <Adornos />
 
       <Container className="relative grid items-center gap-10 pt-28 lg:min-h-[max(100svh,44rem)] lg:grid-cols-12 lg:gap-6 lg:pt-32">
-        <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="relative z-10 pb-4 lg:col-span-6 lg:pb-24">
+        <motion.div initial="hidden" animate="visible" variants={staggerContainer} style={activo ? { opacity: textoOpacity, y: textoY } : undefined} className="relative z-10 pb-4 lg:col-span-6 lg:pb-24">
           <Garabato className="absolute -left-14 top-9 hidden w-10 text-[#b3893c] min-[1400px]:block" />
 
           <motion.span variants={fadeUp} className="eyebrow inline-flex items-center gap-2.5 !text-accent-ink">
@@ -306,13 +361,31 @@ export function Hero() {
         <div className="relative lg:col-span-6 lg:self-center lg:pt-10">
           <div aria-hidden className="absolute -inset-x-6 bottom-0 top-[24%] bg-[linear-gradient(170deg,#0c5a3f_0%,#06281c_60%,#031610_100%)] [clip-path:polygon(0_10%,100%_0,100%_100%,0_100%)] lg:hidden" />
           <div className="relative flex flex-col items-center pb-8 lg:pb-12">
-            <Retrato />
-            <div className="-mt-6 flex w-full justify-center lg:mt-2">
+            <motion.div style={activo ? { x: retratoX, scale: retratoEscala } : undefined} className="relative z-10 origin-bottom">
+              <Retrato />
+            </motion.div>
+            <motion.div style={activo ? { opacity: declaracionOpacity } : undefined} className="-mt-6 flex w-full justify-center lg:mt-2">
               <Declaracion />
-            </div>
+            </motion.div>
           </div>
         </div>
       </Container>
+
+      {activo && (
+        <>
+          <div className="pointer-events-none absolute inset-0 z-20">
+            {MOMENTOS.map((m, i) => (
+              <Momento key={m.verbo} m={m} progreso={scrollYProgress} indice={i} />
+            ))}
+          </div>
+          <motion.div aria-hidden style={{ opacity: indicador }} className="absolute bottom-8 left-1/2 z-20 -translate-x-1/2 text-center text-[0.65rem] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+            Desliza
+            <span className="mx-auto mt-2 block h-8 w-px bg-gradient-to-b from-[#b3893c] to-transparent" />
+          </motion.div>
+        </>
+      )}
+      </div>
+      </div>
       </div>
 
       <Trayectoria />

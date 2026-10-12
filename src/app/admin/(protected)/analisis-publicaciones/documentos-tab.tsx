@@ -84,6 +84,7 @@ export function DocumentosTab() {
   const [texto, setTexto] = React.useState("");
   const [tipo, setTipo] = React.useState("");
   const [estadoF, setEstadoF] = React.useState("");
+  const [categoriaF, setCategoriaF] = React.useState("");
   const [orden, setOrden] = React.useState<"reciente" | "titulo" | "tamano">("reciente");
   const [conVersiones, setConVersiones] = React.useState(false);
   const [sel, setSel] = React.useState<Set<string>>(new Set());
@@ -279,6 +280,18 @@ export function DocumentosTab() {
     await recargar();
   }
 
+  /** Crea una carpeta desde el panel del documento y devuelve su id para dejarla elegida. */
+  async function crearYDevolver(nombre: string): Promise<string | null> {
+    try {
+      const r = await pedir<{ carpeta: Carpeta }>("/api/admin/documentos/carpetas", "POST", { nombre, padreId: null });
+      await recargar();
+      return r.carpeta.id;
+    } catch (e) {
+      setAviso({ ok: false, texto: e instanceof Error ? e.message : "No fue posible crear la carpeta." });
+      return null;
+    }
+  }
+
   async function renombrar(c: Carpeta) {
     const nombre = window.prompt("Nuevo nombre de la carpeta", c.nombre)?.trim();
     if (!nombre || nombre === c.nombre) return;
@@ -324,9 +337,11 @@ export function DocumentosTab() {
     if (q) base = base.filter((d) => [d.titulo, d.archivo, d.descripcion, d.categoria, d.autor, d.fuente, ...d.etiquetas].some((x) => x?.toLowerCase().includes(q)));
     if (tipo) base = base.filter((d) => d.tipo === tipo);
     if (estadoF) base = base.filter((d) => d.estado === estadoF);
+    if (categoriaF) base = base.filter((d) => d.categoria?.trim() === categoriaF);
     return [...base].sort((a, b) => (orden === "titulo" ? a.titulo.localeCompare(b.titulo, "es") : orden === "tamano" ? (b.bytes ?? 0) - (a.bytes ?? 0) : b.creadoEn.localeCompare(a.creadoEn)));
-  }, [vista, todos, papelera, conVersiones, texto, tipo, estadoF, orden, descendientes]);
+  }, [vista, todos, papelera, conVersiones, texto, tipo, estadoF, categoriaF, orden, descendientes]);
 
+  const categorias = React.useMemo(() => [...new Set([...todos, ...papelera].map((d) => d.categoria?.trim()).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "es")), [todos, papelera]);
   const tipos = React.useMemo(() => [...new Set(todos.map((d) => d.tipo).filter((t): t is string => !!t))].sort(), [todos]);
   const documentoAbierto = [...todos, ...papelera].find((d) => d.id === abierto) ?? null;
   const enCola = cola.filter((i) => i.fase !== "listo" && i.fase !== "error").length;
@@ -454,7 +469,8 @@ export function DocumentosTab() {
                 <>
                   <button type="button" onClick={() => setVista({ tipo: "sin" })} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${vista.tipo === "sin" ? "bg-brand-soft font-semibold" : "hover:bg-surface-muted"}`}><Inbox className="size-4" /> Sin carpeta <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{conteo((d) => !d.carpetaId)}</span></button>
                   <div className="my-2 border-t border-border" />
-                  <div className="flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Carpetas <button type="button" aria-label="Nueva carpeta" onClick={() => setNuevaCarpeta("raiz")} className="rounded p-1 hover:bg-surface-muted"><FolderPlus className="size-3.5" /></button></div>
+                  <div className="flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Carpetas</div>
+                  <button type="button" onClick={() => { setNuevaCarpeta("raiz"); setNombreCarpeta(""); }} className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-2 py-1.5 text-sm font-semibold text-brand hover:border-brand hover:bg-brand-soft"><FolderPlus className="size-4" /> Nueva carpeta</button>
                   {nuevaCarpeta === "raiz" && <NuevaCarpeta padre={null} nivel={0} />}
                   <Carpetas padre={null} nivel={0} />
                   {carpetas.length === 0 && nuevaCarpeta !== "raiz" && <p className="px-2 py-1 text-xs text-muted-foreground">Crea carpetas para ordenar tus documentos.</p>}
@@ -473,6 +489,7 @@ export function DocumentosTab() {
               <div className="flex flex-wrap items-center gap-2">
                 <label className="flex min-w-[12rem] flex-1 items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 focus-within:border-brand"><Search className="size-4 text-muted-foreground" /><input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Filtrar por título, autor, etiqueta…" aria-label="Filtrar documentos" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
                 <select aria-label="Tipo de archivo" value={tipo} onChange={(e) => setTipo(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="">Todos los tipos</option>{tipos.map((t) => <option key={t} value={t}>{t.toUpperCase()}</option>)}</select>
+                {categorias.length > 0 && <select aria-label="Categoría" value={categoriaF} onChange={(e) => setCategoriaF(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="">Todas las categorías</option>{categorias.map((c) => <option key={c} value={c}>{c}</option>)}</select>}
                 <select aria-label="Estado" value={estadoF} onChange={(e) => setEstadoF(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="">Cualquier estado</option><option value="listo">Listos</option><option value="procesando">Procesando</option><option value="error">Con error</option></select>
                 <select aria-label="Ordenar" value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="reciente">Más recientes</option><option value="titulo">Por título</option><option value="tamano">Por tamaño</option></select>
                 {gestor && <label className="flex items-center gap-1.5 text-xs font-semibold"><input type="checkbox" checked={conVersiones} onChange={(e) => setConVersiones(e.target.checked)} /> Ver versiones anteriores</label>}
@@ -542,7 +559,7 @@ export function DocumentosTab() {
         </>
       )}
 
-      {documentoAbierto && <PanelDocumento key={documentoAbierto.id} doc={documentoAbierto} gestor={gestor} carpetas={carpetas} vectorizando={vectorizando === documentoAbierto.id} onCerrar={() => setAbierto(null)} onDescargar={() => void descargar(documentoAbierto)} onContinuar={() => void continuar(documentoAbierto)} onGuardar={(c) => aplicar([documentoAbierto.id], c, "Cambios guardados.")} onVersion={() => { versionDe.current = documentoAbierto.id; entradaVersion.current?.click(); }} onEliminar={() => void eliminarDefinitivo([documentoAbierto.id])} />}
+      {documentoAbierto && <PanelDocumento key={documentoAbierto.id} doc={documentoAbierto} gestor={gestor} carpetas={carpetas} categorias={categorias} onNuevaCarpeta={crearYDevolver} vectorizando={vectorizando === documentoAbierto.id} onCerrar={() => setAbierto(null)} onDescargar={() => void descargar(documentoAbierto)} onContinuar={() => void continuar(documentoAbierto)} onGuardar={(c) => aplicar([documentoAbierto.id], c, "Cambios guardados.")} onVersion={() => { versionDe.current = documentoAbierto.id; entradaVersion.current?.click(); }} onEliminar={() => void eliminarDefinitivo([documentoAbierto.id])} />}
     </div>
   );
 }
@@ -617,8 +634,8 @@ function BuscarYPreguntar() {
 
 /* ------------------------------------------------------------ panel del documento ---- */
 
-function PanelDocumento({ doc, gestor, carpetas, vectorizando, onCerrar, onDescargar, onContinuar, onGuardar, onVersion, onEliminar }: {
-  doc: Documento; gestor: boolean; carpetas: Carpeta[]; vectorizando: boolean;
+function PanelDocumento({ doc, gestor, carpetas, categorias, onNuevaCarpeta, vectorizando, onCerrar, onDescargar, onContinuar, onGuardar, onVersion, onEliminar }: {
+  doc: Documento; gestor: boolean; carpetas: Carpeta[]; categorias: string[]; onNuevaCarpeta: (nombre: string) => Promise<string | null>; vectorizando: boolean;
   onCerrar: () => void; onDescargar: () => void; onContinuar: () => void; onGuardar: (c: Record<string, unknown>) => Promise<void>; onVersion: () => void; onEliminar: () => void;
 }) {
   const [f, setF] = React.useState({
@@ -682,12 +699,16 @@ function PanelDocumento({ doc, gestor, carpetas, vectorizando, onCerrar, onDesca
             <label className="block text-xs font-semibold">Título<input className={`${campo} mt-1 font-normal`} value={f.titulo} onChange={(e) => setF({ ...f, titulo: e.target.value })} maxLength={200} /></label>
             <label className="block text-xs font-semibold">Descripción<textarea className={`${campo} mt-1 font-normal`} rows={3} value={f.descripcion} onChange={(e) => setF({ ...f, descripcion: e.target.value })} maxLength={1000} /></label>
             <div className="grid grid-cols-2 gap-3">
-              <label className="block text-xs font-semibold">Categoría<input className={`${campo} mt-1 font-normal`} value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} placeholder="acta, estudio, norma…" maxLength={60} /></label>
+              <label className="block text-xs font-semibold">Categoría<input list="categorias-documentos" className={`${campo} mt-1 font-normal`} value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} placeholder="Elige una o escribe una nueva" maxLength={60} /><datalist id="categorias-documentos">{categorias.map((c) => <option key={c} value={c} />)}</datalist></label>
               <label className="block text-xs font-semibold">Fecha del documento<input type="date" className={`${campo} mt-1 font-normal`} value={f.fechaDocumento} onChange={(e) => setF({ ...f, fechaDocumento: e.target.value })} /></label>
               <label className="block text-xs font-semibold">Autor<input className={`${campo} mt-1 font-normal`} value={f.autor} onChange={(e) => setF({ ...f, autor: e.target.value })} maxLength={120} /></label>
               <label className="block text-xs font-semibold">Fuente<input className={`${campo} mt-1 font-normal`} value={f.fuente} onChange={(e) => setF({ ...f, fuente: e.target.value })} placeholder="entidad, medio o enlace" maxLength={200} /></label>
             </div>
-            <label className="block text-xs font-semibold">Carpeta<select className={`${campo} mt-1 font-normal`} value={f.carpetaId} onChange={(e) => setF({ ...f, carpetaId: e.target.value })}><option value="">Sin carpeta</option>{opciones.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></label>
+            <label className="block text-xs font-semibold">Carpeta<select className={`${campo} mt-1 font-normal`} value={f.carpetaId} onChange={(e) => {
+              if (e.target.value !== "__nueva") return setF({ ...f, carpetaId: e.target.value });
+              const nombre = window.prompt("Nombre de la carpeta nueva")?.trim();
+              if (nombre) void onNuevaCarpeta(nombre).then((id) => id && setF((x) => ({ ...x, carpetaId: id })));
+            }}><option value="">Sin carpeta</option>{opciones.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}<option value="__nueva">+ Crear carpeta nueva…</option></select></label>
             <label className="block text-xs font-semibold">Etiquetas (separadas por coma)<input className={`${campo} mt-1 font-normal`} value={f.etiquetas} onChange={(e) => setF({ ...f, etiquetas: e.target.value })} /></label>
             <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={f.confidencial} onChange={(e) => setF({ ...f, confidencial: e.target.checked })} /> Confidencial (se marca en la lista; no sale en el sitio público)</label>
             <button type="submit" disabled={guardando} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground disabled:opacity-60">{guardando ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Guardar cambios</button>
