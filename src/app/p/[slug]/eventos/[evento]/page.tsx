@@ -34,8 +34,21 @@ export default async function EventoPage({ params }: Props) {
 
   if (!esBot((await headers()).get("user-agent"))) registrarEvento(portal.id, "vista", { anuncioIds: anunciosMostrados(datos, "listado") });
   const { a, vars } = construirAmbiente({ plantilla: portal.plantilla, config: portal.config, demo: false, enlaces: true, idBase: "portal", cms: datos });
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: evento.titulo,
+    description: evento.descripcion.slice(0, 500) || undefined,
+    startDate: evento.iniciaEn,
+    endDate: evento.terminaEn ?? undefined,
+    eventStatus: evento.estado === "cancelado" ? "https://schema.org/EventCancelled" : "https://schema.org/EventScheduled",
+    eventAttendanceMode: evento.modalidad === "virtual" ? "https://schema.org/OnlineEventAttendanceMode" : evento.modalidad === "mixta" ? "https://schema.org/MixedEventAttendanceMode" : "https://schema.org/OfflineEventAttendanceMode",
+    location: evento.modalidad === "virtual" ? { "@type": "VirtualLocation", url: `/p/${portal.slug}/eventos/${evento.slug}` } : { "@type": "Place", name: evento.lugar || evento.ciudad, address: evento.ciudad || undefined },
+    organizer: { "@type": "Organization", name: portal.nombre },
+  };
   return (
     <main className="min-h-dvh bg-[#0c1017]">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
       <MarcoPortal a={a} vars={vars} secciones={[]} accion={{ href: datos.hrefUnete, texto: sitio.ajustes.union.boton }}>
         <VistaEvento a={a} evento={evento} terminado={terminado} />
       </MarcoPortal>

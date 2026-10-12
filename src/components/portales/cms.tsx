@@ -5,7 +5,9 @@ import { minutosDeLectura, parsearMarkdown, posicionAnuncioEnArticulo, type Bloq
 import { tematicaDe, type EspacioId } from "@/lib/portales/cms/tematicas";
 import type { Articulo, ArticuloLista } from "@/lib/portales/cms/tipos";
 import type { Evento } from "@/lib/portales/crm/tipos";
+import type { Pagina } from "@/lib/portales/cms/paginas-tipos";
 import { BOTON, Encabezado, Enlace, type Amb } from "./marco";
+import { Compartir } from "./compartir";
 import { FormularioComunidad } from "./formularios";
 import { Ic, Malla } from "./piezas";
 
@@ -244,8 +246,9 @@ export function VistaArticulo({ a, articulo, relacionados, lateral }: { a: Amb; 
               {anuncio && posicion < 0 && <EspacioAnuncio a={a} espacio="articulo" className="my-10" />}
             </div>
             {articulo.etiquetas.length > 0 && (
-              <ul className="mt-8 flex flex-wrap gap-2">{articulo.etiquetas.map((e) => <li key={e} className={`rounded-full border px-3 py-1 text-xs font-semibold ${a.k.pildora}`}>#{e}</li>)}</ul>
+              <ul className="mt-8 flex flex-wrap gap-2">{articulo.etiquetas.map((e) => <li key={e}><Enlace a={a} href={`${cms.urlBase}/articulos?etiqueta=${encodeURIComponent(e)}`} className={`inline-block rounded-full border px-3 py-1 text-xs font-semibold transition hover:text-[var(--p)] ${a.k.pildora}`}>#{e}</Enlace></li>)}</ul>
             )}
+            <Compartir titulo={articulo.titulo} oscuro={a.tema.oscuro} className="mt-8" />
             {articulo.generadoConIa && <p className={`mt-6 text-xs ${a.k.suave}`}>Este artículo se redactó con apoyo de inteligencia artificial y fue revisado por el equipo editorial antes de publicarse.</p>}
             <CajaUnete a={a} className="mt-10" />
           </div>
@@ -277,7 +280,7 @@ export function VistaArticulo({ a, articulo, relacionados, lateral }: { a: Amb; 
 }
 
 /** El listado de artículos del portal, con sus categorías. */
-export function VistaListado({ a, articulos, categorias, actual }: { a: Amb; articulos: ArticuloLista[]; categorias: string[]; actual: string }) {
+export function VistaListado({ a, articulos, categorias, actual, etiqueta = "" }: { a: Amb; articulos: ArticuloLista[]; categorias: string[]; actual: string; etiqueta?: string }) {
   const cms = a.cms!;
   const seccion = tematicaDe(a.id).seccion;
   const [primero, ...resto] = articulos;
@@ -293,8 +296,11 @@ export function VistaListado({ a, articulos, categorias, actual }: { a: Amb; art
             {categorias.map((c) => <li key={c}><Enlace a={a} href={`${cms.urlBase}/articulos?categoria=${encodeURIComponent(c)}`} className={chip(actual === c)}>{c}</Enlace></li>)}
           </ul>
         )}
+        {etiqueta && (
+          <p className={`mt-6 flex flex-wrap items-center gap-3 text-sm ${a.k.suave}`}>Artículos con la etiqueta <b className="text-[var(--texto)]">#{etiqueta}</b> <Enlace a={a} href={`${cms.urlBase}/articulos`} className="font-semibold text-[var(--p)] hover:underline">Ver todos</Enlace></p>
+        )}
         {articulos.length === 0 ? (
-          <p className={`mt-12 rounded-2xl p-8 text-center ${a.k.tarjeta} ${a.k.suave}`}>Todavía no hay artículos en esta sección. Vuelve pronto.</p>
+          <p className={`mt-12 rounded-2xl p-8 text-center ${a.k.tarjeta} ${a.k.suave}`}>{etiqueta || actual ? "No hay artículos con ese filtro." : "Todavía no hay artículos en esta sección. Vuelve pronto."}</p>
         ) : (
           <div className="mt-10 grid gap-8 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
             <div>
@@ -455,12 +461,33 @@ export function VistaEvento({ a, evento, terminado }: { a: Amb; evento: Evento; 
                 <>
                   <p className="text-lg font-bold">Inscríbete</p>
                   {evento.cupo !== null && <p className={`mt-0.5 text-sm ${a.k.suave}`}>Quedan {Math.max(0, evento.cupo - evento.inscritos)} cupos.</p>}
+                  <Enlace a={a} href={`${cms.urlBase}/eventos/${evento.slug}/calendario.ics`} className={`mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[var(--p)] hover:underline`}><CalendarBlank className="size-4" /> Agregar al calendario</Enlace>
                   <FormularioComunidad slug={slug} evento={evento.slug} oscuro={a.tema.oscuro} className="mt-5" gracias={evento.modalidad === "presencial" ? "Te esperamos. Guarda la fecha en tu calendario." : "Te esperamos. Aquí tienes el enlace de la sala:"} />
                 </>
               )}
             </div>
           </aside>
         </div>
+      </article>
+      <EspacioAnuncio a={a} espacio="pie" />
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ páginas ---
+
+/** Una página fija del portal (Quiénes somos, Cómo participar…). */
+export function VistaPagina({ a, pagina }: { a: Amb; pagina: Pick<Pagina, "titulo" | "resumen" | "cuerpo" | "portadaUrl" | "slug"> }) {
+  const bloques = parsearMarkdown(pagina.cuerpo);
+  return (
+    <>
+      <EspacioAnuncio a={a} espacio="cabecera" />
+      <article className="mx-auto max-w-3xl px-5 pt-12 pb-20 @2xl:px-8">
+        <h1 className={`text-[clamp(2rem,5.6cqi,3.2rem)] leading-[1.08] text-balance ${a.tit}`}>{pagina.titulo}</h1>
+        {pagina.resumen && <p className={`mt-5 text-xl leading-relaxed ${a.k.suave}`}>{pagina.resumen}</p>}
+        {pagina.portadaUrl && <Portada a={a} semilla={pagina.slug} url={pagina.portadaUrl} alt={pagina.titulo} className="mt-8 aspect-[16/8] rounded-[2rem]" />}
+        <div className="mt-6"><Prosa a={a} bloques={bloques} /></div>
+        <CajaUnete a={a} className="mt-12" />
       </article>
       <EspacioAnuncio a={a} espacio="pie" />
     </>

@@ -50,6 +50,8 @@ export type DatosCms = {
   articulos: boolean;
   /** Hay eventos publicados: el encabezado y el pie enlazan la agenda. */
   eventos: boolean;
+  /** Páginas fijas publicadas que salen en el menú y en el pie. */
+  paginas: { slug: string; titulo: string }[];
   union: AjustesPortal["union"];
   editor: string;
   /** Enlace con conteo que lleva a la afiliación de la comunidad y recuerda de qué portal vino la persona. */
@@ -163,6 +165,7 @@ export function Cabecera({ a, secciones, accion }: { a: Amb; secciones: { id: st
     // En el inicio, «Artículos» ya viene entre las secciones (baja hasta ellos); en las demás páginas lleva al listado.
     ...(a.cms?.articulos && !secciones.some((s) => s.id === "articulos") ? [{ href: `${a.cms.urlBase}/articulos`, texto: "Artículos" }] : []),
     ...(a.cms?.eventos && !secciones.some((s) => s.id === "eventos") ? [{ href: `${a.cms.urlBase}/eventos`, texto: "Eventos" }] : []),
+    ...(a.cms?.paginas ?? []).map((p) => ({ href: `${a.cms!.urlBase}/pagina/${p.slug}`, texto: p.titulo })),
   ];
   const boton = accion ?? { href: a.hrefCta, texto: a.textoCta };
   return (
@@ -201,6 +204,7 @@ export function Pie({ a }: { a: Amb }) {
                 <li><Enlace a={a} href={cms.urlBase} className="hover:text-white">Inicio</Enlace></li>
                 {cms.articulos && <li><Enlace a={a} href={`${cms.urlBase}/articulos`} className="hover:text-white">Artículos</Enlace></li>}
                 {cms.eventos && <li><Enlace a={a} href={`${cms.urlBase}/eventos`} className="hover:text-white">Eventos</Enlace></li>}
+                {cms.paginas.map((p) => <li key={p.slug}><Enlace a={a} href={`${cms.urlBase}/pagina/${p.slug}`} className="hover:text-white">{p.titulo}</Enlace></li>)}
                 <li><Enlace a={a} href={cms.hrefUnete} className="hover:text-white">Únete a la comunidad</Enlace></li>
               </>
             ) : (

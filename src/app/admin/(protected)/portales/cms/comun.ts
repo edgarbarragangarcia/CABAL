@@ -34,7 +34,7 @@ export const mensajeDe = (e: unknown, defecto: string) => (e instanceof Error ? 
  * Así lo que se ve al preparar un anuncio o el llamado a sumarse es lo mismo que verá la gente.
  */
 export function datosVistaPrevia(ajustes: AjustesPortal, elegidos: DatosCms["elegidos"] = {}): DatosCms {
-  return { urlBase: "#", articulos: false, eventos: false, union: ajustes.union, editor: ajustes.editor, hrefUnete: "#", hrefAnuncio: () => "#", elegidos };
+  return { urlBase: "#", articulos: false, eventos: false, paginas: [], union: ajustes.union, editor: ajustes.editor, hrefUnete: "#", hrefAnuncio: () => "#", elegidos };
 }
 
 export type AnuncioBorrador = Pick<Anuncio, "espacio" | "nombre" | "anunciante" | "formato" | "titulo" | "texto" | "boton" | "imagenUrl" | "destinoUrl" | "desde" | "hasta" | "estado" | "prioridad">;

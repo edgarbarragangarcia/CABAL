@@ -10,7 +10,7 @@ import { tematicaDe } from "@/lib/portales/cms/tematicas";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ categoria?: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ categoria?: string; etiqueta?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const sitio = await cargarSitio((await params).slug);
@@ -28,8 +28,10 @@ export default async function ArticulosPage({ params, searchParams }: Props) {
   const sitio = await cargarSitio((await params).slug);
   if (!sitio || sitio.estado !== "en-linea") notFound();
   const { portal, ajustes, datos, recientes } = sitio;
-  const categoria = (await searchParams).categoria?.slice(0, 40) ?? "";
-  const articulos = categoria ? await articulosPublicados(portal.id, { categoria, limite: 60 }).catch(() => []) : recientes;
+  const q = await searchParams;
+  const categoria = q.categoria?.slice(0, 40) ?? "";
+  const etiqueta = q.etiqueta?.slice(0, 30) ?? "";
+  const articulos = categoria || etiqueta ? await articulosPublicados(portal.id, { categoria: categoria || undefined, etiqueta: etiqueta || undefined, limite: 60 }).catch(() => []) : recientes;
 
   if (!esBot((await headers()).get("user-agent"))) registrarEvento(portal.id, "vista", { anuncioIds: anunciosMostrados(datos, "listado") });
   const { a, vars } = construirAmbiente({ plantilla: portal.plantilla, config: portal.config, demo: false, enlaces: true, idBase: "portal", cms: datos });
@@ -37,7 +39,7 @@ export default async function ArticulosPage({ params, searchParams }: Props) {
   return (
     <main className="min-h-dvh bg-[#0c1017]">
       <MarcoPortal a={a} vars={vars} secciones={[]} accion={{ href: datos.hrefUnete, texto: ajustes.union.boton }}>
-        <VistaListado a={a} articulos={articulos} categorias={categorias} actual={categoria} />
+        <VistaListado a={a} articulos={articulos} categorias={categorias} actual={categoria} etiqueta={etiqueta} />
       </MarcoPortal>
     </main>
   );

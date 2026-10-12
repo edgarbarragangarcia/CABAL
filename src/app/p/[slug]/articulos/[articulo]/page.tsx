@@ -49,8 +49,21 @@ export default async function ArticuloPage({ params }: Props) {
   const otros = recientes.filter((r) => r.id !== art.id);
   // «Sigue leyendo»: primero los de su categoría y, si faltan, los más recientes.
   const relacionados = [...otros.filter((r) => art.categoria && r.categoria === art.categoria), ...otros.filter((r) => !art.categoria || r.categoria !== art.categoria)].slice(0, 3);
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: art.titulo,
+    description: art.seoDescripcion || art.resumen,
+    datePublished: art.publicadoEn ?? undefined,
+    dateModified: art.actualizadoEn,
+    author: { "@type": "Person", name: art.autor || portal.nombre },
+    publisher: { "@type": "Organization", name: portal.nombre },
+    ...(art.portadaUrl ? { image: [art.portadaUrl] } : {}),
+    keywords: art.etiquetas.join(", ") || undefined,
+  };
   return (
     <main className="min-h-dvh bg-[#0c1017]">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
       <MarcoPortal a={a} vars={vars} secciones={[]} accion={{ href: datos.hrefUnete, texto: ajustes.union.boton }}>
         <VistaArticulo a={a} articulo={art} relacionados={relacionados} lateral={otros.slice(0, 5)} />
       </MarcoPortal>
