@@ -71,7 +71,7 @@ export function TerritorioMapa({ url, idDe, alElegir }: { url: string; idDe: (c:
             onMouseLeave={() => setSobre(null)}
             onFocus={() => setSobre(f.code)}
             onBlur={() => setSobre(null)}
-            className="cursor-pointer fill-brand-soft stroke-surface outline-none transition-colors hover:fill-brand focus-visible:fill-brand"
+            className="cursor-pointer fill-brand/25 stroke-surface outline-none transition-colors hover:fill-brand focus-visible:fill-brand"
             strokeWidth={1}
           />
         ))}

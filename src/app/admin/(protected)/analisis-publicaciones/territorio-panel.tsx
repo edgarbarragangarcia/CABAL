@@ -276,7 +276,7 @@ function Buscador({ alElegir }: { alElegir: (id: string) => void }) {
 }
 
 /** Lo que se puede elegir ahora, un nivel más abajo. */
-function Elegir({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => void }) {
+function Elegir({ lugar, alElegir, compacto = false }: { lugar: Lugar; alElegir: (id: string) => void; compacto?: boolean }) {
   const [vista, setVista] = React.useState(0);
   const [filtro, setFiltro] = React.useState("");
   const [todo, setTodo] = React.useState(false);
@@ -299,7 +299,7 @@ function Elegir({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => v
         )}
         {v.items.length > 12 && <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Filtrar…" aria-label="Filtrar la lista" className="ml-auto w-44 rounded-full border border-border bg-surface px-3 py-1.5 text-xs outline-none focus:border-brand" />}
       </div>
-      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className={compacto ? "grid grid-cols-1 gap-2" : "grid gap-2 sm:grid-cols-2 lg:grid-cols-3"}>
         {ver.map((i) => (
           <li key={i.id}>
             <button type="button" onClick={() => alElegir(i.id)} className="flex h-full w-full items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left transition hover:border-brand hover:bg-surface-muted">
@@ -315,18 +315,16 @@ function Elegir({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => v
   );
 }
 
-/** Mapa para elegir con un clic, o la lista (con filtro) para quien prefiere escribir. */
+/** El mapa para elegir con un clic y, a su lado, la lista con filtro para quien prefiere escribir. */
 function Explorar({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => void }) {
   const mapa = mapaDe(lugar.id, lugar.nivel);
-  const [lista, setLista] = React.useState(false);
   if (!mapa) return <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} />;
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold">{lugar.nivel === "pais" ? "Elige un departamento en el mapa" : lugar.nivel === "departamento" ? `Elige un municipio de ${titulo(lugar.nombre)}` : "Elige una localidad"}</p>
-        <button type="button" onClick={() => setLista((v) => !v)} className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-surface-muted">{lista ? "Ver el mapa" : "Ver como lista"}</button>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <TerritorioMapa url={mapa.url} idDe={mapa.idDe} alElegir={alElegir} />
+      <div className="lg:max-h-[36rem] lg:overflow-y-auto lg:pr-1">
+        <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} compacto />
       </div>
-      {lista ? <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} /> : <TerritorioMapa url={mapa.url} idDe={mapa.idDe} alElegir={alElegir} />}
     </div>
   );
 }
