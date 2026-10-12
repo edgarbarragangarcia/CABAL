@@ -15,7 +15,7 @@ const CANAL_YOUTUBE = "UCNwhLgzH-XFeI_2RX424saQ";
 const WIKI_ARTICULO = "Mar%C3%ADa_Fernanda_Cabal";
 const USER_AGENT = "EscudoCabal/1.0 (informe semanal)";
 
-const entidades = (s: string) =>
+export const entidades = (s: string) =>
   s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/&quot;/g, '"')

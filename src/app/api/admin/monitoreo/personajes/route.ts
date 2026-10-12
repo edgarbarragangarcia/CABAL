@@ -4,7 +4,7 @@ import { personajes } from "@/lib/monitoreo/personajes";
 
 export const maxDuration = 60;
 
-/** Publicaciones en X y prensa de los personajes políticos de la lista base. `?forzar=1` ignora la memoria de 30 minutos. */
+/** Videos, declaraciones en la prensa y menciones a María Fernanda de los personajes de la lista base. `?forzar=1` ignora la memoria de 30 minutos. */
 export async function GET(req: Request) {
   const forzar = new URL(req.url).searchParams.get("forzar") === "1";
   try {
