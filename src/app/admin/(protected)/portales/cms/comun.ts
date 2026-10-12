@@ -38,3 +38,9 @@ export function datosVistaPrevia(ajustes: AjustesPortal, elegidos: DatosCms["ele
 }
 
 export type AnuncioBorrador = Pick<Anuncio, "espacio" | "nombre" | "anunciante" | "formato" | "titulo" | "texto" | "boton" | "imagenUrl" | "destinoUrl" | "desde" | "hasta" | "estado" | "prioridad">;
+
+/** De un instante UTC al valor de un campo datetime-local en hora de Colombia (UTC-5, sin horario de verano). */
+export const aCampoFecha = (iso: string | null) => (iso ? new Date(new Date(iso).getTime() - 5 * 3_600_000).toISOString().slice(0, 16) : "");
+/** Del campo datetime-local (hora de Colombia) a un instante ISO. */
+export const deCampoFecha = (v: string) => (v ? new Date(`${v}:00-05:00`).toISOString() : "");
+export const cuandoLargo = (iso: string) => new Date(iso).toLocaleString("es-CO", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "America/Bogota" });

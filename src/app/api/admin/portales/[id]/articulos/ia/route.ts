@@ -52,6 +52,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       revisado: false,
       autor: "",
       seoDescripcion: borrador.seoDescripcion,
+      portadaUrl: "",
+      portadaAlt: "",
+      publicarEn: "",
+      notaRevision: "",
     });
     return NextResponse.json({ articulo }, { status: 201 });
   } catch (e) {

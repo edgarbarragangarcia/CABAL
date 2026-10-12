@@ -62,7 +62,12 @@ export type Trozo = { tipo: "texto" | "negrita" | "cursiva" | "enlace"; texto: s
 export type Bloque =
   | { tipo: "h2" | "h3" | "p" | "cita"; trozos: Trozo[] }
   | { tipo: "ul" | "ol"; items: Trozo[][] }
-  | { tipo: "hr" };
+  | { tipo: "hr" }
+  /** Imagen en su propia línea: `![texto alternativo](https://…)`; el pie, si lo hay, va entre comillas tras el enlace. */
+  | { tipo: "img"; src: string; alt: string; pie: string };
+
+/** Solo imágenes por https: nunca `javascript:`, `data:` ni rutas relativas. */
+const IMAGEN = /^!\[([^\]\n]{0,160})\]\((https:\/\/[^\s)"]+)(?:\s+"([^"\n]{0,200})")?\)$/;
 
 const INLINE = /(\*\*[^*\n]+\*\*|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|(?<![*\w])\*[^*\s][^*\n]*\*(?![*\w])|(?<![_\w])_[^_\s][^_\n]*_(?![_\w]))/g;
 
@@ -85,7 +90,7 @@ export function parsearInline(texto: string): Trozo[] {
   return salida;
 }
 
-/** Markdown básico: títulos (#, ##, ###), párrafos, listas, citas y separadores. */
+/** Markdown básico: títulos (#, ##, ###), párrafos, listas, citas, separadores e imágenes (solo https). */
 export function parsearMarkdown(md: string): Bloque[] {
   const bloques: Bloque[] = [];
   const lineas = md.replace(/\r\n?/g, "\n").split("\n");
@@ -104,6 +109,13 @@ export function parsearMarkdown(md: string): Bloque[] {
     if (!l) {
       cerrarParrafo();
       cerrarLista();
+      continue;
+    }
+    const img = l.match(IMAGEN);
+    if (img) {
+      cerrarParrafo();
+      cerrarLista();
+      bloques.push({ tipo: "img", src: img[2], alt: img[1], pie: img[3] ?? "" });
       continue;
     }
     const titulo = l.match(/^(#{1,4})\s+(.+)$/);

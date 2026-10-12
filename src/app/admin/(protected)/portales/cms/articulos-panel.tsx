@@ -1,155 +1,21 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, Bold, Check, ExternalLink, Heading2, Link2, List, Loader2, Lightbulb, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, CalendarClock, Copy, ExternalLink, Eye, ImageIcon, Lightbulb, Loader2, Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 
-import { Portada, Prosa } from "@/components/portales/cms";
-import { construirAmbiente } from "@/components/portales/marco";
 import { EXTENSIONES, type Extension, type IdeaIa } from "@/lib/portales/cms/ia";
-import { minutosDeLectura, parsearMarkdown } from "@/lib/portales/cms/puro";
 import { tematicaDe } from "@/lib/portales/cms/tematicas";
-import { problemaParaPublicar, type AjustesPortal, type Articulo, type ArticuloLista, type EstadoArticulo } from "@/lib/portales/cms/tipos";
+import type { AjustesPortal, Articulo, ArticuloLista, EstadoArticulo } from "@/lib/portales/cms/tipos";
 import type { Portal } from "@/lib/portales/store";
-import { botonPrimario, botonSecundario, campo, etiquetaCampo, hace, mensajeDe, numero, pedir, tarjeta } from "./comun";
+import { ESTADOS, aForma, cuerpoApi, estadoInfo, formaVacia, type Forma } from "./articulo-forma";
+import { botonPrimario, botonSecundario, campo, cuandoLargo, etiquetaCampo, hace, mensajeDe, numero, pedir, tarjeta } from "./comun";
+import { EditorArticulo } from "./editor-articulo";
 
 /**
- * Artículos del portal: listado, editor con vista previa fiel a como se ve en el sitio, y generación con IA. Lo que escribe la
- * IA siempre llega como borrador marcado «generado con IA» y no se puede publicar hasta que una persona lo revise.
+ * Artículos del portal: listado con búsqueda, filtros y acciones en bloque; el editor profesional (ver editor-articulo.tsx) y la
+ * generación con IA. Lo que escribe la IA siempre llega como borrador marcado «generado con IA» y no se puede publicar hasta que
+ * una persona lo revise.
  */
-
-type Forma = {
-  titulo: string; resumen: string; cuerpo: string; categoria: string; tipo: string; etiquetasTexto: string; autor: string; seoDescripcion: string;
-  estado: EstadoArticulo; destacado: boolean; generadoConIa: boolean; revisado: boolean; slug: string;
-};
-
-const aForma = (a: Articulo): Forma => ({ titulo: a.titulo, resumen: a.resumen, cuerpo: a.cuerpo, categoria: a.categoria, tipo: a.tipo, etiquetasTexto: a.etiquetas.join(", "), autor: a.autor, seoDescripcion: a.seoDescripcion, estado: a.estado, destacado: a.destacado, generadoConIa: a.generadoConIa, revisado: a.revisado, slug: a.slug });
-const formaVacia = (tipo: string): Forma => ({ titulo: "", resumen: "", cuerpo: "", categoria: "", tipo, etiquetasTexto: "", autor: "", seoDescripcion: "", estado: "borrador", destacado: false, generadoConIa: false, revisado: false, slug: "" });
-const cuerpoApi = (f: Forma) => ({
-  titulo: f.titulo.trim(), resumen: f.resumen.trim(), cuerpo: f.cuerpo, categoria: f.categoria, tipo: f.tipo,
-  etiquetas: f.etiquetasTexto.split(",").map((e) => e.trim().replace(/^#/, "")).filter(Boolean).slice(0, 8),
-  estado: f.estado, destacado: f.destacado, generadoConIa: f.generadoConIa, revisado: f.revisado, autor: f.autor.trim(), seoDescripcion: f.seoDescripcion.trim(),
-  ...(f.slug ? { slug: f.slug } : {}),
-});
-
-const ETIQUETA_ESTADO: Record<EstadoArticulo, { texto: string; clase: string }> = {
-  borrador: { texto: "Borrador", clase: "bg-surface-muted text-muted-foreground" },
-  publicado: { texto: "Publicado", clase: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
-  archivado: { texto: "Archivado", clase: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-};
-
-// -------------------------------------------------------------- editor ---
-
-function Editor({ portal, ajustes, id, inicial, aviso, volver, guardado }: { portal: Portal; ajustes: AjustesPortal; id: string | null; inicial: Forma; aviso?: string; volver: () => void; guardado: (a: Articulo) => void }) {
-  const tematica = tematicaDe(portal.plantilla);
-  const [f, setF] = React.useState<Forma>(inicial);
-  const [idActual, setIdActual] = React.useState(id);
-  const [ocupado, setOcupado] = React.useState(false);
-  const [mensaje, setMensaje] = React.useState<{ ok: boolean; texto: string } | null>(aviso ? { ok: true, texto: aviso } : null);
-  const area = React.useRef<HTMLTextAreaElement>(null);
-  const set = <K extends keyof Forma>(k: K, v: Forma[K]) => setF((x) => ({ ...x, [k]: v }));
-  const { a, vars } = construirAmbiente({ plantilla: portal.plantilla, config: portal.config, demo: false, enlaces: false, idBase: "previa", cms: null });
-  const bloques = React.useMemo(() => parsearMarkdown(f.cuerpo), [f.cuerpo]);
-  const problema = f.estado === "publicado" ? problemaParaPublicar({ titulo: f.titulo, cuerpo: f.cuerpo, resumen: f.resumen, generadoConIa: f.generadoConIa, revisado: f.revisado }) : null;
-
-  function insertar(antes: string, despues: string, ejemplo: string) {
-    const t = area.current;
-    if (!t) return;
-    const { selectionStart: i, selectionEnd: j, value } = t;
-    const sel = value.slice(i, j) || ejemplo;
-    set("cuerpo", value.slice(0, i) + antes + sel + despues + value.slice(j));
-    requestAnimationFrame(() => {
-      t.focus();
-      t.setSelectionRange(i + antes.length, i + antes.length + sel.length);
-    });
-  }
-
-  async function guardar(estado: EstadoArticulo = f.estado) {
-    setOcupado(true);
-    setMensaje(null);
-    try {
-      const cuerpo = cuerpoApi({ ...f, estado });
-      const r = idActual
-        ? await pedir<{ articulo: Articulo }>(`/api/admin/portales/${portal.id}/articulos/${idActual}`, "PUT", cuerpo)
-        : await pedir<{ articulo: Articulo }>(`/api/admin/portales/${portal.id}/articulos`, "POST", cuerpo);
-      setIdActual(r.articulo.id);
-      setF(aForma(r.articulo));
-      guardado(r.articulo);
-      setMensaje({ ok: true, texto: estado === "publicado" ? "Publicado. Ya se ve en el sitio del portal." : "Guardado." });
-    } catch (e) {
-      setMensaje({ ok: false, texto: mensajeDe(e, "No se pudo guardar el artículo.") });
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  const url = `/p/${portal.slug}/articulos/${f.slug}`;
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={volver} className={botonSecundario}><ArrowLeft className="size-4" /> Artículos</button>
-        <h3 className="font-display text-lg font-semibold">{idActual ? "Editar artículo" : "Nuevo artículo"}</h3>
-        {f.generadoConIa && <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${f.revisado ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/15 text-amber-700 dark:text-amber-300"}`}>Generado con IA · {f.revisado ? "revisado" : "sin revisar"}</span>}
-        {idActual && f.estado === "publicado" && portal.estado === "publicado" && <a href={url} target="_blank" rel="noreferrer noopener" className="ml-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline">Ver en el sitio <ExternalLink className="size-4" /></a>}
-      </div>
-
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className={`${tarjeta} space-y-4 p-5`}>
-          <label className="block"><span className={etiquetaCampo}>Título</span><input className={`${campo} text-base font-semibold`} value={f.titulo} maxLength={160} onChange={(e) => set("titulo", e.target.value)} /></label>
-          <label className="block"><span className={etiquetaCampo}>Resumen (aparece en el listado y en buscadores)</span><textarea className={`${campo} resize-none`} rows={2} value={f.resumen} maxLength={400} onChange={(e) => set("resumen", e.target.value)} /></label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block"><span className={etiquetaCampo}>Categoría</span>
-              <select className={campo} value={f.categoria} onChange={(e) => set("categoria", e.target.value)}><option value="">Sin categoría</option>{tematica.categorias.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-            <label className="block"><span className={etiquetaCampo}>Tipo de artículo</span>
-              <select className={campo} value={f.tipo} onChange={(e) => set("tipo", e.target.value)}><option value="">Libre</option>{tematica.tipos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select></label>
-          </div>
-          <div>
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className={`${etiquetaCampo} mb-0`}>Texto (markdown)</span>
-              <div className="ml-auto flex gap-1">
-                <button type="button" onClick={() => insertar("## ", "", "Subtítulo")} aria-label="Subtítulo" title="Subtítulo" className="grid size-8 place-items-center rounded-lg ring-1 ring-border hover:bg-surface-muted"><Heading2 className="size-4" /></button>
-                <button type="button" onClick={() => insertar("**", "**", "texto")} aria-label="Negrita" title="Negrita" className="grid size-8 place-items-center rounded-lg ring-1 ring-border hover:bg-surface-muted"><Bold className="size-4" /></button>
-                <button type="button" onClick={() => insertar("- ", "", "elemento de la lista")} aria-label="Lista" title="Lista" className="grid size-8 place-items-center rounded-lg ring-1 ring-border hover:bg-surface-muted"><List className="size-4" /></button>
-                <button type="button" onClick={() => insertar("[", "](https://)", "texto del enlace")} aria-label="Enlace" title="Enlace" className="grid size-8 place-items-center rounded-lg ring-1 ring-border hover:bg-surface-muted"><Link2 className="size-4" /></button>
-              </div>
-            </div>
-            <textarea ref={area} className={`${campo} min-h-[26rem] resize-y font-mono text-[13px] leading-relaxed`} value={f.cuerpo} maxLength={60000} onChange={(e) => set("cuerpo", e.target.value)} placeholder={"Escribe aquí.\n\n## Un subtítulo\n\nUn párrafo con **negrita** y una lista:\n\n- uno\n- dos"} />
-            <p className="mt-1 text-xs text-muted-foreground">{numero(f.cuerpo.trim().split(/\s+/).filter(Boolean).length)} palabras · {minutosDeLectura(f.cuerpo)} min de lectura</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block"><span className={etiquetaCampo}>Etiquetas (separadas por coma)</span><input className={campo} value={f.etiquetasTexto} placeholder="prevención, laboratorio" onChange={(e) => set("etiquetasTexto", e.target.value)} /></label>
-            <label className="block"><span className={etiquetaCampo}>Autor (opcional)</span><input className={campo} value={f.autor} maxLength={80} onChange={(e) => set("autor", e.target.value)} /></label>
-          </div>
-          <label className="block"><span className={etiquetaCampo}>Descripción para buscadores (opcional, máx. 160)</span><input className={campo} value={f.seoDescripcion} maxLength={160} onChange={(e) => set("seoDescripcion", e.target.value)} /></label>
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" className="size-4" checked={f.destacado} onChange={(e) => set("destacado", e.target.checked)} /> Destacado (sale primero)</label>
-            {f.generadoConIa && <label className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-900 dark:text-amber-200"><input type="checkbox" className="size-4" checked={f.revisado} onChange={(e) => set("revisado", e.target.checked)} /> Lo revisé: leí el texto completo y está bien</label>}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-            <button type="button" onClick={() => guardar("publicado")} disabled={ocupado} className={botonPrimario}>{ocupado ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} {f.estado === "publicado" ? "Guardar y mantener publicado" : "Publicar"}</button>
-            <button type="button" onClick={() => guardar(f.estado === "publicado" ? "borrador" : f.estado)} disabled={ocupado} className={botonSecundario}>{f.estado === "publicado" ? "Pasar a borrador" : "Guardar borrador"}</button>
-            {idActual && f.estado !== "archivado" && <button type="button" onClick={() => guardar("archivado")} disabled={ocupado} className={botonSecundario}>Archivar</button>}
-            <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">Estado: <b className="text-foreground">{ETIQUETA_ESTADO[f.estado].texto}</b></label>
-          </div>
-          {problema && f.estado === "publicado" && <p className="text-xs text-amber-700 dark:text-amber-300">Para publicarlo: {problema}</p>}
-          {mensaje && <p role="status" className={`rounded-xl px-4 py-3 text-sm ${mensaje.ok ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/10 text-rose-800 dark:text-rose-300"}`}>{mensaje.texto}</p>}
-        </div>
-
-        <div className="min-w-0">
-          <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Vista previa · como se verá en {portal.nombre}</p>
-          <div style={vars} className="@container pointer-events-none max-h-[calc(100dvh-10rem)] overflow-y-auto rounded-2xl border border-border bg-[var(--fondo)] p-6 text-[var(--texto)] @xl:p-10">
-            {f.categoria && <span className={`inline-flex rounded-full px-3.5 py-1.5 text-[0.68rem] font-bold tracking-[0.16em] uppercase ${a.k.etiqueta}`}>{f.categoria}</span>}
-            <h1 className={`mt-4 text-[2.1rem] leading-[1.1] text-balance ${a.tit}`}>{f.titulo || "Título del artículo"}</h1>
-            {f.resumen && <p className={`mt-4 text-lg leading-relaxed ${a.k.suave}`}>{f.resumen}</p>}
-            <Portada a={a} semilla={f.slug || f.titulo || "nuevo"} className="mt-6 aspect-[16/8] rounded-[1.5rem]" />
-            <div className="mt-4"><Prosa a={a} bloques={bloques} /></div>
-            {f.generadoConIa && <p className={`mt-4 text-xs ${a.k.suave}`}>Este artículo se redactó con apoyo de inteligencia artificial y fue revisado por el equipo editorial antes de publicarse.</p>}
-            <p className={`mt-6 text-xs ${a.k.suave}`}>Al final del artículo irá el llamado: «{ajustes.union.titulo}».</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ------------------------------------------------------------------ IA ---
 
@@ -241,13 +107,25 @@ function GeneradorIa({ portal, iaLista, cerrar, generado }: { portal: Portal; ia
   );
 }
 
+
+function Miniatura({ url }: { url: string }) {
+  // eslint-disable-next-line @next/next/no-img-element -- miniatura de Storage
+  return <img src={url} alt="" loading="lazy" className="size-full object-cover" />;
+}
+
 // --------------------------------------------------------------- panel ---
 
-export function ArticulosPanel({ portal, ajustes, cambio, abrirIa }: { portal: Portal; ajustes: AjustesPortal; cambio: () => void; abrirIa?: boolean }) {
+type Orden = "reciente" | "titulo" | "lecturas";
+
+export function ArticulosPanel({ portal, ajustes, cambio, abrirIa, pro, avisar }: { portal: Portal; ajustes: AjustesPortal; cambio: () => void; abrirIa?: boolean; pro: boolean; avisar: (texto: string, ok?: boolean) => void }) {
   const tematica = tematicaDe(portal.plantilla);
   const [lista, setLista] = React.useState<ArticuloLista[] | null>(null);
   const [error, setError] = React.useState("");
   const [filtro, setFiltro] = React.useState<"todos" | EstadoArticulo>("todos");
+  const [q, setQ] = React.useState("");
+  const [categoria, setCategoria] = React.useState("");
+  const [orden, setOrden] = React.useState<Orden>("reciente");
+  const [sel, setSel] = React.useState<Set<string>>(new Set());
   const [editor, setEditor] = React.useState<{ id: string | null; forma: Forma; aviso?: string } | null>(null);
   const [ia, setIa] = React.useState(!!abrirIa);
   const [iaLista, setIaLista] = React.useState<boolean | null>(null);
@@ -273,45 +151,89 @@ export function ArticulosPanel({ portal, ajustes, cambio, abrirIa }: { portal: P
     return () => { cancelado = true; };
   }, [portal.id]);
 
-  async function editar(id: string) {
+  async function abrir(id: string) {
     setOcupado(true);
     try {
       const { articulo } = await pedir<{ articulo: Articulo }>(`/api/admin/portales/${portal.id}/articulos/${id}`, "GET");
       setEditor({ id, forma: aForma(articulo) });
     } catch (e) {
-      setError(mensajeDe(e, "No se pudo abrir el artículo."));
+      avisar(mensajeDe(e, "No se pudo abrir el artículo."), false);
     } finally {
       setOcupado(false);
     }
   }
 
-  async function eliminar(a: ArticuloLista) {
-    if (!window.confirm(`¿Eliminar «${a.titulo}»? No se puede deshacer.`)) return;
+  async function duplicar(a: ArticuloLista) {
     setOcupado(true);
     try {
-      await pedir(`/api/admin/portales/${portal.id}/articulos/${a.id}`, "DELETE");
+      const { articulo } = await pedir<{ articulo: Articulo }>(`/api/admin/portales/${portal.id}/articulos/${a.id}`, "GET");
+      const f = { ...aForma(articulo), titulo: `Copia de ${articulo.titulo}`.slice(0, 160), estado: "borrador" as const, slug: "", destacado: false, publicarEn: "", notaRevision: "" };
+      const r = await pedir<{ articulo: Articulo }>(`/api/admin/portales/${portal.id}/articulos`, "POST", cuerpoApi(f));
       await cargar();
       cambio();
+      avisar("Se creó una copia como borrador.");
+      setEditor({ id: r.articulo.id, forma: aForma(r.articulo) });
     } catch (e) {
-      setError(mensajeDe(e, "No se pudo eliminar el artículo."));
+      avisar(mensajeDe(e, "No se pudo duplicar."), false);
     } finally {
       setOcupado(false);
+    }
+  }
+
+  async function cambiarEstado(ids: string[], estado: EstadoArticulo) {
+    setOcupado(true);
+    let hechos = 0;
+    try {
+      for (const id of ids) {
+        const { articulo } = await pedir<{ articulo: Articulo }>(`/api/admin/portales/${portal.id}/articulos/${id}`, "GET");
+        const f = aForma(articulo);
+        await pedir(`/api/admin/portales/${portal.id}/articulos/${id}`, "PUT", cuerpoApi({ ...f, estado, publicarEn: estado === "programado" ? f.publicarEn : "" }));
+        hechos++;
+      }
+      avisar(hechos === 1 ? "Listo." : `${hechos} artículos actualizados.`);
+    } catch (e) {
+      avisar(`${mensajeDe(e, "No se pudo cambiar el estado.")}${hechos > 0 ? ` (${hechos} sí se actualizaron.)` : ""}`, false);
+    } finally {
+      setSel(new Set());
+      setOcupado(false);
+      await cargar();
+      cambio();
+    }
+  }
+
+  async function eliminar(ids: string[]) {
+    if (!window.confirm(ids.length === 1 ? "¿Eliminar este artículo? No se puede deshacer." : `¿Eliminar ${ids.length} artículos? No se puede deshacer.`)) return;
+    setOcupado(true);
+    try {
+      for (const id of ids) await pedir(`/api/admin/portales/${portal.id}/articulos/${id}`, "DELETE");
+      avisar(ids.length === 1 ? "Artículo eliminado." : `${ids.length} artículos eliminados.`);
+    } catch (e) {
+      avisar(mensajeDe(e, "No se pudo eliminar."), false);
+    } finally {
+      setSel(new Set());
+      setOcupado(false);
+      await cargar();
+      cambio();
     }
   }
 
   if (editor) {
-    return <Editor portal={portal} ajustes={ajustes} id={editor.id} inicial={editor.forma} aviso={editor.aviso} volver={() => { setEditor(null); void cargar(); cambio(); }} guardado={() => { void cargar(); cambio(); }} />;
+    return <EditorArticulo portal={portal} ajustes={ajustes} pro={pro} id={editor.id} inicial={editor.forma} aviso={editor.aviso} avisar={avisar} volver={() => { setEditor(null); void cargar(); cambio(); }} guardado={() => { void cargar(); cambio(); }} />;
   }
 
   const todos = lista ?? [];
   const cuenta = (e: EstadoArticulo) => todos.filter((a) => a.estado === e).length;
-  const visibles = filtro === "todos" ? todos : todos.filter((a) => a.estado === filtro);
+  const categorias = [...new Set(todos.map((a) => a.categoria).filter(Boolean))].sort((x, y) => x.localeCompare(y, "es"));
+  const visibles = todos
+    .filter((a) => (filtro === "todos" ? a.estado !== "archivado" || true : a.estado === filtro))
+    .filter((a) => !categoria || a.categoria === categoria)
+    .filter((a) => !q || `${a.titulo} ${a.resumen} ${a.etiquetas.join(" ")} ${a.autor}`.toLowerCase().includes(q.toLowerCase()))
+    .sort((x, y) => (orden === "titulo" ? x.titulo.localeCompare(y.titulo, "es") : orden === "lecturas" ? y.vistas - x.vistas : y.actualizadoEn.localeCompare(x.actualizadoEn)));
   const chips: { id: "todos" | EstadoArticulo; texto: string; n: number }[] = [
     { id: "todos", texto: "Todos", n: todos.length },
-    { id: "publicado", texto: "Publicados", n: cuenta("publicado") },
-    { id: "borrador", texto: "Borradores", n: cuenta("borrador") },
-    { id: "archivado", texto: "Archivados", n: cuenta("archivado") },
+    ...ESTADOS.filter((e) => cuenta(e.id) > 0 || e.id === "publicado" || e.id === "borrador").map((e) => ({ id: e.id as EstadoArticulo, texto: e.texto, n: cuenta(e.id) })),
   ];
+  const todosMarcados = visibles.length > 0 && visibles.every((a) => sel.has(a.id));
 
   return (
     <div className="space-y-5">
@@ -321,14 +243,30 @@ export function ArticulosPanel({ portal, ajustes, cambio, abrirIa }: { portal: P
           <p className="text-sm text-muted-foreground">{tematica.seccion.descripcion}</p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
-          <button type="button" onClick={() => setIa(true)} className={botonPrimario}><Sparkles className="size-4" /> Generar con IA</button>
-          <button type="button" onClick={() => setEditor({ id: null, forma: formaVacia(tematica.tipos[0]?.id ?? "") })} className={botonSecundario}><Plus className="size-4" /> Escribir uno</button>
+          <button type="button" onClick={() => setIa(true)} className={botonSecundario}><Sparkles className="size-4" /> Generar con IA</button>
+          <button type="button" onClick={() => setEditor({ id: null, forma: formaVacia(tematica.tipos[0]?.id ?? "") })} className={botonPrimario}><Plus className="size-4" /> Nuevo artículo</button>
         </div>
       </div>
 
-      <div role="tablist" aria-label="Estado" className="inline-flex flex-wrap gap-1 rounded-full bg-surface p-1 text-sm shadow-sm ring-1 ring-border">
-        {chips.map((c) => <button key={c.id} type="button" role="tab" aria-selected={filtro === c.id} onClick={() => setFiltro(c.id)} className={`rounded-full px-4 py-1.5 font-semibold transition ${filtro === c.id ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`}>{c.texto} <span className={`ml-1 rounded-full px-1.5 text-[11px] ${filtro === c.id ? "bg-white/20" : "bg-surface-muted"}`}>{c.n}</span></button>)}
+      <div className="flex flex-wrap items-center gap-3">
+        <div role="tablist" aria-label="Estado" className="inline-flex flex-wrap gap-1 rounded-full bg-surface p-1 text-sm shadow-sm ring-1 ring-border">
+          {chips.map((c) => <button key={c.id} type="button" role="tab" aria-selected={filtro === c.id} onClick={() => { setFiltro(c.id); setSel(new Set()); }} className={`rounded-full px-3.5 py-1.5 font-semibold transition ${filtro === c.id ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`}>{c.texto} <span className={`ml-1 rounded-full px-1.5 text-[11px] ${filtro === c.id ? "bg-white/20" : "bg-surface-muted"}`}>{c.n}</span></button>)}
+        </div>
+        <label className="flex min-w-[12rem] flex-1 items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 focus-within:border-brand"><Search className="size-4 text-muted-foreground" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por título, etiqueta o autor…" aria-label="Buscar artículos" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
+        {categorias.length > 0 && <select aria-label="Categoría" value={categoria} onChange={(e) => setCategoria(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-2 text-xs font-semibold"><option value="">Todas las categorías</option>{categorias.map((c) => <option key={c} value={c}>{c}</option>)}</select>}
+        <select aria-label="Ordenar" value={orden} onChange={(e) => setOrden(e.target.value as Orden)} className="rounded-full border border-border bg-surface px-3 py-2 text-xs font-semibold"><option value="reciente">Más recientes</option><option value="titulo">Por título</option><option value="lecturas">Más leídos</option></select>
       </div>
+
+      {sel.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-soft p-2 text-xs font-semibold">
+          <span>{sel.size} seleccionado{sel.size === 1 ? "" : "s"}</span>
+          <button type="button" disabled={ocupado} onClick={() => void cambiarEstado([...sel], "publicado")} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5"><Eye className="size-3.5" /> Publicar</button>
+          <button type="button" disabled={ocupado} onClick={() => void cambiarEstado([...sel], "borrador")} className="rounded-full bg-surface px-3 py-1.5">Pasar a borrador</button>
+          <button type="button" disabled={ocupado} onClick={() => void cambiarEstado([...sel], "archivado")} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5"><Archive className="size-3.5" /> Archivar</button>
+          <button type="button" disabled={ocupado} onClick={() => void eliminar([...sel])} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-rose-700 dark:text-rose-300"><Trash2 className="size-3.5" /> Eliminar</button>
+          <button type="button" onClick={() => setSel(new Set())} className="ml-auto">Quitar selección</button>
+        </div>
+      )}
 
       {error && <p role="alert" className="rounded-xl bg-rose-500/10 p-4 text-sm text-rose-800 dark:text-rose-300">{error}</p>}
       {!lista && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Leyendo artículos…</p>}
@@ -336,36 +274,47 @@ export function ArticulosPanel({ portal, ajustes, cambio, abrirIa }: { portal: P
       {lista && visibles.length === 0 && !error && (
         <div className={`${tarjeta} grid place-items-center gap-3 p-14 text-center`}>
           <Sparkles className="size-8 text-muted-foreground" />
-          <p className="font-semibold">{todos.length === 0 ? "Todavía no hay artículos" : "No hay artículos en este estado"}</p>
-          <p className="max-w-md text-sm text-muted-foreground">{todos.length === 0 ? "Pídele a la IA un primer borrador sobre un tema de este portal, o escribe uno tú. Con tres o cuatro artículos publicados el portal empieza a verse vivo." : "Cambia el filtro para ver los demás."}</p>
+          <p className="font-semibold">{todos.length === 0 ? "Todavía no hay artículos" : "Ningún artículo coincide"}</p>
+          <p className="max-w-md text-sm text-muted-foreground">{todos.length === 0 ? "Pídele a la IA un primer borrador sobre un tema de este portal, o escribe uno tú. Con tres o cuatro artículos publicados el portal empieza a verse vivo." : "Cambia el estado o la búsqueda para ver los demás."}</p>
         </div>
       )}
 
       {visibles.length > 0 && (
-        <ul className={`${tarjeta} divide-y divide-border overflow-hidden`}>
-          {visibles.map((a) => {
-            const e = ETIQUETA_ESTADO[a.estado];
-            return (
-              <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
-                <div className="min-w-0 flex-1 basis-72">
-                  <button type="button" onClick={() => editar(a.id)} disabled={ocupado} className="block max-w-full truncate text-left font-semibold hover:text-brand">{a.titulo}</button>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{[a.categoria || "Sin categoría", tematica.tipos.find((t) => t.id === a.tipo)?.nombre, a.autor].filter(Boolean).join(" · ")} · actualizado {hace(a.actualizadoEn)}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {a.generadoConIa && <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${a.revisado ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/15 text-amber-700 dark:text-amber-300"}`}>IA · {a.revisado ? "revisado" : "sin revisar"}</span>}
-                  {a.destacado && <span className="rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-bold text-brand">Destacado</span>}
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${e.clase}`}>{e.texto}</span>
-                </div>
-                <span className="w-20 text-right text-xs text-muted-foreground tabular-nums">{numero(a.vistas)} lecturas</span>
-                <div className="flex gap-1.5">
-                  <button type="button" onClick={() => editar(a.id)} disabled={ocupado} aria-label={`Editar ${a.titulo}`} className="grid size-8 place-items-center rounded-full ring-1 ring-border hover:bg-surface-muted disabled:opacity-50"><Pencil className="size-3.5" /></button>
-                  {a.estado === "publicado" && portal.estado === "publicado" && <a href={`/p/${portal.slug}/articulos/${a.slug}`} target="_blank" rel="noreferrer noopener" aria-label={`Ver ${a.titulo} en el sitio`} className="grid size-8 place-items-center rounded-full ring-1 ring-border hover:bg-surface-muted"><ExternalLink className="size-3.5" /></a>}
-                  <button type="button" onClick={() => eliminar(a)} disabled={ocupado} aria-label={`Eliminar ${a.titulo}`} className="grid size-8 place-items-center rounded-full text-rose-600 ring-1 ring-rose-500/30 hover:bg-rose-500/10 disabled:opacity-50"><Trash2 className="size-3.5" /></button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <div className={`${tarjeta} overflow-hidden`}>
+          <div className="flex items-center gap-3 border-b border-border bg-surface-muted/50 px-5 py-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <input type="checkbox" aria-label="Seleccionar todos" checked={todosMarcados} onChange={(e) => setSel(e.target.checked ? new Set(visibles.map((a) => a.id)) : new Set())} />
+            <span>{visibles.length} artículo{visibles.length === 1 ? "" : "s"}</span>
+          </div>
+          <ul className="divide-y divide-border">
+            {visibles.map((a) => {
+              const e = estadoInfo(a.estado);
+              return (
+                <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 hover:bg-surface-muted/40">
+                  <input type="checkbox" aria-label={`Seleccionar ${a.titulo}`} checked={sel.has(a.id)} onChange={() => setSel((s) => { const n = new Set(s); if (n.has(a.id)) n.delete(a.id); else n.add(a.id); return n; })} />
+                  <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-muted text-muted-foreground">
+                    {a.portadaUrl ? <Miniatura url={a.portadaUrl} /> : <ImageIcon className="size-5" />}
+                  </span>
+                  <div className="min-w-0 flex-1 basis-64">
+                    <button type="button" onClick={() => void abrir(a.id)} disabled={ocupado} className="block max-w-full truncate text-left font-semibold hover:text-brand">{a.titulo}</button>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{[a.categoria || "Sin categoría", tematica.tipos.find((t) => t.id === a.tipo)?.nombre, a.autor].filter(Boolean).join(" · ")} · actualizado {hace(a.actualizadoEn)}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {a.generadoConIa && <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${a.revisado ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/15 text-amber-700 dark:text-amber-300"}`}>IA · {a.revisado ? "revisado" : "sin revisar"}</span>}
+                    {a.destacado && <span className="rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-bold text-brand">Destacado</span>}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${e.clase}`}>{a.estado === "programado" && <CalendarClock className="size-3" />}{e.texto}{a.estado === "programado" && a.publicarEn ? ` · ${cuandoLargo(a.publicarEn)}` : ""}</span>
+                  </div>
+                  <span className="w-24 text-right text-xs text-muted-foreground tabular-nums">{numero(a.vistas)} lecturas</span>
+                  <div className="flex gap-1.5">
+                    <button type="button" onClick={() => void abrir(a.id)} disabled={ocupado} aria-label={`Editar ${a.titulo}`} className="grid size-8 place-items-center rounded-full ring-1 ring-border hover:bg-surface-muted disabled:opacity-50"><Pencil className="size-3.5" /></button>
+                    <button type="button" onClick={() => void duplicar(a)} disabled={ocupado} aria-label={`Duplicar ${a.titulo}`} title="Duplicar" className="grid size-8 place-items-center rounded-full ring-1 ring-border hover:bg-surface-muted disabled:opacity-50"><Copy className="size-3.5" /></button>
+                    {a.estado === "publicado" && portal.estado === "publicado" && <a href={`/p/${portal.slug}/articulos/${a.slug}`} target="_blank" rel="noreferrer noopener" aria-label={`Ver ${a.titulo} en el sitio`} className="grid size-8 place-items-center rounded-full ring-1 ring-border hover:bg-surface-muted"><ExternalLink className="size-3.5" /></a>}
+                    <button type="button" onClick={() => void eliminar([a.id])} disabled={ocupado} aria-label={`Eliminar ${a.titulo}`} className="grid size-8 place-items-center rounded-full text-rose-600 ring-1 ring-rose-500/30 hover:bg-rose-500/10 disabled:opacity-50"><Trash2 className="size-3.5" /></button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       {ia && (

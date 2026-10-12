@@ -23,7 +23,16 @@ const hash = (s: string) => [...s].reduce((h, ch) => (h * 31 + ch.charCodeAt(0))
 // ----------------------------------------------------------------- portada ---
 
 /** Portada del artículo: degradado de la marca, mallas de color y el ícono de la temática, distinta en cada artículo. */
-export function Portada({ a, semilla, etiqueta, className = "" }: { a: Amb; semilla: string; etiqueta?: string; className?: string }) {
+export function Portada({ a, semilla, etiqueta, className = "", url = "", alt = "" }: { a: Amb; semilla: string; etiqueta?: string; className?: string; /** Imagen de portada; vacía, se dibuja la del tema. */ url?: string; alt?: string }) {
+  if (url) {
+    return (
+      <div className={`relative isolate overflow-hidden bg-[var(--alt)] ${className}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- la portada vive en Storage o en el servidor de quien la puso */}
+        <img src={url} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover" />
+        {etiqueta && <span className="absolute bottom-3 left-3 rounded-full bg-black/45 px-3 py-1 text-[0.68rem] font-bold tracking-wide text-white uppercase backdrop-blur">{etiqueta}</span>}
+      </div>
+    );
+  }
   const h = hash(semilla);
   const giro = (h % 60) - 30;
   const x = 55 + (h % 30);
@@ -48,7 +57,7 @@ export function TarjetaArticulo({ a, art, grande = false }: { a: Amb; art: Artic
   const href = cms ? `${cms.urlBase}/articulos/${art.slug}` : "#";
   return (
     <Enlace a={a} href={href} className={`group flex h-full flex-col overflow-hidden rounded-[1.75rem] transition duration-300 hover:-translate-y-1 ${a.k.tarjeta}`}>
-      <Portada a={a} semilla={art.slug} etiqueta={art.categoria || undefined} className={grande ? "aspect-[16/8]" : "aspect-[16/9]"} />
+      <Portada a={a} semilla={art.slug} etiqueta={art.categoria || undefined} url={art.portadaUrl} alt={art.portadaAlt} className={grande ? "aspect-[16/8]" : "aspect-[16/9]"} />
       <span className="flex flex-1 flex-col gap-2 p-6">
         <span className={`text-xs font-semibold ${a.k.suave}`}>{fechaLarga(art.publicadoEn)}</span>
         <span className={`${grande ? "text-2xl" : "text-lg"} leading-snug font-bold text-balance ${a.tema.serif ? "font-display font-normal" : ""}`}>{art.titulo}</span>
@@ -172,6 +181,13 @@ function BloqueTexto({ a, b }: { a: Amb; b: Bloque }) {
     case "p": return <p className="my-5 text-[1.075rem] leading-[1.8]"><Trozos trozos={b.trozos} /></p>;
     case "cita": return <blockquote className="my-8 rounded-2xl border-l-4 border-[var(--p)] bg-[var(--p)]/[0.07] px-6 py-4 text-[0.95rem] leading-relaxed italic"><Trozos trozos={b.trozos} /></blockquote>;
     case "hr": return <hr className={`my-10 ${a.k.linea}`} />;
+    case "img": return (
+      <figure className="my-8">
+        {/* eslint-disable-next-line @next/next/no-img-element -- la imagen vive en Storage o en el servidor de quien la puso */}
+        <img src={b.src} alt={b.alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-auto w-full rounded-[1.5rem]" />
+        {b.pie && <figcaption className={`mt-2 text-center text-sm ${a.k.suave}`}>{b.pie}</figcaption>}
+      </figure>
+    );
     case "ul": return <ul className="my-5 space-y-2.5 pl-1">{b.items.map((it, i) => <li key={i} className="flex gap-3 text-[1.075rem] leading-[1.7]"><span aria-hidden className="mt-[0.7em] size-1.5 shrink-0 rounded-full bg-[var(--p)]" /><span><Trozos trozos={it} /></span></li>)}</ul>;
     case "ol": return <ol className="my-5 space-y-3">{b.items.map((it, i) => <li key={i} className="flex gap-3 text-[1.075rem] leading-[1.7]"><span aria-hidden className="mt-[0.25em] grid size-6 shrink-0 place-items-center rounded-full bg-[var(--p)] text-xs font-bold text-[var(--sobre)]">{i + 1}</span><span><Trozos trozos={it} /></span></li>)}</ol>;
   }
@@ -222,7 +238,7 @@ export function VistaArticulo({ a, articulo, relacionados, lateral }: { a: Amb; 
             <h1 className={`mt-4 text-[clamp(2rem,5.6cqi,3.2rem)] leading-[1.08] text-balance ${a.tit}`}>{articulo.titulo}</h1>
             {articulo.resumen && <p className={`mt-5 text-xl leading-relaxed ${a.k.suave}`}>{articulo.resumen}</p>}
             <MetaArticulo a={a} art={articulo} />
-            <Portada a={a} semilla={articulo.slug} className="mt-8 aspect-[16/8] rounded-[2rem]" />
+            <Portada a={a} semilla={articulo.slug} url={articulo.portadaUrl} alt={articulo.portadaAlt || articulo.titulo} className="mt-8 aspect-[16/8] rounded-[2rem]" />
             <div className="mt-6">
               <Prosa a={a} bloques={bloques} insertar={anuncio && posicion > 0 ? { despuesDe: posicion, nodo: <EspacioAnuncio a={a} espacio="articulo" className="my-10" /> } : undefined} />
               {anuncio && posicion < 0 && <EspacioAnuncio a={a} espacio="articulo" className="my-10" />}

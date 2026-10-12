@@ -8,7 +8,11 @@ const texto = (min: number, max: number) => z.string().trim().min(min).max(max);
 
 // ------------------------------------------------------------- artículos ---
 
-export const ESTADOS_ARTICULO = ["borrador", "publicado", "archivado"] as const;
+/**
+ * Flujo editorial: borrador → revisión → (programado) → publicado → archivado. «Programado» se publica solo a su hora: el
+ * primer visitante o la primera vez que se abre el CMS después de esa hora lo pasa a «publicado».
+ */
+export const ESTADOS_ARTICULO = ["borrador", "revision", "programado", "publicado", "archivado"] as const;
 export type EstadoArticulo = (typeof ESTADOS_ARTICULO)[number];
 
 export type Articulo = {
@@ -32,6 +36,13 @@ export type Articulo = {
   publicadoEn: string | null;
   creadoEn: string;
   actualizadoEn: string;
+  /** Imagen de portada (de la biblioteca de medios o un enlace); vacía = portada dibujada por código. */
+  portadaUrl: string;
+  portadaAlt: string;
+  /** Cuándo se publica solo (estado «programado»). */
+  publicarEn: string | null;
+  /** Recado para quien revisa (estado «revisión»). */
+  notaRevision: string;
 };
 
 /** Lo que trae el listado de artículos: sin el cuerpo (puede pesar decenas de miles de caracteres). */
@@ -53,6 +64,10 @@ export const articuloSchema = z.object({
   autor: z.string().trim().max(80).default(""),
   seoDescripcion: z.string().trim().max(200).default(""),
   slug: slugArticuloSchema.optional(),
+  portadaUrl: z.union([z.literal(""), z.string().trim().max(600).refine((u) => /^https:\/\/[^\s]+$/i.test(u), "La portada debe ser un enlace https.")]).default(""),
+  portadaAlt: z.string().trim().max(160).default(""),
+  publicarEn: z.union([z.literal(""), z.string().refine((s) => !Number.isNaN(Date.parse(s)), "Fecha de publicación no válida.")]).default(""),
+  notaRevision: z.string().trim().max(500).default(""),
 });
 export type DatosArticulo = z.infer<typeof articuloSchema>;
 

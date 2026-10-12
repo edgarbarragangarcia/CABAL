@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { ErrorPortales } from "../store";
 import { anuncioVigente, slugDeTitulo, slugUnico } from "./puro";
+import type { VersionArticulo } from "./versiones";
 import {
   ajustesPorDefecto,
   problemaParaPublicar,
@@ -59,9 +60,54 @@ export async function hayCms(): Promise<boolean> {
   return true;
 }
 
+// ------------------------------------------------------- funciones avanzadas ---
+
+/**
+ * ¿Están creadas las piezas del CMS avanzado (supabase/portales-cms-pro.sql: portada, programación, revisión, historial,
+ * medios, páginas y boletines)? Sin ellas el CMS sigue funcionando con lo básico. Se recuerda 30 s para no preguntar en cada
+ * petición; un error de red no se guarda como «no».
+ */
+let proCache: { ok: boolean; en: number } | null = null;
+export async function esPro(): Promise<boolean> {
+  if (proCache && Date.now() - proCache.en < 30_000) return proCache.ok;
+  const c = getSupabaseServerClient();
+  if (!c) return false;
+  const t1 = await c.from("portal_articulos").select("portada_url").limit(1);
+  if (t1.error && !sinTabla(t1.error) && t1.error.code !== "42703" && !/column/i.test(t1.error.message ?? "")) return false;
+  let ok = !t1.error;
+  if (ok) {
+    for (const t of ["portal_medios", "portal_paginas", "portal_campanas", "portal_articulo_versiones"]) {
+      const r = await c.from(t).select("portal_id").limit(1);
+      if (r.error) {
+        ok = false;
+        break;
+      }
+    }
+  }
+  proCache = { ok, en: Date.now() };
+  return ok;
+}
+/** Para después de ejecutar el SQL: que el CMS lo note sin esperar. */
+export const olvidarPro = () => {
+  proCache = null;
+};
+
+/** Pasa a «publicado» los artículos programados cuya hora ya llegó (se llama al leer; es una sola consulta). */
+export async function promoverProgramados(portalId: string): Promise<void> {
+  if (!(await esPro())) return;
+  const ahora = new Date().toISOString();
+  const { error } = await db().rpc("portal_promover_programados", { p_portal: portalId, p_ahora: ahora });
+  if (error) {
+    // Sin la función SQL, se hace en dos pasos (leer y actualizar cada uno).
+    const { data } = await db().from("portal_articulos").select("id,publicar_en").eq("portal_id", portalId).eq("estado", "programado").lte("publicar_en", ahora).limit(50);
+    for (const f of (data ?? []) as Fila[]) await db().from("portal_articulos").update({ estado: "publicado", publicado_en: f.publicar_en ?? ahora }).eq("id", f.id).eq("estado", "programado");
+  }
+}
+
 // ------------------------------------------------------------- artículos ---
 
-const COLS_LISTA = "id,portal_id,slug,titulo,resumen,categoria,tipo,etiquetas,estado,destacado,generado_con_ia,revisado,autor,vistas,publicado_en,creado_en,actualizado_en";
+const COLS_BASE = "id,portal_id,slug,titulo,resumen,categoria,tipo,etiquetas,estado,destacado,generado_con_ia,revisado,autor,vistas,publicado_en,creado_en,actualizado_en";
+const COLS_PRO = `${COLS_BASE},portada_url,portada_alt,publicar_en,nota_revision`;
 
 const aLista = (f: Fila): ArticuloLista => ({
   id: f.id,
@@ -81,14 +127,20 @@ const aLista = (f: Fila): ArticuloLista => ({
   publicadoEn: f.publicado_en ?? null,
   creadoEn: f.creado_en,
   actualizadoEn: f.actualizado_en,
+  portadaUrl: f.portada_url ?? "",
+  portadaAlt: f.portada_alt ?? "",
+  publicarEn: f.publicar_en ?? null,
+  notaRevision: f.nota_revision ?? "",
 });
 const aArticulo = (f: Fila): Articulo => ({ ...aLista(f), cuerpo: f.cuerpo ?? "", seoDescripcion: f.seo_descripcion ?? "" });
 
 /** Los artículos de un portal para el panel, del más reciente al más antiguo (sin el cuerpo). */
 export async function listarArticulos(portalId: string): Promise<ArticuloLista[]> {
-  const { data, error } = await db().from("portal_articulos").select(COLS_LISTA).eq("portal_id", portalId).order("actualizado_en", { ascending: false }).limit(300);
+  const pro = await esPro();
+  if (pro) await promoverProgramados(portalId);
+  const { data, error } = await db().from("portal_articulos").select(pro ? COLS_PRO : COLS_BASE).eq("portal_id", portalId).order("actualizado_en", { ascending: false }).limit(300);
   if (error) throw fallo(error);
-  return (data ?? []).map(aLista);
+  return ((data ?? []) as unknown as Fila[]).map(aLista);
 }
 
 export async function obtenerArticulo(portalId: string, id: string): Promise<Articulo> {
@@ -104,8 +156,8 @@ async function enlacesUsados(portalId: string, base: string, excluirId?: string)
   return new Set((data ?? []).filter((f: Fila) => f.id !== excluirId).map((f: Fila) => f.slug));
 }
 
-function cuerpoFila(d: DatosArticulo) {
-  return {
+async function cuerpoFila(d: DatosArticulo): Promise<Record<string, unknown>> {
+  const base: Record<string, unknown> = {
     titulo: d.titulo,
     resumen: d.resumen,
     cuerpo: d.cuerpo,
@@ -119,10 +171,19 @@ function cuerpoFila(d: DatosArticulo) {
     autor: d.autor,
     seo_descripcion: d.seoDescripcion,
   };
+  if (!(await esPro())) {
+    if (d.estado === "revision" || d.estado === "programado") throw new ErrorPortales("invalido", "La revisión y la programación necesitan el CMS avanzado: ejecuta supabase/portales-cms-pro.sql en Supabase.");
+    return base;
+  }
+  return { ...base, portada_url: d.portadaUrl, portada_alt: d.portadaAlt, publicar_en: d.estado === "programado" && d.publicarEn ? new Date(d.publicarEn).toISOString() : null, nota_revision: d.notaRevision };
 }
 
 function validarPublicacion(d: DatosArticulo) {
-  if (d.estado !== "publicado") return;
+  if (d.estado === "programado") {
+    if (!d.publicarEn) throw new ErrorPortales("invalido", "Elige la fecha y hora en que se publicará.");
+    if (Date.parse(d.publicarEn) < Date.now() - 60_000) throw new ErrorPortales("invalido", "La fecha de publicación ya pasó: elige una futura o publica ahora.");
+  }
+  if (d.estado !== "publicado" && d.estado !== "programado") return;
   const problema = problemaParaPublicar(d);
   if (problema) throw new ErrorPortales("invalido", problema);
 }
@@ -133,23 +194,47 @@ export async function crearArticulo(portalId: string, d: DatosArticulo): Promise
   const slug = d.slug ?? slugUnico(base, await enlacesUsados(portalId, base));
   const { data, error } = await db()
     .from("portal_articulos")
-    .insert({ portal_id: portalId, slug, ...cuerpoFila(d), publicado_en: d.estado === "publicado" ? new Date().toISOString() : null })
+    .insert({ portal_id: portalId, slug, ...(await cuerpoFila(d)), publicado_en: d.estado === "publicado" ? new Date().toISOString() : null })
     .select("*")
     .single();
   if (error) throw fallo(error);
   return aArticulo(data);
 }
 
-export async function actualizarArticulo(portalId: string, id: string, d: DatosArticulo): Promise<Articulo> {
+const MAX_VERSIONES = 25;
+
+/** Guarda lo que había antes de este cambio (solo si cambió el texto o el título) y deja las más recientes. */
+async function guardarVersion(portalId: string, antes: Articulo, d: DatosArticulo, autor: string) {
+  if (!(await esPro())) return;
+  if (antes.cuerpo === d.cuerpo && antes.titulo === d.titulo && antes.resumen === d.resumen) return;
+  const c = db();
+  const { error } = await c.from("portal_articulo_versiones").insert({ portal_id: portalId, articulo_id: antes.id, titulo: antes.titulo, resumen: antes.resumen, cuerpo: antes.cuerpo, estado: antes.estado, autor_edicion: autor.slice(0, 120) });
+  if (error) return; // el historial nunca debe impedir guardar
+  const { data } = await c.from("portal_articulo_versiones").select("id").eq("articulo_id", antes.id).order("creado_en", { ascending: false }).range(MAX_VERSIONES, MAX_VERSIONES + 200);
+  const sobran = ((data ?? []) as Fila[]).map((f) => f.id);
+  if (sobran.length > 0) await c.from("portal_articulo_versiones").delete().in("id", sobran);
+}
+
+export type { VersionArticulo };
+
+export async function listarVersiones(portalId: string, articuloId: string): Promise<VersionArticulo[]> {
+  if (!(await esPro())) return [];
+  const { data, error } = await db().from("portal_articulo_versiones").select("*").eq("portal_id", portalId).eq("articulo_id", articuloId).order("creado_en", { ascending: false }).limit(MAX_VERSIONES);
+  if (error) return [];
+  return ((data ?? []) as Fila[]).map((f) => ({ id: f.id, titulo: f.titulo, resumen: f.resumen ?? "", cuerpo: f.cuerpo ?? "", estado: f.estado ?? "", autor: f.autor_edicion ?? "", creadoEn: f.creado_en }));
+}
+
+export async function actualizarArticulo(portalId: string, id: string, d: DatosArticulo, autor = ""): Promise<Articulo> {
   const actual = await obtenerArticulo(portalId, id);
   validarPublicacion(d);
+  await guardarVersion(portalId, actual, d, autor);
   const ahora = new Date().toISOString();
   // La fecha de publicación es la de la primera vez que se publicó: editar o volver a publicar no la cambia.
   const publicadoEn = d.estado === "publicado" ? (actual.publicadoEn ?? ahora) : actual.publicadoEn;
   const slug = d.slug && d.slug !== actual.slug ? slugUnico(d.slug, await enlacesUsados(portalId, d.slug, id)) : actual.slug;
   const { data, error } = await db()
     .from("portal_articulos")
-    .update({ slug, ...cuerpoFila(d), publicado_en: publicadoEn, actualizado_en: ahora })
+    .update({ slug, ...(await cuerpoFila(d)), publicado_en: publicadoEn, actualizado_en: ahora })
     .eq("portal_id", portalId)
     .eq("id", id)
     .select("*")
@@ -164,16 +249,20 @@ export async function eliminarArticulo(portalId: string, id: string) {
 }
 
 /** Artículos publicados para el sitio público, destacados primero y luego los más recientes. */
-export async function articulosPublicados(portalId: string, o: { categoria?: string; limite?: number; excluirId?: string } = {}): Promise<ArticuloLista[]> {
-  let q = db().from("portal_articulos").select(COLS_LISTA).eq("portal_id", portalId).eq("estado", "publicado");
+export async function articulosPublicados(portalId: string, o: { categoria?: string; limite?: number; excluirId?: string; etiqueta?: string } = {}): Promise<ArticuloLista[]> {
+  const pro = await esPro();
+  if (pro) await promoverProgramados(portalId);
+  let q = db().from("portal_articulos").select(pro ? COLS_PRO : COLS_BASE).eq("portal_id", portalId).eq("estado", "publicado");
   if (o.categoria) q = q.eq("categoria", o.categoria);
+  if (o.etiqueta) q = q.contains("etiquetas", [o.etiqueta]);
   const limite = Math.min(o.limite ?? 60, 120);
   const { data, error } = await q.order("destacado", { ascending: false }).order("publicado_en", { ascending: false }).limit(limite + (o.excluirId ? 1 : 0));
   if (error) throw fallo(error);
-  return (data ?? []).map(aLista).filter((a: ArticuloLista) => a.id !== o.excluirId).slice(0, limite);
+  return ((data ?? []) as unknown as Fila[]).map(aLista).filter((a: ArticuloLista) => a.id !== o.excluirId).slice(0, limite);
 }
 
 export async function articuloPublicado(portalId: string, slug: string): Promise<Articulo | null> {
+  if (await esPro()) await promoverProgramados(portalId);
   const { data, error } = await db().from("portal_articulos").select("*").eq("portal_id", portalId).eq("slug", slug).eq("estado", "publicado").maybeSingle();
   if (error || !data) return null;
   return aArticulo(data);
