@@ -11,7 +11,7 @@ type Props = { code: string; name: string };
 /** Qué mapa corresponde a un lugar: el país por departamentos, un departamento por municipios, Bogotá por localidades. */
 export function mapaDe(id: string, nivel: string): { url: string; idDe: (code: string) => string } | null {
   if (nivel === "pais") return { url: "/data/geo/departamentos.json", idDe: (c) => c.padStart(2, "0") };
-  if (nivel === "departamento") return { url: `/data/geo/municipios/${id}.json`, idDe: (c) => c.padStart(5, "0") };
+  if (nivel === "departamento" && id !== "11") return { url: `/data/geo/municipios/${id}.json`, idDe: (c) => c.padStart(5, "0") };
   if (id === "11001") return { url: "/data/geo/bogota-localidades.json", idDe: (c) => `11001:z${c.padStart(2, "0")}` };
   return null;
 }
