@@ -20,7 +20,6 @@ export const ES_PARTIDO_CABAL = /CENTRO DEMOCR/i;
 const PATRON_OPOSICION = ["partido.ilike.*PACTO HIST*", "partido.ilike.*DECENCIA*", "partido.ilike.*COLOMBIA HUMANA*"].join(",");
 
 export const ELECCIONES_TERRITORIO = [
-  { id: "congreso-2026", corporacion: "SE", titulo: "Senado 2026" },
   { id: "congreso-2022", corporacion: "SE", titulo: "Senado 2022" },
   { id: "congreso-2018", corporacion: "SE", titulo: "Senado 2018" },
 ] as const;

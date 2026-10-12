@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { marcarVigente } from "@/lib/documentos/gestor";
 import { MAX_PARTES, procesarDocumento } from "@/lib/documentos/servicio";
 
 export const runtime = "nodejs";
@@ -15,6 +16,8 @@ export async function POST(req: Request) {
   if (!p.success) return NextResponse.json({ error: "Datos no válidos." }, { status: 422 });
   try {
     const doc = await procesarDocumento(p.data.id, p.data.partes);
+    // Una versión nueva pasa a ser la vigente cuando ya tiene su texto (las anteriores quedan en el historial).
+    await marcarVigente(doc).catch(() => {});
     return NextResponse.json({ documento: doc });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "No fue posible procesar el documento." }, { status: 422 });

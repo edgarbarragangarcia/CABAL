@@ -10,7 +10,7 @@ import type { Fragmento } from "./fragmentos";
 
 const BUCKET = "documentos";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type Fila = Record<string, any>;
+export type Fila = Record<string, any>;
 
 export type Documento = {
   id: string;
@@ -29,9 +29,22 @@ export type Documento = {
   ruta: string | null;
   creadoEn: string;
   actualizadoEn: string;
+  // Gestor documental (supabase/gestor-documental.sql); sin el SQL quedan en sus valores por omisión.
+  carpetaId: string | null;
+  descripcion: string | null;
+  categoria: string | null;
+  autor: string | null;
+  fuente: string | null;
+  fechaDocumento: string | null;
+  confidencial: boolean;
+  hash: string | null;
+  version: number;
+  grupoVersion: string | null;
+  vigente: boolean;
+  eliminadoEn: string | null;
 };
 
-const aDocumento = (f: Fila): Documento => ({
+export const aDocumento = (f: Fila): Documento => ({
   id: f.id,
   titulo: f.titulo,
   archivo: f.archivo ?? null,
@@ -48,23 +61,35 @@ const aDocumento = (f: Fila): Documento => ({
   ruta: f.ruta ?? null,
   creadoEn: f.creado_en,
   actualizadoEn: f.actualizado_en,
+  carpetaId: f.carpeta_id ?? null,
+  descripcion: f.descripcion ?? null,
+  categoria: f.categoria ?? null,
+  autor: f.autor ?? null,
+  fuente: f.fuente ?? null,
+  fechaDocumento: f.fecha_documento ?? null,
+  confidencial: f.confidencial ?? false,
+  hash: f.hash ?? null,
+  version: f.version ?? 1,
+  grupoVersion: f.grupo_version ?? null,
+  vigente: f.es_vigente ?? true,
+  eliminadoEn: f.eliminado_en ?? null,
 });
 
 const faltaTabla = (e: { code?: string; message?: string }) =>
   e.code === "42P01" || e.code === "PGRST205" || e.code === "PGRST202" || /schema cache|does not exist/i.test(e.message ?? "");
 
-function cliente() {
+export function cliente() {
   const c = getSupabaseServerClient();
   if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
   return c;
 }
 
-function fallo(e: { code?: string; message?: string }): never {
+export function fallo(e: { code?: string; message?: string }): never {
   throw new Error(faltaTabla(e) ? "Faltan las tablas de documentos: ejecuta supabase/documentos.sql en Supabase." : (e.message ?? "No se pudo usar Supabase."));
 }
 
 /** ¿Está Supabase conectado y tiene las tablas, el vector y las funciones? Se prueba cada pieza. */
-export async function estadoDocumentos(): Promise<{ configurada: boolean; tabla: boolean; error?: string }> {
+export async function estadoDocumentos(): Promise<{ configurada: boolean; tabla: boolean; gestor?: boolean; error?: string }> {
   const c = getSupabaseServerClient();
   if (!c) return { configurada: false, tabla: false };
   for (const tabla of ["documentos", "documento_fragmentos"]) {
@@ -74,12 +99,27 @@ export async function estadoDocumentos(): Promise<{ configurada: boolean; tabla:
   // Las funciones de búsqueda y de guardado de vectores: sin ellas el SQL quedó a medias.
   const { error } = await c.rpc("guardar_vectores", { p_filas: [] });
   if (error) return faltaTabla(error) ? { configurada: true, tabla: false } : { configurada: true, tabla: false, error: error.message };
-  return { configurada: true, tabla: true };
+  // El gestor documental (carpetas, versiones, papelera...) es una ampliación: sin su SQL todo lo anterior sigue funcionando.
+  const g = await c.from("documento_carpetas").select("id").limit(1);
+  const g2 = await c.from("documentos").select("carpeta_id, eliminado_en").limit(1);
+  return { configurada: true, tabla: true, gestor: !g.error && !g2.error };
 }
 
-export async function listarDocumentos(): Promise<Documento[]> {
-  const { data, error } = await cliente().from("documentos").select("*").order("creado_en", { ascending: false }).limit(500);
-  if (error) fallo(error);
+/** Los documentos; `papelera` trae solo los eliminados y, si no, se omiten (cuando el gestor está activo). */
+export async function listarDocumentos(opciones: { papelera?: boolean } = {}): Promise<Documento[]> {
+  const base = () => cliente().from("documentos").select("*").order("creado_en", { ascending: false }).limit(1000);
+  const q = opciones.papelera ? base().not("eliminado_en", "is", null) : base().is("eliminado_en", null);
+  const { data, error } = await q;
+  if (error) {
+    // Sin el SQL del gestor no existe la columna: se lista todo, como antes.
+    if (error.code === "42703" || /eliminado_en/.test(error.message ?? "")) {
+      if (opciones.papelera) return [];
+      const r = await base();
+      if (r.error) fallo(r.error);
+      return (r.data ?? []).map(aDocumento);
+    }
+    fallo(error);
+  }
   return (data ?? []).map(aDocumento);
 }
 
@@ -89,10 +129,10 @@ export async function obtenerDocumento(id: string): Promise<Documento | null> {
   return data ? aDocumento(data) : null;
 }
 
-export async function crearDocumento(d: { titulo: string; archivo: string; tipo: string; bytes: number; etiquetas: string[] }): Promise<Documento> {
+export async function crearDocumento(d: { titulo: string; archivo: string; tipo: string; bytes: number; etiquetas: string[]; extras?: Record<string, unknown> }): Promise<Documento> {
   const { data, error } = await cliente()
     .from("documentos")
-    .insert({ titulo: d.titulo, archivo: d.archivo, tipo: d.tipo, bytes: d.bytes, etiquetas: d.etiquetas, estado: "subiendo" })
+    .insert({ titulo: d.titulo, archivo: d.archivo, tipo: d.tipo, bytes: d.bytes, etiquetas: d.etiquetas, estado: "subiendo", ...(d.extras ?? {}) })
     .select("*")
     .single();
   if (error) fallo(error);
