@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Database, Flame, Loader2, MapPinned, Scale, Search, ShieldAlert, TriangleAlert, Vote } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Database, Flame, Loader2, MapPinned, Search, ShieldAlert, TriangleAlert } from "lucide-react";
 
 import { buildNetwork, type Mapping } from "@/lib/crm/network";
 import { seguidoresEn } from "@/lib/crm/seguidores";
@@ -10,7 +10,7 @@ import type { Indicadores, ItemIndicador } from "@/lib/territorio/indicadores";
 import { GRUPOS, type Grupo } from "@/lib/territorio/catalogo";
 import type { Coincidencia, Lugar } from "@/lib/territorio/jerarquia";
 import type { Relacion } from "@/lib/territorio/relacion";
-import type { EleccionLugar, FilaRanking } from "@/lib/territorio/votacion";
+import type { EleccionLugar } from "@/lib/territorio/votacion";
 import { titulo } from "./nombres";
 import { usePeticion } from "./peticion";
 import { RelacionTerritorio } from "./territorio-relacion";
@@ -56,111 +56,40 @@ function leerCampos(): Mapping {
   }
 }
 
-function Etiqueta({ children, tono }: { children: React.ReactNode; tono: "cabal" | "oposicion" }) {
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tono === "cabal" ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300"}`}>{children}</span>;
-}
-
-function FilaPartido({ p, maximo }: { p: FilaRanking; maximo: number }) {
+/** Cómo le fue a María Fernanda Cabal en el lugar, elección por elección (en 2026 su partido fue con lista cerrada). */
+function VotosCabal({ elecciones, lugar }: { elecciones: EleccionLugar[]; lugar: string }) {
   return (
-    <li className="space-y-1">
-      <div className="flex items-baseline gap-2 text-sm">
-        <span className="min-w-0 flex-1 truncate font-medium">{titulo(p.nombre)}</span>
-        {p.esCabal && <Etiqueta tono="cabal">CABAL</Etiqueta>}
-        {p.esOposicion && <Etiqueta tono="oposicion">OPOSICIÓN</Etiqueta>}
-        <span className="tabular-nums text-muted-foreground">{fmt(p.votos)}</span>
-        <span className="w-14 text-right font-semibold tabular-nums">{dec(p.pct)} %</span>
+    <div className="space-y-3">
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full min-w-[32rem] text-left text-sm">
+          <thead className="border-b border-border bg-surface-muted/60 text-[11px] tracking-wide text-muted-foreground uppercase">
+            <tr><th className="px-3 py-2.5 font-semibold">Elección</th><th className="px-3 py-2.5 text-right font-semibold">Votos</th><th className="px-3 py-2.5 text-right font-semibold">% de los válidos</th><th className="px-3 py-2.5 font-semibold">Puesto</th></tr>
+          </thead>
+          <tbody>
+            {elecciones.map((e) => (
+              <tr key={e.id} className="border-b border-border/60 last:border-0">
+                <td className="px-3 py-2.5 font-medium">{e.titulo}</td>
+                {!e.guardado ? (
+                  <td colSpan={3} className="px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300">Sin resultado guardado{e.cobertura ? ` (${e.cobertura.guardados} de ${e.cobertura.total})` : ""}. Se carga en Fuente de la verdad.</td>
+                ) : e.noPublicado ? (
+                  <td colSpan={3} className="px-3 py-2.5 text-xs text-muted-foreground">La Registraduría no publica este lugar.</td>
+                ) : e.cabal ? (
+                  <>
+                    <td className="px-3 py-2.5 text-right text-base font-bold tabular-nums">{fmt(e.cabal.votos)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{dec(e.cabal.pct, 2)} %</td>
+                    <td className="px-3 py-2.5 tabular-nums">{e.cabal.puesto} <span className="text-xs text-muted-foreground">de {fmt(e.cabal.de)}</span></td>
+                  </>
+                ) : (
+                  <td colSpan={3} className="px-3 py-2.5 text-xs text-muted-foreground">
+                    {e.listaCerrada && e.partidoCabal ? `Lista cerrada: no hay votos por candidato. Su partido, ${titulo(e.partidoCabal.nombre)}, sacó ${fmt(e.partidoCabal.votos)} votos (${dec(e.partidoCabal.pct)} %).` : "Sin votos propios en este lugar."}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted"><div className="h-full rounded-full" style={{ width: `${maximo > 0 ? Math.max(1.5, (p.votos / maximo) * 100) : 0}%`, background: p.color || "#64748b" }} /></div>
-    </li>
-  );
-}
-
-/** El ranking de una elección en el lugar: María Fernanda, la oposición y los demás partidos y candidatos. */
-function Votacion({ e, lugar }: { e: EleccionLugar; lugar: string }) {
-  if (!e.guardado) return <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-4 shrink-0" />El resultado de {e.titulo} para {lugar} todavía no está guardado en Supabase{e.cobertura ? ` (0 de ${e.cobertura.total} ${e.cobertura.total === 1 ? "lugar" : "lugares"} guardados)` : ""}. Se guarda en Fuente de la verdad &gt; Datos electorales{e.cobertura ? ", cargando hasta zonas o puestos" : ""}.</p>;
-  if (e.noPublicado) return <p className="rounded-xl bg-surface-muted/70 px-4 py-3 text-sm text-muted-foreground">La Registraduría no publica resultados de {e.titulo} para {lugar}.</p>;
-  const esLista = e.corporacion !== "PR";
-  const parcial = e.cobertura && e.cobertura.guardados < e.cobertura.total;
-  const maximo = Math.max(...e.partidos.map((p) => p.votos), 0);
-  return (
-    <div className="space-y-4">
-      {parcial && <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />Suma de {e.cobertura!.guardados} de {e.cobertura!.total} lugares guardados: las cifras son un mínimo.</p>}
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-sky-400/40 bg-sky-500/5 p-4">
-          <p className="flex items-center gap-2 text-xs font-bold tracking-wide text-sky-700 uppercase dark:text-sky-300"><Vote className="size-3.5" /> María Fernanda Cabal</p>
-          {e.cabal ? (
-            <>
-              <p className="mt-1.5 text-2xl font-bold tabular-nums">{fmt(e.cabal.votos)} <span className="text-sm font-medium text-muted-foreground">votos · {dec(e.cabal.pct, 2)} % de los válidos</span></p>
-              <p className="mt-0.5 text-sm text-muted-foreground">Puesto <b className="text-foreground">{e.cabal.puesto}</b> entre {fmt(e.cabal.de)} candidatos con votos en {lugar}.</p>
-            </>
-          ) : esLista ? (
-            <p className="mt-1.5 text-sm text-muted-foreground">{e.listaCerrada ? "Su partido fue con lista cerrada: solo hay votos por la lista, no por cada candidato." : "No aparece con votos propios en este lugar."}</p>
-          ) : (
-            <p className="mt-1.5 text-sm text-muted-foreground">No fue candidata en esta elección.</p>
-          )}
-          {e.partidoCabal && <p className="mt-1.5 text-sm">Su partido, <b>{titulo(e.partidoCabal.nombre)}</b>: {dec(e.partidoCabal.pct)} % ({fmt(e.partidoCabal.votos)} votos), puesto {e.partidoCabal.puesto}.</p>}
-        </div>
-        <div className="rounded-xl border border-fuchsia-400/40 bg-fuchsia-500/5 p-4">
-          <p className="flex items-center gap-2 text-xs font-bold tracking-wide text-fuchsia-700 uppercase dark:text-fuchsia-300"><Scale className="size-3.5" /> La oposición</p>
-          {e.oposicion ? (
-            <>
-              <p className="mt-1.5 text-2xl font-bold tabular-nums">{dec(e.oposicion.pct)} % <span className="text-sm font-medium text-muted-foreground">· {fmt(e.oposicion.votos)} votos · puesto {e.oposicion.puesto}</span></p>
-              <p className="mt-0.5 text-sm text-muted-foreground">{e.oposicion.partidos.map(titulo).join(" + ")}</p>
-              {e.ventajaOposicion !== null && e.partidoCabal && <p className="mt-1.5 text-sm">Frente al {titulo(e.partidoCabal.nombre)}: <b className={e.ventajaOposicion >= 0 ? "text-fuchsia-700 dark:text-fuchsia-300" : "text-sky-700 dark:text-sky-300"}>{e.ventajaOposicion >= 0 ? "+" : "−"}{dec(Math.abs(e.ventajaOposicion))} puntos</b> {e.ventajaOposicion >= 0 ? "a favor de la oposición" : "a favor del partido de María Fernanda"}.</p>}
-            </>
-          ) : <p className="mt-1.5 text-sm text-muted-foreground">No hay lista de la oposición con votos en este lugar.</p>}
-        </div>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[3fr_2fr]">
-        <div>
-          <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{esLista ? "Partidos" : "Candidatos"} · {fmt(e.validos)} votos válidos</p>
-          <ol className="space-y-2.5">{e.partidos.slice(0, esLista ? 10 : 6).map((p) => <FilaPartido key={`${p.codigo}-${p.nombre}`} p={p} maximo={maximo} />)}</ol>
-        </div>
-        {esLista && e.candidatos.length > 0 && (
-          <div>
-            <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Candidatos más votados</p>
-            <ol className="space-y-1.5 text-sm">
-              {e.candidatos.map((k, i) => (
-                <li key={`${k.nombre}-${i}`} className="flex items-baseline gap-2">
-                  <span className="w-5 text-right text-xs text-muted-foreground tabular-nums">{i + 1}</span>
-                  <span className="min-w-0 flex-1"><span className="truncate font-medium">{titulo(k.nombre)}</span> <span className="text-xs text-muted-foreground">· {titulo(k.partido)}</span></span>
-                  {k.esCabal && <Etiqueta tono="cabal">CABAL</Etiqueta>}
-                  {k.esOposicion && <Etiqueta tono="oposicion">OPOSICIÓN</Etiqueta>}
-                  <span className="font-semibold tabular-nums">{fmt(k.votos)}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Cómo le fue a María Fernanda y a la oposición en cada elección, para ver el cambio de una a otra. */
-function Evolucion({ elecciones }: { elecciones: EleccionLugar[] }) {
-  const con = elecciones.filter((e) => e.guardado && !e.noPublicado && e.oposicion);
-  if (con.length === 0) return null;
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full min-w-[34rem] text-left text-sm">
-        <thead className="border-b border-border bg-surface-muted/60 text-[11px] tracking-wide text-muted-foreground uppercase">
-          <tr><th className="px-3 py-2.5 font-semibold">Elección</th><th className="px-3 py-2.5 font-semibold">María Fernanda / su partido</th><th className="px-3 py-2.5 font-semibold">Oposición</th><th className="px-3 py-2.5 text-right font-semibold">Diferencia</th></tr>
-        </thead>
-        <tbody>
-          {con.map((e) => (
-            <tr key={e.id} className="border-b border-border/60 last:border-0">
-              <td className="px-3 py-2 font-medium">{e.titulo}</td>
-              <td className="px-3 py-2">
-                {e.cabal ? <>{dec(e.cabal.pct, 2)} % <span className="text-xs text-muted-foreground">({fmt(e.cabal.votos)} votos, puesto {e.cabal.puesto})</span></> : e.partidoCabal ? <>{dec(e.partidoCabal.pct)} % <span className="text-xs text-muted-foreground">({titulo(e.partidoCabal.nombre).replace("Partido ", "")}{e.listaCerrada ? ", lista cerrada" : ""})</span></> : <span className="text-muted-foreground">—</span>}
-              </td>
-              <td className="px-3 py-2">{dec(e.oposicion!.pct)} % <span className="text-xs text-muted-foreground">(puesto {e.oposicion!.puesto})</span></td>
-              <td className="px-3 py-2 text-right tabular-nums">{e.ventajaOposicion === null ? <span className="text-muted-foreground">—</span> : <b className={e.ventajaOposicion >= 0 ? "text-fuchsia-700 dark:text-fuchsia-300" : "text-sky-700 dark:text-sky-300"}>{e.ventajaOposicion >= 0 ? "+" : "−"}{dec(Math.abs(e.ventajaOposicion))} pts</b>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <p className="text-[11px] text-muted-foreground">Votos de María Fernanda Cabal al Senado en {lugar}, de los resultados guardados en Supabase.</p>
     </div>
   );
 }
@@ -350,7 +279,6 @@ type Pestana = "votacion" | "conflicto" | "seguidores" | "municipios";
 export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; demo: boolean }) {
   const [id, setId] = React.useState(leerLugar);
   const [version, setVersion] = React.useState(0);
-  const [eleccionId, setEleccionId] = React.useState<string>("");
   const [pestana, setPestana] = React.useState<Pestana>("votacion");
   const [fuentesAbiertas, setFuentesAbiertas] = React.useState(false);
   const datos = usePeticion<Respuesta>(`/api/admin/territorio?id=${encodeURIComponent(id)}&v=${version}`);
@@ -371,7 +299,6 @@ export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; dem
     return seguidoresEn(snapshot, red, m ? { nivel: "municipio", nombre: m.nombre, departamento: lugar.departamento?.nombre } : { nivel: "departamento", nombre: lugar.departamento!.nombre }, 8);
   }, [lugar, snapshot, red]);
 
-  const eleccion = d?.elecciones.find((e) => e.id === eleccionId) ?? d?.elecciones[0];
   const nombreLugar = lugar ? titulo(lugar.nombre) : "";
   const hayInfo = !!lugar && lugar.nivel !== "pais";
   const bajo = lugar && (lugar.nivel === "localidad" || lugar.nivel === "barrio" || lugar.nivel === "puesto");
@@ -440,16 +367,9 @@ export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; dem
 
           <div className="mt-5">
             {pestana === "votacion" && !d.error && (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {bajo && <p className="text-xs text-muted-foreground">{lugar!.nivel === "puesto" ? "Votos de este puesto." : lugar!.nivel === "barrio" ? "Suma de los puestos de votación del barrio." : "Suma de las zonas electorales de la localidad o comuna."}</p>}
-                <div role="tablist" aria-label="Elección" className="flex flex-wrap gap-1.5">
-                  {d.elecciones.map((e) => <button key={e.id} type="button" role="tab" aria-selected={eleccion?.id === e.id} onClick={() => setEleccionId(e.id)} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${eleccion?.id === e.id ? "bg-brand text-brand-foreground shadow" : "text-muted-foreground ring-1 ring-border hover:text-foreground"}`}>{e.titulo}</button>)}
-                </div>
-                {eleccion && <Votacion e={eleccion} lugar={nombreLugar} />}
-                <details className="rounded-xl border border-border p-3">
-                  <summary className="cursor-pointer text-sm font-semibold">Cómo le fue a la oposición, elección por elección</summary>
-                  <div className="mt-3"><Evolucion elecciones={d.elecciones} /><p className="mt-2 text-[11px] text-muted-foreground">La oposición se toma como el Pacto Histórico (y su lista de 2018, la Lista de la Decencia).</p></div>
-                </details>
+                <VotosCabal elecciones={d.elecciones} lugar={nombreLugar} />
               </div>
             )}
             {pestana === "conflicto" && d.indicadores && (

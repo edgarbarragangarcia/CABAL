@@ -23,8 +23,6 @@ export const ELECCIONES_TERRITORIO = [
   { id: "congreso-2026", corporacion: "SE", titulo: "Senado 2026" },
   { id: "congreso-2022", corporacion: "SE", titulo: "Senado 2022" },
   { id: "congreso-2018", corporacion: "SE", titulo: "Senado 2018" },
-  { id: "presidencia-2026-2v", corporacion: "PR", titulo: "Presidencia 2026 · 2ª vuelta" },
-  { id: "presidencia-2022-2v", corporacion: "PR", titulo: "Presidencia 2022 · 2ª vuelta" },
 ] as const;
 
 export type FilaRanking = { codigo: string; nombre: string; color: string; votos: number; pct: number; esCabal: boolean; esOposicion: boolean };
