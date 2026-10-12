@@ -4,6 +4,8 @@ import { unstable_cache } from "next/cache";
 
 import { poblacionDe } from "@/lib/dane/poblacion";
 
+import { zonaDe, type Zona } from "./zona";
+
 /**
  * Economía, población y servicios sociales de un departamento o municipio, con datos abiertos oficiales consultados en vivo en
  * datos.gov.co (Socrata): PIB departamental (DANE), educación (Ministerio de Educación), afiliados a salud (Ministerio de Salud) y
@@ -45,6 +47,9 @@ export type Socio = {
     serie: Barra[];
   } | null;
   agro: { anio: number; cultivos: { cultivo: string; produccion: number; area: number }[]; total: number } | null;
+  /** Cifras exactas de la comuna o localidad (Censo 2018 del DANE), cuando el lugar elegido está dentro de una. */
+  zona: Zona | null;
+  zonaAviso: string | null;
   avisos: string[];
 };
 
@@ -165,7 +170,7 @@ async function seccion<T>(clave: string, dane: string, extra: string, f: () => P
   }
 }
 
-export async function socioeconomicoDe(dane: string, nombre: string, nombreDepartamento: string): Promise<Socio> {
+export async function socioeconomicoDe(dane: string, nombre: string, nombreDepartamento: string, localidad?: { nombre: string; numero?: string }): Promise<Socio> {
   const d = codigo(dane);
   const [edu, sal, eco, agr] = await Promise.all([
     seccion("educación", d, "", () => educacion(d)),
@@ -173,6 +178,7 @@ export async function socioeconomicoDe(dane: string, nombre: string, nombreDepar
     seccion("economía", d, nombreDepartamento, () => economia(d, nombreDepartamento)),
     seccion("agro", d, "", () => agro(d)),
   ]);
+  const zonaR = localidad && d.length === 5 ? await zonaDe(d, nombre, localidad.nombre, localidad.numero) : null;
   return {
     dane: d,
     nivel: d.length === 5 ? "municipio" : "departamento",
@@ -182,6 +188,8 @@ export async function socioeconomicoDe(dane: string, nombre: string, nombreDepar
     salud: sal.v,
     economia: eco.v,
     agro: agr.v,
+    zona: zonaR?.zona ?? null,
+    zonaAviso: zonaR && !zonaR.zona ? (zonaR.motivo ?? null) : null,
     avisos: [edu, sal, eco, agr].flatMap((s) => (s.error ? [`No se pudo consultar ${s.error}.`] : [])),
   };
 }

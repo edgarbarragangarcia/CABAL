@@ -3,11 +3,13 @@
 import { Loader2, TriangleAlert } from "lucide-react";
 
 import type { Barra, Socio } from "@/lib/territorio/socioeconomico";
+import type { Zona } from "@/lib/territorio/zona";
 import { usePeticion } from "./peticion";
 
 /** Economía, población y servicios del lugar elegido, con gráficas simples. Datos oficiales: DANE, MEN, MinSalud y MinAgricultura. */
 
 const fmt = (n: number) => Math.round(n).toLocaleString("es-CO");
+const pc = (a: number, b: number) => (b > 0 ? (a / b) * 100 : 0);
 const dec = (n: number, d = 1) => n.toLocaleString("es-CO", { maximumFractionDigits: d, minimumFractionDigits: d });
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const COLORES = ["bg-brand", "bg-sky-500", "bg-amber-500", "bg-emerald-500", "bg-violet-500", "bg-rose-500", "bg-teal-500", "bg-orange-500"];
@@ -64,6 +66,59 @@ function Dato({ etiqueta, valor, detalle }: { etiqueta: string; valor: string; d
   );
 }
 
+
+/** Cifras exactas de la comuna o localidad: Censo 2018 del DANE por manzana, con la comparación frente al conjunto de comunas. */
+function ZonaCensal({ z }: { z: Zona }) {
+  const dif = (a: number, b: number) => {
+    const d = a - b;
+    return Math.abs(d) < 0.5 ? "igual al promedio de la ciudad" : `${d > 0 ? "+" : "−"}${dec(Math.abs(d))} pts frente a la ciudad`;
+  };
+  const ocupadas = z.viviendas.ocupadas;
+  const totalEstrato = z.estrato.reduce((s, e) => s + e.valor, 0);
+  const totalEdu = z.educacion.reduce((s, e) => s + e.valor, 0);
+  const totalTipos = z.viviendas.tipos.reduce((s, e) => s + e.valor, 0);
+  return (
+    <Seccion titulo={`${z.nombre} — datos exactos de la zona (${z.tipo.toLowerCase()} de ${z.municipio})`} fuente={z.fuente}>
+      <ul className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+        <Dato etiqueta="Habitantes" valor={fmt(z.personas)} detalle={`${dec(z.contexto.pctDelMunicipio)} % de las ${z.contexto.zonas} zonas de ${z.municipio}`} />
+        <Dato etiqueta="Hogares" valor={fmt(z.hogares)} detalle={`${dec(z.personasPorHogar, 2)} personas por hogar`} />
+        <Dato etiqueta="Mujeres / hombres" valor={`${dec(pc(z.mujeres, z.personas))} % / ${dec(pc(z.hombres, z.personas))} %`} />
+        <Dato etiqueta="Viviendas ocupadas" valor={fmt(ocupadas)} detalle={`${fmt(z.viviendas.desocupadas)} desocupadas`} />
+      </ul>
+      <ul className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+        <Dato etiqueta="Menores de 20 años" valor={`${dec(z.menores20.pct)} %`} detalle={dif(z.menores20.pct, z.menores20.pctMunicipio)} />
+        <Dato etiqueta="Mayores de 60 años" valor={`${dec(z.mayores60.pct)} %`} detalle={dif(z.mayores60.pct, z.mayores60.pctMunicipio)} />
+        {z.servicios.filter((x) => x.clave === "internet" || x.clave === "gas").map((x) => <Dato key={x.clave} etiqueta={`Con ${x.etiqueta.toLowerCase()}`} valor={`${dec(x.pct)} %`} detalle={dif(x.pct, x.pctMunicipio)} />)}
+      </ul>
+      <div className="grid gap-5 md:grid-cols-2">
+        <div><p className="mb-2 text-xs font-semibold text-muted-foreground">Cómo se distribuye por edad</p><Barras datos={z.edades} suma={z.personas} /></div>
+        <div>
+          <p className="mb-2 text-xs font-semibold text-muted-foreground">Estrato socioeconómico (según la factura de energía, viviendas)</p>
+          <Barras datos={z.estrato} suma={totalEstrato} />
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-semibold text-muted-foreground">Servicios públicos y conexión (% de viviendas ocupadas)</p>
+          <Barras datos={z.servicios.map((x) => ({ etiqueta: x.etiqueta, valor: x.pct }))} formato={(v) => `${dec(v)} %`} max={100} />
+          <p className="mt-1 text-[10px] text-muted-foreground">Ciudad: {z.servicios.map((x) => `${x.etiqueta} ${dec(x.pctMunicipio, 0)} %`).join(" · ")}</p>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-semibold text-muted-foreground">Tipo de vivienda</p>
+          <Barras datos={z.viviendas.tipos.filter((t) => t.valor > 0)} suma={totalTipos} />
+          <p className="mb-2 mt-4 text-xs font-semibold text-muted-foreground">Nivel educativo más alto (reparto entre estos cuatro niveles)</p>
+          <Barras datos={z.educacion} suma={totalEdu} />
+        </div>
+      </div>
+      {z.empresas && (
+        <div className="space-y-2 border-t border-border pt-4">
+          <p className="text-xs font-semibold text-muted-foreground">Empresas registradas en la zona ({z.empresas.anio}): {fmt(z.empresas.total)} en total. Las cinco actividades con más empresas:</p>
+          <Barras datos={z.empresas.actividades} suma={z.empresas.total} />
+          <p className="text-[11px] text-muted-foreground">Fuente: {z.empresas.fuente}. Es el registro de matrículas mercantiles ubicadas en la zona, no el empleo ni los ingresos.</p>
+        </div>
+      )}
+    </Seccion>
+  );
+}
+
 export function SocioeconomicoTerritorio({ lugarId, nombreLugar, subnivel }: { lugarId: string; nombreLugar: string; subnivel: boolean }) {
   const r = usePeticion<Socio>(`/api/admin/territorio/socioeconomico?id=${encodeURIComponent(lugarId)}`);
   if (r.estado === "cargando") return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Consultando DANE y datos abiertos… (puede tardar unos segundos)</p>;
@@ -75,8 +130,18 @@ export function SocioeconomicoTerritorio({ lugarId, nombreLugar, subnivel }: { l
 
   return (
     <div className="space-y-4">
-      {subnivel && <p className="text-xs text-muted-foreground">Estas cifras existen por municipio, no por barrio, localidad o puesto: son las de {ambito}, donde queda {nombreLugar}.</p>}
+      {subnivel && (
+        <p className="text-xs text-muted-foreground">
+          {s.zona
+            ? `Las cifras de la zona son del Censo 2018 para ${s.zona.nombre}, donde queda ${nombreLugar} (no existen a nivel de barrio o puesto). Las de economía, educación y salud son del municipio.`
+            : `Estas cifras existen por municipio, no por barrio, localidad o puesto: son las de ${ambito}, donde queda ${nombreLugar}.`}
+        </p>
+      )}
       {s.avisos.map((a) => <p key={a} className="flex items-start gap-2 text-xs text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{a}</p>)}
+
+      {s.zona && <ZonaCensal z={s.zona} />}
+      {!s.zona && s.zonaAviso && <p className="flex items-start gap-2 rounded-xl bg-surface-muted/70 p-3 text-xs text-muted-foreground"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{s.zonaAviso} Se muestran las cifras de {ambito}.</p>}
+      {s.zona && <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Contexto: {ambito}</p>}
 
       {s.poblacion && (
         <Seccion titulo={`Población de ${s.nombre}`} fuente="DANE, proyecciones de población del Censo 2018">
