@@ -14,6 +14,7 @@ import type { EleccionLugar, FilaRanking } from "@/lib/territorio/votacion";
 import { titulo } from "./nombres";
 import { usePeticion } from "./peticion";
 import { RelacionTerritorio } from "./territorio-relacion";
+import { TerritorioMapa, mapaDe } from "./territorio-mapa";
 import { FuentesTerritorio } from "./territorio-fuentes";
 
 /**
@@ -314,6 +315,22 @@ function Elegir({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => v
   );
 }
 
+/** Mapa para elegir con un clic, o la lista (con filtro) para quien prefiere escribir. */
+function Explorar({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => void }) {
+  const mapa = mapaDe(lugar.id, lugar.nivel);
+  const [lista, setLista] = React.useState(false);
+  if (!mapa) return <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} />;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">{lugar.nivel === "pais" ? "Elige un departamento en el mapa" : lugar.nivel === "departamento" ? `Elige un municipio de ${titulo(lugar.nombre)}` : "Elige una localidad"}</p>
+        <button type="button" onClick={() => setLista((v) => !v)} className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-surface-muted">{lista ? "Ver el mapa" : "Ver como lista"}</button>
+      </div>
+      {lista ? <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} /> : <TerritorioMapa url={mapa.url} idDe={mapa.idDe} alElegir={alElegir} />}
+    </div>
+  );
+}
+
 type Pestana = "votacion" | "conflicto" | "seguidores" | "municipios";
 
 export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; demo: boolean }) {
@@ -379,11 +396,11 @@ export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; dem
               <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Ciudades principales</p>
               <div className="flex flex-wrap gap-2">{PRINCIPALES.map(([c, n]) => <button key={c} type="button" onClick={() => ir(c)} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:border-brand hover:bg-surface-muted">{n}</button>)}</div>
             </div>
-            <Elegir lugar={lugar} alElegir={ir} />
+            <Explorar lugar={lugar} alElegir={ir} />
           </div>
         )}
         {lugar && lugar.nivel !== "pais" && lugar.vistas.length > 0 && (
-          <div className="border-t border-border pt-4"><Elegir key={lugar.id} lugar={lugar} alElegir={ir} /></div>
+          <div className="border-t border-border pt-4"><Explorar key={lugar.id} lugar={lugar} alElegir={ir} /></div>
         )}
         {lugar?.puesto && (
           <div className="rounded-xl bg-surface-muted/70 p-4 text-sm">
