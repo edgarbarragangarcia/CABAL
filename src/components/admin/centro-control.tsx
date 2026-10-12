@@ -9,7 +9,6 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleAlert,
-  ExternalLink,
   FlaskConical,
   Gauge,
   GraduationCap,
@@ -783,35 +782,9 @@ export function CentroDeControl() {
 
   return (
     <div className="w-full">
-      <div className="relative flex flex-wrap items-start justify-between gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-600 to-sky-600 p-6 text-white shadow-xl shadow-emerald-700/25">
-        <div
-          aria-hidden="true"
-          className="absolute -right-10 -bottom-20 size-56 rounded-full bg-white/10"
-        />
-        <div
-          aria-hidden="true"
-          className="cabal-blob absolute right-40 -top-16 size-40 rounded-full bg-amber-300/25 blur-2xl"
-        />
-        <div className="relative">
-          <h1 className="text-3xl font-bold tracking-tight">Escudo Cabal</h1>
-          <p className="mt-1 text-sm text-white/85">
-            Tu tablero de decisiones — arrastra, achica/amplía o quita los
-            widgets a tu gusto.
-          </p>
-        </div>
-        <Link
-          href="/"
-          target="_blank"
-          className="relative inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-800 shadow-md transition-transform hover:scale-105"
-        >
-          Ver el sitio
-          <ExternalLink className="size-3.5" aria-hidden="true" />
-        </Link>
-      </div>
-
       <BannerEnVivo datos={monitoreo.datos} />
 
-      <div className="mt-6">
+      <div>
         <DashboardGrid
           widgets={widgets}
           storageKey="centro-control-layout-v1"

@@ -14,7 +14,7 @@ import { PrediccionesTab } from "./predicciones-tab";
 type TabId = "centro" | "votaciones" | "predicciones" | "avales";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: "centro", label: "Centro de control", icon: LayoutDashboard },
+  { id: "centro", label: "Monitoreo", icon: LayoutDashboard },
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Red Cabal", icon: Network },
   { id: "avales", label: "Avales", icon: ShieldCheck },
