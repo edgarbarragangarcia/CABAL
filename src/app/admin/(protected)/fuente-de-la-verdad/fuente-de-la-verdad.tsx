@@ -1,28 +1,54 @@
 "use client";
 
 import * as React from "react";
-import { Database, Library, Network } from "lucide-react";
+import { Library, Network } from "lucide-react";
 
 import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
 
 import { DatosTab } from "../analisis-publicaciones/datos-tab";
-import { DocumentosTab } from "../analisis-publicaciones/documentos-tab";
+import { DocumentosTab, type FuenteDatos } from "../analisis-publicaciones/documentos-tab";
+import { usePeticion } from "../analisis-publicaciones/peticion";
 import { MapaDatos } from "./mapa-datos";
 
 const OPCIONES = [
-  { id: "datos", label: "Datos electorales", icon: Database },
-  { id: "documentos", label: "Documentos", icon: Library },
+  { id: "biblioteca", label: "Documentos y datos", icon: Library },
   { id: "mapa", label: "Mapa de datos", icon: Network },
 ] as const;
 
-/** Ambas quedan montadas una vez abiertas: tienen cargas en curso que no deben cortarse al cambiar de pestaña. */
+type EstadoCargaRespuesta = { carga?: { carga?: { enMarcha?: boolean; ultimoLoteEn?: string | null; fin?: string; pendientes?: number | null } | null } };
+
+/**
+ * El gestor reúne lo que alimenta al panel: los documentos que se suben y las fuentes de datos (hoy, los resultados electorales),
+ * que se ven en la misma lista y en el mismo menú, como un documento más. Ambas pestañas quedan montadas una vez abiertas: tienen
+ * cargas en curso que no deben cortarse al cambiar de pestaña.
+ */
 export function FuenteDeLaVerdad() {
-  const [tab, setTab] = React.useState<(typeof OPCIONES)[number]["id"]>("datos");
-  const [abiertas, setAbiertas] = React.useState<ReadonlySet<string>>(new Set(["datos"]));
+  const [tab, setTab] = React.useState<(typeof OPCIONES)[number]["id"]>("biblioteca");
+  const [abiertas, setAbiertas] = React.useState<ReadonlySet<string>>(new Set(["biblioteca"]));
   const ir = (id: typeof tab) => {
     setTab(id);
     setAbiertas((a) => new Set(a).add(id));
   };
+
+  // Un resumen liviano de los datos electorales para mostrarlos en la lista (el panel completo se abre al elegir la fuente).
+  const total = usePeticion<{ filas: number | null }>("/api/admin/gestor/mapa?solo=electoral");
+  const carga = usePeticion<EstadoCargaRespuesta>("/api/admin/elecciones/almacen?solo=carga");
+  const filas = total.estado === "listo" ? total.data.filas : null;
+  const c = carga.estado === "listo" ? carga.data.carga?.carga : null;
+  const enMarcha = !!c?.enMarcha;
+  const fuentes: FuenteDatos[] = [
+    {
+      id: "electoral",
+      nombre: "Datos electorales",
+      detalle: "Resultados de todas las elecciones y cargos, de donde se alimentan Votaciones y Territorio",
+      resumen: filas === null ? "—" : `${filas.toLocaleString("es-CO")} filas`,
+      estado: enMarcha ? "Cargando" : filas === 0 ? "Sin cargar" : c?.fin === "error" || c?.fin === "pausa" ? "Pausada" : "Listo",
+      tono: enMarcha ? "curso" : filas === 0 || c?.fin === "error" || c?.fin === "pausa" ? "pendiente" : "ok",
+      fecha: c?.ultimoLoteEn ?? null,
+      contenido: <DatosTab />,
+    },
+  ];
+
   return (
     <div className="mt-6">
       <div className="flex gap-1 border-b border-border">
@@ -39,21 +65,16 @@ export function FuenteDeLaVerdad() {
         ))}
       </div>
       <Lienzo className="mt-6">
-        {tab === "datos" ? (
-          <Portada icono={Database} etiqueta="Datos electorales" titulo="Resultados guardados en Supabase" descripcion="La copia de todas las elecciones y cargos, de la que se alimentan Votaciones, Territorio y el resto del panel. La Registraduría solo se consulta para llenar esta copia.">
-            <ChipPortada icono={Database}>Se carga en el servidor, sin dejar la pantalla abierta</ChipPortada>
-          </Portada>
-        ) : tab === "mapa" ? (
-          <Portada icono={Network} etiqueta="Mapa de datos" titulo="Lo que hay en Supabase" descripcion="Cada módulo del panel y sus tablas como una red: cuánto guarda cada una y qué falta por crear.">
-            <ChipPortada icono={Network}>Toca un nodo para ver qué contiene</ChipPortada>
+        {tab === "biblioteca" ? (
+          <Portada icono={Library} etiqueta="Gestor documental" titulo="Documentos y fuentes de datos" descripcion="Los documentos de la Fundación y los datos electorales en un solo lugar: carpetas, versiones, papelera e historial, búsqueda por significado y preguntas con citas.">
+            <ChipPortada icono={Library}>Los datos electorales son una fuente más: ábrela desde la lista o el menú</ChipPortada>
           </Portada>
         ) : (
-          <Portada icono={Library} etiqueta="Gestor documental" titulo="Documentos de la Fundación" descripcion="Carpetas, versiones, papelera e historial, con búsqueda por significado y preguntas con citas sobre cada documento.">
-            <ChipPortada icono={Library}>Los archivos se vectorizan para buscarlos por lo que dicen</ChipPortada>
+          <Portada icono={Network} etiqueta="Mapa de datos" titulo="Lo que hay en Supabase" descripcion="Cada módulo del panel y lo que tiene dentro: documentos, portales, elecciones, comunidad… y qué falta por crear.">
+            <ChipPortada icono={Network}>Toca un módulo o un punto para ver qué contiene</ChipPortada>
           </Portada>
         )}
-        {abiertas.has("datos") && <div hidden={tab !== "datos"}><DatosTab /></div>}
-        {abiertas.has("documentos") && <div hidden={tab !== "documentos"}><DocumentosTab /></div>}
+        {abiertas.has("biblioteca") && <div hidden={tab !== "biblioteca"}><DocumentosTab fuentes={fuentes} /></div>}
         {abiertas.has("mapa") && <div hidden={tab !== "mapa"}><MapaDatos /></div>}
       </Lienzo>
     </div>

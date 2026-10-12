@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import {
-  Archive, ArchiveRestore, Check, Copy, Download, FileText, Folder, FolderOpen, FolderPlus, History, Inbox, Library, Loader2, MessageSquareText,
+  Archive, ArchiveRestore, Check, Copy, Database, Download, FileText, Folder, FolderOpen, FolderPlus, History, Inbox, Library, Loader2, MessageSquareText,
   Pencil, Play, Search, Sparkles, Trash2, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 
@@ -32,7 +32,7 @@ type Hallazgo = { documentoId: string; titulo: string; posicion: number; pagina:
 type Respuesta = { respuesta: string; fuentes: { n: number; documentoId: string; titulo: string; pagina: number | null; contenido: string }[]; avisos: string[] };
 type Fase = "espera" | "subiendo" | "procesando" | "vectorizando" | "listo" | "error";
 type Item = { clave: string; archivo: File; titulo: string; etiquetas: string[]; carpetaId: string | null; versionDe?: string; duplicar?: boolean; fase: Fase; progreso: number; detalle: string; error?: string; duplicadoDe?: string };
-type Vista = { tipo: "todos" } | { tipo: "sin" } | { tipo: "carpeta"; id: string } | { tipo: "papelera" };
+type Vista = { tipo: "todos" } | { tipo: "sin" } | { tipo: "carpeta"; id: string } | { tipo: "papelera" } | { tipo: "fuente"; id: string };
 
 const tarjeta = "rounded-2xl border border-border bg-surface shadow-sm";
 const campo = "w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand";
@@ -77,7 +77,35 @@ const ESTADO_CLASE: Record<Estado, string> = {
   error: "bg-red-500/15 text-red-700 dark:text-red-300",
 };
 
-export function DocumentosTab() {
+/**
+ * Una fuente de datos que vive en el gestor como un documento más: aparece en la lista (tipo «Datos») y en el menú lateral, y al
+ * abrirla muestra su propio panel (`contenido`), que se monta la primera vez que se abre y sigue montado.
+ */
+export type FuenteDatos = {
+  id: string;
+  nombre: string;
+  /** Una línea bajo el nombre. */
+  detalle: string;
+  /** En la columna «Tamaño»: «172.889 filas». */
+  resumen: string;
+  estado: string;
+  tono: "ok" | "curso" | "pendiente";
+  fecha?: string | null;
+  contenido: React.ReactNode;
+};
+
+const TONO_FUENTE: Record<FuenteDatos["tono"], string> = {
+  ok: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  curso: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  pendiente: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+};
+
+export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
+  const [fuentesAbiertas, setFuentesAbiertas] = React.useState<ReadonlySet<string>>(new Set());
+  const abrirFuente = (id: string) => {
+    setFuentesAbiertas((a) => new Set(a).add(id));
+    setVista({ tipo: "fuente", id });
+  };
   const [datos, setDatos] = React.useState<Datos | null>(null);
   const [cola, setCola] = React.useState<Item[]>([]);
   const [vista, setVista] = React.useState<Vista>({ tipo: "todos" });
@@ -340,6 +368,8 @@ export function DocumentosTab() {
     if (categoriaF) base = base.filter((d) => d.categoria?.trim() === categoriaF);
     return [...base].sort((a, b) => (orden === "titulo" ? a.titulo.localeCompare(b.titulo, "es") : orden === "tamano" ? (b.bytes ?? 0) - (a.bytes ?? 0) : b.creadoEn.localeCompare(a.creadoEn)));
   }, [vista, todos, papelera, conVersiones, texto, tipo, estadoF, categoriaF, orden, descendientes]);
+  /** Las fuentes de datos se ven en la lista general, como un documento más (sin filtros de texto activos). */
+  const filasFuente = vista.tipo === "todos" && !texto && !tipo && !estadoF && !categoriaF ? fuentes : [];
 
   const categorias = React.useMemo(() => [...new Set([...todos, ...papelera].map((d) => d.categoria?.trim()).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "es")), [todos, papelera]);
   const tipos = React.useMemo(() => [...new Set(todos.map((d) => d.tipo).filter((t): t is string => !!t))].sort(), [todos]);
@@ -478,10 +508,24 @@ export function DocumentosTab() {
                   <button type="button" onClick={() => setVista({ tipo: "papelera" })} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${vista.tipo === "papelera" ? "bg-brand-soft font-semibold" : "hover:bg-surface-muted"}`}><Archive className="size-4" /> Papelera <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{papelera.length}</span></button>
                 </>
               )}
+              {fuentes.length > 0 && (
+                <>
+                  <div className="my-2 border-t border-border" />
+                  <div className="px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Fuentes de datos</div>
+                  {fuentes.map((f) => {
+                    const activa = vista.tipo === "fuente" && vista.id === f.id;
+                    return (
+                      <button key={f.id} type="button" onClick={() => abrirFuente(f.id)} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${activa ? "bg-brand-soft font-semibold" : "hover:bg-surface-muted"}`}>
+                        <Database className="size-4" /> <span className="min-w-0 truncate">{f.nombre}</span>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </aside>
 
             <section
-              className={`${tarjeta} min-w-0 space-y-3 p-4 ${arrastrando ? "ring-2 ring-brand" : ""}`}
+              className={`${tarjeta} min-w-0 space-y-3 p-4 ${arrastrando ? "ring-2 ring-brand" : ""} ${vista.tipo === "fuente" ? "hidden" : ""}`}
               onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
               onDragLeave={() => setArrastrando(false)}
               onDrop={(e) => { e.preventDefault(); setArrastrando(false); if (e.dataTransfer.files.length) agregar(e.dataTransfer.files); }}
@@ -514,7 +558,7 @@ export function DocumentosTab() {
                 </div>
               )}
 
-              {lista.length === 0 ? (
+              {lista.length === 0 && filasFuente.length === 0 ? (
                 <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
                   <UploadCloud className="size-8" />
                   {vista.tipo === "papelera" ? "La papelera está vacía." : todos.length === 0 ? "Todavía no hay documentos. Arrastra archivos aquí o usa «Subir documentos»." : "Ningún documento coincide con los filtros."}
@@ -534,6 +578,20 @@ export function DocumentosTab() {
                       </tr>
                     </thead>
                     <tbody>
+                      {filasFuente.map((f) => (
+                        <tr key={f.id} onClick={() => abrirFuente(f.id)} className="cursor-pointer border-b border-border/60 hover:bg-surface-muted/60">
+                          <td className="px-3 py-2.5"><Database className="size-4 text-brand" aria-hidden="true" /></td>
+                          <td className="max-w-[22rem] px-3 py-2.5">
+                            <p className="truncate font-semibold">{f.nombre}</p>
+                            <p className="truncate text-xs text-muted-foreground">{f.detalle}</p>
+                          </td>
+                          {gestor && <td className="px-3 py-2.5 text-xs text-muted-foreground">Fuentes de datos</td>}
+                          <td className="px-3 py-2.5 text-xs font-semibold uppercase text-muted-foreground">Datos</td>
+                          <td className="px-3 py-2.5 text-right text-xs tabular-nums text-muted-foreground">{f.resumen}</td>
+                          <td className="px-3 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONO_FUENTE[f.tono]}`}>{f.estado}</span></td>
+                          <td className="px-3 py-2.5 text-xs text-muted-foreground">{fecha(f.fecha ?? null)}</td>
+                        </tr>
+                      ))}
                       {lista.map((d) => (
                         <tr key={d.id} onClick={() => setAbierto(d.id)} className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-muted/60 ${abierto === d.id ? "bg-brand-soft/60" : ""}`}>
                           <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${d.titulo}`} checked={sel.has(d.id)} onChange={() => alternar(d.id)} /></td>
@@ -555,9 +613,17 @@ export function DocumentosTab() {
               <p className="text-[11px] text-muted-foreground">{lista.length} documento{lista.length === 1 ? "" : "s"}. Arrastra archivos sobre esta zona para subirlos{vista.tipo === "carpeta" ? " a la carpeta abierta" : ""}. Etiquetas de subida:{" "}
                 <input value={etiquetasSubida} onChange={(e) => setEtiquetasSubida(e.target.value)} placeholder="plan de gobierno, Bolívar" aria-label="Etiquetas para lo que subas" className="ml-1 w-56 rounded-full border border-border bg-surface px-2 py-0.5 text-[11px]" /></p>
             </section>
+            {fuentes.map((f) => (
+              <div key={f.id} hidden={!(vista.tipo === "fuente" && vista.id === f.id)} className="min-w-0">
+                {fuentesAbiertas.has(f.id) && f.contenido}
+              </div>
+            ))}
           </div>
         </>
       )}
+
+      {/* Sin las tablas de documentos la rejilla de arriba no se ve: la fuente de datos no debe quedar inalcanzable. */}
+      {datos && !datos.tabla && fuentes.map((f) => <div key={f.id}>{f.contenido}</div>)}
 
       {documentoAbierto && <PanelDocumento key={documentoAbierto.id} doc={documentoAbierto} gestor={gestor} carpetas={carpetas} categorias={categorias} onNuevaCarpeta={crearYDevolver} vectorizando={vectorizando === documentoAbierto.id} onCerrar={() => setAbierto(null)} onDescargar={() => void descargar(documentoAbierto)} onContinuar={() => void continuar(documentoAbierto)} onGuardar={(c) => aplicar([documentoAbierto.id], c, "Cambios guardados.")} onVersion={() => { versionDe.current = documentoAbierto.id; entradaVersion.current?.click(); }} onEliminar={() => void eliminarDefinitivo([documentoAbierto.id])} />}
     </div>

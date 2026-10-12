@@ -3,53 +3,61 @@
 import * as React from "react";
 import { AlertTriangle, Check, Copy, Database, ExternalLink, RefreshCw } from "lucide-react";
 
-import type { ModuloMapa, RespuestaMapa, TablaMapa } from "@/lib/gestor/mapa";
+import type { Entidad, ModuloMapa, RespuestaMapa } from "@/lib/gestor/mapa";
 
 import { usePeticion } from "../analisis-publicaciones/peticion";
 
 /**
- * El mapa de Supabase como una red: al centro la base, alrededor cada módulo del panel y de ellos salen sus tablas. El tamaño
- * de cada nodo crece con sus filas; los huecos punteados son tablas que aún no existen (falta ejecutar su SQL).
+ * El mapa de lo que hay en Supabase, leído de izquierda a derecha como una red: la base → los módulos del panel → lo que hay
+ * dentro de cada uno (un documento, un portal, una elección, un político…). El tamaño del punto crece con su contenido; un
+ * punto hueco es algo que todavía no tiene datos o cuyas tablas faltan por crear.
  */
 
 const COLOR: Record<string, string> = { electoral: "#10b981", documentos: "#0ea5e9", monitoreo: "#f43f5e", territorio: "#f59e0b", comunidad: "#a855f7", portales: "#14b8a6" };
-// Ángulo (grados, 0 = derecha) de cada módulo alrededor del centro: Portales, con 14 tablas, queda a un lado con espacio.
-const ANGULO: Record<string, number> = { portales: 160, monitoreo: 88, territorio: 52, comunidad: 5, electoral: 322, documentos: 250 };
-const W = 1000;
-const H = 720;
-const CX = W / 2;
-const CY = H / 2;
-const R_HUB = 175;
+// Orden de arriba hacia abajo: primero lo más importante para la Fundación.
+const ORDEN = ["documentos", "electoral", "portales", "comunidad", "territorio", "monitoreo"];
+const UNIDAD: Record<string, string> = { documentos: "documento", electoral: "elección", portales: "portal", comunidad: "tipo de dato", territorio: "conjunto de datos", monitoreo: "político" };
 
-const num = (n: number | null) => (n === null ? "—" : n.toLocaleString("es-CO"));
-const radio = (filas: number | null) => (filas === null ? 7 : 7 + Math.min(11, Math.log10(filas + 1) * 2.2));
-const polar = (grados: number, r: number) => ({ x: CX + r * Math.cos((grados * Math.PI) / 180), y: CY + r * Math.sin((grados * Math.PI) / 180) });
+const W = 880;
+const X_BASE = 62;
+const X_MODULO = 262;
+const X_ENTIDAD = 470;
+const FILA = 50;
+const SEPARACION = 22;
+const ANCHO_MODULO = 168;
 
-type Nodo = { modulo: ModuloMapa; tabla: TablaMapa; x: number; y: number; r: number; ancla: boolean };
+const num = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("es-CO"));
+const radio = (cantidad: number, vacia: boolean) => (vacia ? 8 : 9 + Math.min(11, Math.log10(cantidad + 1) * 2.6));
 
-function distribuir(modulos: ModuloMapa[]) {
-  const hubs = modulos.map((m) => ({ modulo: m, ...polar(ANGULO[m.id] ?? 0, R_HUB), ang: ANGULO[m.id] ?? 0 }));
-  const nodos: Nodo[] = [];
-  for (const h of hubs) {
-    const n = h.modulo.tablas.length;
-    const span = Math.min(110, 16 + n * 10);
-    h.modulo.tablas.forEach((t, i) => {
-      const a = n === 1 ? h.ang : h.ang - span / 2 + (span * i) / (n - 1);
-      const p = polar(a, R_HUB + (n > 6 ? (i % 2 ? 150 : 95) : 100)); // dos anillos cuando hay muchas tablas
-      // Las tablas salen desde el centro hacia afuera pero se anclan al hub: se reubican alrededor de él.
-      const d = Math.hypot(p.x - CX, p.y - CY) - R_HUB;
-      const q = { x: h.x + d * Math.cos((a * Math.PI) / 180), y: h.y + d * Math.sin((a * Math.PI) / 180) };
-      nodos.push({ modulo: h.modulo, tabla: t, x: q.x, y: q.y, r: radio(t.filas), ancla: t.tabla === h.modulo.ancla });
-    });
+type NodoEntidad = { clave: string; modulo: string; y: number; r: number; entidad: Entidad; vacia: boolean; relleno: boolean };
+type NodoModulo = { modulo: ModuloMapa; y: number; faltan: boolean };
+
+function construir(modulos: ModuloMapa[]) {
+  const ordenados = [...modulos].sort((a, b) => ORDEN.indexOf(a.id) - ORDEN.indexOf(b.id));
+  const entidades: NodoEntidad[] = [];
+  const mods: NodoModulo[] = [];
+  let y = 36;
+  for (const m of ordenados) {
+    const faltan = m.tablas.some((t) => t.filas === null);
+    const lista: Entidad[] = m.entidades.length > 0 ? m.entidades : [{ id: `${m.id}-vacio`, nombre: faltan ? "Faltan crear las tablas" : "Todavía no hay nada guardado", resumen: faltan ? "Usa «Copiar el SQL que falta»" : "Cuando haya datos aparecerán aquí", cantidad: 0, unidad: "", hijos: [] }];
+    const inicio = y;
+    for (const e of lista) {
+      const relleno = e.cantidad > 0 || e.hijos.length > 0;
+      const vacia = !relleno && m.entidades.length === 0 ? true : !relleno;
+      entidades.push({ clave: `${m.id}:${e.id}`, modulo: m.id, y, r: radio(e.cantidad, vacia), entidad: e, vacia, relleno });
+      y += FILA;
+    }
+    mods.push({ modulo: m, y: (inicio + y - FILA) / 2, faltan });
+    y += SEPARACION;
   }
-  return { hubs, nodos };
+  return { mods, entidades, alto: y + 10 };
 }
 
 export function MapaDatos() {
   const [v, setV] = React.useState(0);
   const r = usePeticion<RespuestaMapa>(`/api/admin/gestor/mapa${v ? `?v=${v}` : ""}`);
   const datos = r.estado === "listo" ? r.data : undefined;
-  const [sel, setSel] = React.useState<{ modulo: string; tabla?: string } | null>(null);
+  const [sel, setSel] = React.useState<{ modulo: string; entidad?: string } | null>(null);
   const [copiado, setCopiado] = React.useState<string | null>(null);
   const copiar = (clave: string, texto: string) => {
     navigator.clipboard?.writeText(texto);
@@ -57,20 +65,22 @@ export function MapaDatos() {
     setTimeout(() => setCopiado(null), 1600);
   };
 
-  const { hubs, nodos } = React.useMemo(() => (datos ? distribuir(datos.modulos) : { hubs: [], nodos: [] }), [datos]);
-  const actual = datos ? datos.modulos.find((m) => m.id === (sel?.modulo ?? datos.modulos[0]?.id)) : undefined;
-  const tablaSel = actual?.tablas.find((t) => t.tabla === sel?.tabla);
+  const grafo = React.useMemo(() => (datos ? construir(datos.modulos) : null), [datos]);
+  const moduloActual = datos ? datos.modulos.find((m) => m.id === (sel?.modulo ?? ORDEN.find((o) => datos.modulos.some((m) => m.id === o)))) : undefined;
+  const entidadActual = moduloActual?.entidades.find((e) => e.id === sel?.entidad);
 
   const todas = datos?.modulos.flatMap((m) => m.tablas) ?? [];
-  const conDatos = todas.filter((t) => (t.filas ?? 0) > 0).length;
   const faltan = todas.filter((t) => t.filas === null).length;
+  const de = (id: string) => datos?.modulos.find((m) => m.id === id)?.entidades ?? [];
+  const portales = de("portales");
+  const elecciones = de("electoral");
   const filas = todas.reduce((s, t) => s + (t.filas ?? 0), 0);
 
   return (
     <div className="space-y-4">
-      <style>{`@keyframes mapa-pulso{to{stroke-dashoffset:-24}}@keyframes mapa-late{0%,100%{opacity:.55}50%{opacity:1}}.mapa-arista{stroke-dasharray:3 9;animation:mapa-pulso 2.4s linear infinite}.mapa-nodo{animation:mapa-late 3.2s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.mapa-arista,.mapa-nodo{animation:none}}`}</style>
+      <style>{`@keyframes mapa-pulso{to{stroke-dashoffset:-24}}.mapa-arista{stroke-dasharray:3 9;animation:mapa-pulso 2.4s linear infinite}@media (prefers-reduced-motion:reduce){.mapa-arista{animation:none}}`}</style>
       <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">Todo lo que guarda el panel en Supabase, por módulo. Toca un módulo o una tabla para ver qué contiene.</p>
+        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">Lo que tiene guardado el panel en Supabase, de izquierda a derecha: la base, sus módulos y lo que hay dentro de cada uno. Toca un módulo o un punto para ver el detalle.</p>
         <button type="button" onClick={() => setV((n) => n + 1)} disabled={r.estado === "cargando"} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60">
           <RefreshCw className={`size-3 ${r.estado === "cargando" ? "animate-spin" : ""}`} aria-hidden="true" /> Actualizar
         </button>
@@ -79,17 +89,19 @@ export function MapaDatos() {
       {r.estado === "cargando" && !datos && <p className="text-sm text-muted-foreground">Leyendo Supabase…</p>}
       {datos && !datos.conectado && <p className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">Supabase no está conectado en este entorno (faltan SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).</p>}
 
-      {datos && (
+      {datos && grafo && (
         <>
-          <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
+          <div className="grid grid-cols-2 gap-2 text-center sm:gap-3 lg:grid-cols-4">
             {[
-              { l: "Tablas con datos", v: `${conDatos} de ${todas.length}` },
-              { l: "Filas guardadas", v: num(filas) },
-              { l: "Tablas por crear", v: String(faltan) },
+              { l: "Documentos", v: num(de("documentos").length), d: "en la biblioteca" },
+              { l: "Portales", v: num(portales.length), d: `${portales.filter((p) => p.cantidad > 0).length} con contenido` },
+              { l: "Elecciones", v: num(elecciones.filter((e) => e.cantidad > 0).length), d: `cargadas de ${elecciones.length}` },
+              { l: "Registros", v: num(filas), d: "en todas las tablas" },
             ].map((k) => (
               <div key={k.l} className="rounded-2xl border border-border bg-surface p-3">
                 <p className="text-lg font-bold tabular-nums sm:text-2xl">{k.v}</p>
-                <p className="text-[11px] text-muted-foreground">{k.l}</p>
+                <p className="text-xs font-semibold">{k.l}</p>
+                <p className="text-[11px] text-muted-foreground">{k.d}</p>
               </div>
             ))}
           </div>
@@ -103,102 +115,122 @@ export function MapaDatos() {
             </div>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="overflow-hidden rounded-2xl bg-slate-950 ring-1 ring-border">
-              <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Mapa de las tablas guardadas en Supabase">
-                {hubs.map((h) => (
-                  <line key={`c-${h.modulo.id}`} x1={CX} y1={CY} x2={h.x} y2={h.y} stroke={COLOR[h.modulo.id]} strokeOpacity={0.55} strokeWidth={1.5} className="mapa-arista" />
-                ))}
-                {nodos.map((n) => {
-                  const h = hubs.find((x) => x.modulo.id === n.modulo.id)!;
-                  return <line key={`e-${n.tabla.tabla}`} x1={h.x} y1={h.y} x2={n.x} y2={n.y} stroke={COLOR[n.modulo.id]} strokeOpacity={n.tabla.filas === null ? 0.15 : 0.4} strokeWidth={1} className={n.tabla.filas === null ? undefined : "mapa-arista"} />;
-                })}
-                {nodos.map((n) => {
-                  const activo = sel?.tabla === n.tabla.tabla;
-                  const falta = n.tabla.filas === null;
-                  return (
-                    <g key={n.tabla.tabla} onClick={() => setSel({ modulo: n.modulo.id, tabla: n.tabla.tabla })} className="cursor-pointer" role="button" aria-label={`${n.tabla.tabla}: ${num(n.tabla.filas)} filas`}>
-                      <circle cx={n.x} cy={n.y} r={n.r + 8} fill="transparent" />
-                      <circle cx={n.x} cy={n.y} r={n.r} fill={falta ? "none" : COLOR[n.modulo.id]} fillOpacity={falta ? 0 : n.tabla.filas ? 0.9 : 0.35} stroke={activo ? "#fff" : COLOR[n.modulo.id]} strokeWidth={activo ? 2.5 : 1.5} strokeDasharray={falta ? "3 3" : undefined} className={falta ? undefined : "mapa-nodo"} />
-                      {(activo || n.ancla || n.r > 13) && <text x={n.x} y={n.y + n.r + 12} textAnchor="middle" className="fill-white/80 text-[10px]">{n.tabla.tabla.replace(/^portal_|^documento_/, "")}</text>}
-                    </g>
-                  );
-                })}
-                {hubs.map((h) => {
-                  const activo = (sel?.modulo ?? datos.modulos[0]?.id) === h.modulo.id;
-                  return (
-                    <g key={h.modulo.id} onClick={() => setSel({ modulo: h.modulo.id })} className="cursor-pointer" role="button" aria-label={h.modulo.nombre}>
-                      <circle cx={h.x} cy={h.y} r={24} fill="#0f172a" stroke={COLOR[h.modulo.id]} strokeWidth={activo ? 4 : 2.5} />
-                      <text x={h.x} y={h.y + 4} textAnchor="middle" className="fill-white text-[11px] font-bold">{h.modulo.tablas.length}</text>
-                      <text x={h.x} y={h.y - 32} textAnchor="middle" className="fill-white text-[13px] font-semibold">{h.modulo.nombre}</text>
-                    </g>
-                  );
-                })}
-                <circle cx={CX} cy={CY} r={42} fill="#0f172a" stroke="#34d399" strokeWidth={3} className="mapa-nodo" />
-                <text x={CX} y={CY - 2} textAnchor="middle" className="fill-white text-[13px] font-bold">Supabase</text>
-                <text x={CX} y={CY + 14} textAnchor="middle" className="fill-emerald-300 text-[10px]">{num(filas)} filas</text>
-              </svg>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
+            <div className="min-w-0 overflow-hidden rounded-2xl bg-slate-950 ring-1 ring-border">
+              <div className="overflow-x-auto">
+                <svg viewBox={`0 0 ${W} ${grafo.alto}`} className="block h-auto w-full min-w-[700px]" role="img" aria-label="Mapa de lo que hay guardado en Supabase">
+                  {/* de la base a cada módulo */}
+                  {grafo.mods.map((m) => {
+                    const x1 = X_BASE + 46;
+                    const x2 = X_MODULO - ANCHO_MODULO / 2;
+                    const xm = (x1 + x2) / 2;
+                    return <path key={`b-${m.modulo.id}`} d={`M${x1} ${grafo.alto / 2} C${xm} ${grafo.alto / 2} ${xm} ${m.y} ${x2} ${m.y}`} fill="none" stroke={COLOR[m.modulo.id]} strokeOpacity={0.55} strokeWidth={1.6} className="mapa-arista" />;
+                  })}
+                  {/* de cada módulo a lo que tiene dentro */}
+                  {grafo.entidades.map((n) => {
+                    const m = grafo.mods.find((x) => x.modulo.id === n.modulo)!;
+                    const x1 = X_MODULO + ANCHO_MODULO / 2;
+                    const x2 = X_ENTIDAD - n.r;
+                    const xm = (x1 + x2) / 2;
+                    return <path key={`e-${n.clave}`} d={`M${x1} ${m.y} C${xm} ${m.y} ${xm} ${n.y} ${x2} ${n.y}`} fill="none" stroke={COLOR[n.modulo]} strokeOpacity={n.relleno ? 0.5 : 0.18} strokeWidth={1.2} className={n.relleno ? "mapa-arista" : undefined} />;
+                  })}
+
+                  {/* lo que hay dentro */}
+                  {grafo.entidades.map((n) => {
+                    const activo = sel?.modulo === n.modulo && sel.entidad === n.entidad.id;
+                    return (
+                      <g key={n.clave} onClick={() => setSel({ modulo: n.modulo, entidad: n.entidad.id })} className="cursor-pointer" role="button" aria-label={`${n.entidad.nombre}: ${n.entidad.resumen}`}>
+                        <rect x={X_ENTIDAD - n.r - 6} y={n.y - FILA / 2 + 3} width={W - X_ENTIDAD + n.r} height={FILA - 6} rx={10} fill={activo ? "#ffffff" : "transparent"} fillOpacity={0.08} />
+                        <circle cx={X_ENTIDAD} cy={n.y} r={n.r} fill={n.relleno ? COLOR[n.modulo] : "none"} fillOpacity={0.9} stroke={activo ? "#fff" : COLOR[n.modulo]} strokeWidth={activo ? 3 : 1.6} strokeDasharray={n.relleno ? undefined : "3 3"} />
+                        <text x={X_ENTIDAD + n.r + 12} y={n.y - 3} className="fill-white text-[14px] font-semibold">{n.entidad.nombre.length > 38 ? `${n.entidad.nombre.slice(0, 37)}…` : n.entidad.nombre}</text>
+                        <text x={X_ENTIDAD + n.r + 12} y={n.y + 14} className="fill-slate-300 text-[11.5px]">{n.entidad.resumen.length > 54 ? `${n.entidad.resumen.slice(0, 53)}…` : n.entidad.resumen}</text>
+                      </g>
+                    );
+                  })}
+
+                  {/* los módulos */}
+                  {grafo.mods.map((m) => {
+                    const activo = (sel?.modulo ?? grafo.mods[0].modulo.id) === m.modulo.id;
+                    const cuantos = m.modulo.entidades.length;
+                    return (
+                      <g key={m.modulo.id} onClick={() => setSel({ modulo: m.modulo.id })} className="cursor-pointer" role="button" aria-label={m.modulo.nombre}>
+                        <rect x={X_MODULO - ANCHO_MODULO / 2} y={m.y - 24} width={ANCHO_MODULO} height={48} rx={24} fill="#0f172a" stroke={COLOR[m.modulo.id]} strokeWidth={activo ? 3.5 : 2} strokeDasharray={m.faltan ? "5 4" : undefined} />
+                        <text x={X_MODULO} y={m.y - 2} textAnchor="middle" className="fill-white text-[14px] font-bold">{m.modulo.nombre}</text>
+                        <text x={X_MODULO} y={m.y + 14} textAnchor="middle" className="fill-slate-300 text-[11px]">{m.faltan && cuantos === 0 ? "faltan tablas" : `${cuantos} ${UNIDAD[m.modulo.id] ?? "elemento"}${cuantos === 1 ? "" : "s"}`}</text>
+                      </g>
+                    );
+                  })}
+
+                  {/* la base */}
+                  <circle cx={X_BASE} cy={grafo.alto / 2} r={46} fill="#0f172a" stroke="#34d399" strokeWidth={3.5} />
+                  <text x={X_BASE} y={grafo.alto / 2 - 6} textAnchor="middle" className="fill-white text-[14px] font-bold">Supabase</text>
+                  <text x={X_BASE} y={grafo.alto / 2 + 10} textAnchor="middle" className="fill-emerald-300 text-[11px] font-semibold">{num(filas)}</text>
+                  <text x={X_BASE} y={grafo.alto / 2 + 23} textAnchor="middle" className="fill-emerald-300/80 text-[9.5px]">registros</text>
+                </svg>
+              </div>
               <p className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/10 px-4 py-2 text-[11px] text-slate-300">
-                <span>Nodo grande = más filas</span>
-                <span>Línea punteada y hueco = tabla sin crear</span>
-                <span>El número en el módulo = cuántas tablas tiene</span>
+                <span>Punto grande = más contenido</span>
+                <span>Punto hueco = todavía sin datos</span>
+                <span>Borde punteado = faltan tablas por crear</span>
               </p>
             </div>
 
-            {actual && (
-              <aside className="min-w-0 rounded-2xl border border-border bg-surface p-4">
-                <p className="flex items-center gap-2 text-sm font-semibold"><span className="size-3 rounded-full" style={{ background: COLOR[actual.id] }} />{actual.nombre}</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">SQL: {actual.archivo}</p>
-                {actual.sql && (
-                  <button type="button" onClick={() => copiar(actual.id, actual.sql ?? "")} className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-500/10 dark:text-amber-200">
-                    {copiado === actual.id ? <Check className="size-3" /> : <Copy className="size-3" />}{copiado === actual.id ? "Copiado" : "Copiar el SQL de este módulo"}
-                  </button>
-                )}
-                {tablaSel && (
-                  <p className="mt-3 rounded-xl bg-surface-muted p-3 text-xs"><strong>{tablaSel.tabla}</strong><br />{tablaSel.sirve}<br /><span className="text-muted-foreground">{tablaSel.filas === null ? "La tabla no existe todavía." : `${num(tablaSel.filas)} filas`}</span></p>
-                )}
-                <ul className="mt-3 divide-y divide-border text-xs">
-                  {actual.tablas.map((t) => (
-                    <li key={t.tabla}>
-                      <button type="button" onClick={() => setSel({ modulo: actual.id, tabla: t.tabla })} className={`flex w-full items-center justify-between gap-2 py-2 text-left hover:text-brand ${tablaSel?.tabla === t.tabla ? "font-semibold" : ""}`}>
-                        <span className="min-w-0 truncate">{t.tabla}</span>
-                        {t.filas === null ? <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300"><AlertTriangle className="size-3" />sin crear</span> : <span className="tabular-nums">{num(t.filas)}</span>}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+            {moduloActual && (
+              <aside className="min-w-0 space-y-3 rounded-2xl border border-border bg-surface p-4">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-semibold"><span className="size-3 rounded-full" style={{ background: COLOR[moduloActual.id] }} />{moduloActual.nombre}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">SQL: {moduloActual.archivo}</p>
+                </div>
 
-                {actual.id === "documentos" && (
-                  <div className="mt-3 border-t border-border pt-3 text-xs">
-                    <p className="font-semibold">Carpetas</p>
-                    {datos.detalle.carpetas.length === 0 && datos.detalle.sinCarpeta === 0 ? <p className="text-muted-foreground">Aún no hay documentos.</p> : (
-                      <ul className="mt-1 space-y-1">
-                        {datos.detalle.carpetas.map((c) => <li key={c.nombre} className="flex justify-between"><span>{c.nombre}</span><span className="tabular-nums">{c.documentos}</span></li>)}
-                        <li className="flex justify-between text-muted-foreground"><span>Sin carpeta</span><span className="tabular-nums">{datos.detalle.sinCarpeta}</span></li>
+                {entidadActual && (
+                  <div className="rounded-xl bg-surface-muted p-3 text-xs">
+                    <p className="text-sm font-semibold">{entidadActual.nombre}</p>
+                    <p className="mt-0.5 text-muted-foreground">{entidadActual.resumen}</p>
+                    {entidadActual.hijos.length > 0 && (
+                      <ul className="mt-2 divide-y divide-border">
+                        {entidadActual.hijos.map((h) => <li key={h.nombre} className="flex justify-between gap-2 py-1"><span className="min-w-0 truncate">{h.nombre}</span><span className="tabular-nums font-semibold">{num(h.cantidad)}</span></li>)}
                       </ul>
                     )}
                   </div>
                 )}
-                {actual.id === "electoral" && datos.detalle.elecciones.length > 0 && (
-                  <div className="mt-3 border-t border-border pt-3 text-xs">
-                    <p className="font-semibold">Elecciones guardadas</p>
-                    <ul className="mt-1 space-y-1">
-                      {datos.detalle.elecciones.slice(0, 12).map((e) => <li key={`${e.eleccion}${e.corporacion}`} className="flex justify-between gap-2"><span className="min-w-0 truncate">{e.eleccion} · {e.corporacion}</span><span className="tabular-nums">{num(e.guardados)}</span></li>)}
+
+                {moduloActual.entidades.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Qué hay dentro ({moduloActual.entidades.length})</p>
+                    <ul className="mt-1 divide-y divide-border text-xs">
+                      {moduloActual.entidades.map((e) => (
+                        <li key={e.id}>
+                          <button type="button" onClick={() => setSel({ modulo: moduloActual.id, entidad: e.id })} className={`block w-full py-2 text-left hover:text-brand ${entidadActual?.id === e.id ? "font-semibold" : ""}`}>
+                            <span className="block truncate">{e.nombre}</span>
+                            <span className="block truncate text-[11px] font-normal text-muted-foreground">{e.resumen}</span>
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 )}
-                {actual.id === "monitoreo" && datos.detalle.personajes.length > 0 && (
-                  <div className="mt-3 border-t border-border pt-3 text-xs">
-                    <p className="font-semibold">Por político</p>
-                    <ul className="mt-1 space-y-1">
-                      {datos.detalle.personajes.map((p) => <li key={p.personaje} className="flex justify-between"><span>{p.personaje}</span><span className="tabular-nums">{p.items} · la nombran {p.nombran}</span></li>)}
-                    </ul>
-                  </div>
+
+                <details className="rounded-xl border border-border p-2 text-xs">
+                  <summary className="cursor-pointer font-semibold">Tablas de este módulo ({moduloActual.tablas.length})</summary>
+                  <ul className="mt-2 divide-y divide-border">
+                    {moduloActual.tablas.map((t) => (
+                      <li key={t.tabla} className="flex items-center justify-between gap-2 py-1.5" title={t.sirve}>
+                        <span className="min-w-0 truncate">{t.tabla}</span>
+                        {t.filas === null ? <span className="inline-flex shrink-0 items-center gap-1 text-amber-700 dark:text-amber-300"><AlertTriangle className="size-3" />sin crear</span> : <span className="tabular-nums">{num(t.filas)}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+
+                {moduloActual.sql && (
+                  <button type="button" onClick={() => copiar(moduloActual.id, moduloActual.sql ?? "")} className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-500/10 dark:text-amber-200">
+                    {copiado === moduloActual.id ? <Check className="size-3" /> : <Copy className="size-3" />}{copiado === moduloActual.id ? "Copiado" : "Copiar el SQL de este módulo"}
+                  </button>
                 )}
               </aside>
             )}
           </div>
-          <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground"><Database className="mt-0.5 size-3 shrink-0" aria-hidden="true" /><span>Las cifras de tablas muy grandes son estimadas por Supabase. Las tablas sin crear se activan ejecutando su archivo SQL en Supabase › SQL Editor.</span></p>
+          <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground"><Database className="mt-0.5 size-3 shrink-0" aria-hidden="true" /><span>Los trozos de un documento son cómo se parte para poder buscar dentro de él: se cuentan dentro del documento. Las cifras de tablas muy grandes son estimadas por Supabase.</span></p>
         </>
       )}
     </div>
