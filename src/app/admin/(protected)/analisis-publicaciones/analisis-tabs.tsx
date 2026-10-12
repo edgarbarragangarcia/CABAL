@@ -4,7 +4,7 @@ import * as React from "react";
 import type { LucideIcon } from "lucide-react";
 import { LayoutDashboard, Network, ShieldCheck, Vote } from "lucide-react";
 
-import { CentroDeControl } from "@/components/admin/centro-control";
+import { MonitoreoSecciones } from "@/components/admin/monitoreo-secciones";
 
 import { AvalesTab } from "./avales-tab";
 import { ExploradorElectoral } from "./explorador-electoral";
@@ -57,7 +57,7 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
       </div>
 
       <div className="mt-6">
-        {tab === "centro" && <CentroDeControl />}
+        {tab === "centro" && <MonitoreoSecciones />}
         {tab === "votaciones" && <ExploradorElectoral />}
         {tab === "predicciones" && <PrediccionesTab />}
         {tab === "avales" && <AvalesTab />}

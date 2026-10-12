@@ -121,3 +121,36 @@ export async function eleccionesDeAmbito(id: string, dane: string): Promise<Elec
     })
   );
 }
+
+/**
+ * Votos de María Fernanda Cabal en cada hijo de un lugar sub-municipal (comunas, barrios o puestos), para colorear la lista.
+ * Solo lee de Supabase; un hijo sin resultado guardado no aparece.
+ */
+export async function votosCabalDeHijos(hijos: string[], dane: string, eleccionId: string): Promise<{ votos: Record<string, number>; guardados: number }> {
+  const c = getSupabaseServerClient();
+  if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
+  const datos = (await ELECCIONES_DATA[eleccionId as keyof typeof ELECCIONES_DATA]()).default as unknown as { corporaciones: { sigla: string; geo: string }[] };
+  const geoKey = datos.corporaciones.find((x) => x.sigla === "SE")?.geo;
+  const ix = geoKey ? await indiceDe(geoKey, dane) : null;
+  if (!ix) return { votos: {}, guardados: 0 };
+  const codigosDe = new Map<string, string[]>();
+  for (const h of hijos) {
+    const am = await ambitosDe(h);
+    if (!am) continue;
+    const cods = am.zonas.length > 0 ? am.zonas.map((z) => ix.zonas.get(z)) : am.puestos.map((p) => ix.puestos.get(`${p.zona}|${normalizar(p.nombre)}`) || ix.puestos.get(normalizar(p.nombre)));
+    codigosDe.set(h, cods.filter((x): x is string => !!x));
+  }
+  const todos = [...new Set([...codigosDe.values()].flat())];
+  const porCodigo = new Map<string, number>();
+  for (let i = 0; i < todos.length; i += 150) {
+    const { data, error } = await c.from("resultados_electorales").select("ambito, datos").eq("eleccion", eleccionId).eq("corporacion", "SE").eq("vacio", false).in("ambito", todos.slice(i, i + 150));
+    if (error) throw new Error(error.message);
+    for (const f of (data ?? []) as { ambito: string; datos: Resultado | null }[]) if (f.datos) porCodigo.set(f.ambito, resumirResultado(f.datos).cabal?.votos ?? 0);
+  }
+  const votos: Record<string, number> = {};
+  for (const [h, cods] of codigosDe) {
+    const guardados = cods.filter((x) => porCodigo.has(x));
+    if (guardados.length > 0) votos[h] = guardados.reduce((s, x) => s + (porCodigo.get(x) ?? 0), 0);
+  }
+  return { votos, guardados: Object.keys(votos).length };
+}

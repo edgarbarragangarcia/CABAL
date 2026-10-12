@@ -57,7 +57,7 @@ export function TerritorioMapa({ url, idDe, alElegir, valores }: { url: string; 
   const actual = formas.find((f) => f.code === sobre);
   const max = valores ? Math.max(0, ...Object.values(valores)) : 0;
   const fmt = (n: number) => n.toLocaleString("es-CO");
-  const valorDe = (code: string) => (valores ? valores[code] ?? valores[code.padStart(5, "0")] : undefined);
+  const valorDe = (code: string) => (valores ? valores[idDe(code)] ?? valores[code] : undefined);
   return (
     <div className="relative mx-auto max-w-xl">
       <svg viewBox={`0 0 ${W} ${H}`} role="group" aria-label="Mapa para elegir un lugar" className="h-auto w-full">

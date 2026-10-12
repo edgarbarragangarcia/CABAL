@@ -205,7 +205,8 @@ function Buscador({ alElegir }: { alElegir: (id: string) => void }) {
 }
 
 /** Lo que se puede elegir ahora, un nivel más abajo. */
-function Elegir({ lugar, alElegir, compacto = false }: { lugar: Lugar; alElegir: (id: string) => void; compacto?: boolean }) {
+function Elegir({ lugar, alElegir, compacto = false, valores }: { lugar: Lugar; alElegir: (id: string) => void; compacto?: boolean; /** Votos de María Fernanda por lugar: colorea cada uno según cuántos tuvo. */ valores?: Record<string, number> | null }) {
+  const max = valores ? Math.max(0, ...Object.values(valores)) : 0;
   const [vista, setVista] = React.useState(0);
   const [filtro, setFiltro] = React.useState("");
   const [todo, setTodo] = React.useState(false);
@@ -231,8 +232,13 @@ function Elegir({ lugar, alElegir, compacto = false }: { lugar: Lugar; alElegir:
       <ul className={compacto ? "grid grid-cols-1 gap-2" : "grid gap-2 sm:grid-cols-2 lg:grid-cols-3"}>
         {ver.map((i) => (
           <li key={i.id}>
-            <button type="button" onClick={() => alElegir(i.id)} className="flex h-full w-full items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left transition hover:border-brand hover:bg-surface-muted">
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{titulo(i.nombre)}</span>{i.detalle && <span className="block truncate text-xs text-muted-foreground">{i.detalle}</span>}</span>
+            <button
+              type="button"
+              onClick={() => alElegir(i.id)}
+              style={valores ? { backgroundColor: valores[i.id] === undefined ? undefined : `color-mix(in srgb, var(--brand) ${Math.round(8 + 42 * Math.sqrt(max > 0 ? valores[i.id] / max : 0))}%, transparent)` } : undefined}
+              className="flex h-full w-full items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left transition hover:border-brand"
+            >
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{titulo(i.nombre)}</span>{(i.detalle || valores?.[i.id] !== undefined) && <span className="block truncate text-xs text-muted-foreground">{valores?.[i.id] !== undefined ? <b className="text-foreground">{fmt(valores[i.id])} votos</b> : null}{valores?.[i.id] !== undefined && i.detalle ? " · " : ""}{i.detalle}</span>}</span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             </button>
           </li>
@@ -244,31 +250,31 @@ function Elegir({ lugar, alElegir, compacto = false }: { lugar: Lugar; alElegir:
   );
 }
 
-/** El mapa para elegir con un clic y, a su lado, la lista con filtro para quien prefiere escribir. */
+/** El mapa (donde lo hay) y la lista de lugares, ambos coloreados por los votos de María Fernanda Cabal. */
 function Explorar({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => void }) {
   const mapa = mapaDe(lugar.id, lugar.nivel);
   const [eleccion, setEleccion] = React.useState("congreso-2022");
-  const pinta = lugar.nivel === "pais" ? "co" : lugar.nivel === "departamento" ? lugar.id : null;
-  const votos = usePeticion<{ votos: Record<string, number>; guardados: number; elecciones: { id: string; titulo: string }[] }>(pinta ? `/api/admin/territorio/mapa?id=${pinta}&eleccion=${eleccion}` : null);
-  if (!mapa) return <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} />;
+  const votos = usePeticion<{ votos: Record<string, number>; guardados: number; elecciones: { id: string; titulo: string }[] }>(`/api/admin/territorio/mapa?id=${encodeURIComponent(lugar.id)}&eleccion=${eleccion}`);
   const v = votos.estado === "listo" && votos.data.guardados > 0 ? votos.data : null;
+  const barra = (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span className="font-semibold">Coloreado por los votos de María Fernanda Cabal en</span>
+      {(votos.estado === "listo" ? votos.data.elecciones : [{ id: "congreso-2022", titulo: "Senado 2022" }, { id: "congreso-2018", titulo: "Senado 2018" }]).map((e) => (
+        <button key={e.id} type="button" onClick={() => setEleccion(e.id)} className={`rounded-full px-3 py-1 font-semibold ${eleccion === e.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border text-muted-foreground hover:text-foreground"}`}>{e.titulo}</button>
+      ))}
+      {votos.estado === "listo" && votos.data.guardados === 0 && <span className="text-muted-foreground">Aún no hay resultados guardados de esta elección para estos lugares (se cargan en Fuente de la verdad).</span>}
+      {votos.estado === "error" && <span className="text-muted-foreground">{votos.error}</span>}
+    </div>
+  );
+  if (!mapa) return <div className="space-y-3">{barra}<Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} valores={v?.votos ?? null} /></div>;
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <div className="space-y-3">
-        {pinta && (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-semibold">Pintado por los votos de María Fernanda Cabal en</span>
-            {(votos.estado === "listo" ? votos.data.elecciones : [{ id: "congreso-2022", titulo: "Senado 2022" }, { id: "congreso-2018", titulo: "Senado 2018" }]).map((e) => (
-              <button key={e.id} type="button" onClick={() => setEleccion(e.id)} className={`rounded-full px-3 py-1 font-semibold ${eleccion === e.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border text-muted-foreground hover:text-foreground"}`}>{e.titulo}</button>
-            ))}
-            {votos.estado === "listo" && votos.data.guardados === 0 && <span className="text-muted-foreground">Aún no hay resultados guardados de esta elección en Supabase.</span>}
-            {votos.estado === "error" && <span className="text-muted-foreground">{votos.error}</span>}
-          </div>
-        )}
+    <div className="space-y-3">
+      {barra}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <TerritorioMapa url={mapa.url} idDe={mapa.idDe} alElegir={alElegir} valores={v?.votos ?? null} />
-      </div>
-      <div className="lg:max-h-[36rem] lg:overflow-y-auto lg:pr-1">
-        <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} compacto />
+        <div className="lg:max-h-[36rem] lg:overflow-y-auto lg:pr-1">
+          <Elegir key={lugar.id} lugar={lugar} alElegir={alElegir} compacto valores={v?.votos ?? null} />
+        </div>
       </div>
     </div>
   );
