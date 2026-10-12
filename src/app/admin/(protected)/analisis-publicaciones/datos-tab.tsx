@@ -309,7 +309,7 @@ export function DatosTab() {
         <p className="rounded-xl bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">Falta conectar Supabase: define SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en el servidor.</p>
       )}
 
-      {estado && estado.configurada && !estado.tabla && !estado.error && (
+      {estado && estado.configurada && !estado.tabla && !estado.error && !!estado.sql && (
         <section className={`${tarjeta} space-y-3 border-amber-400/50 p-5`}>
           <h3 className="font-display text-lg font-semibold">Un paso para guardar los resultados</h3>
           <p className="text-sm text-muted-foreground">Hace falta crear las tablas en tu base de Supabase (una sola vez): copia este SQL y ejecútalo en el editor SQL. Crea las tablas, tres vistas para consultar partidos, candidatos y ganadores, y deja todo cerrado a la llave pública.</p>

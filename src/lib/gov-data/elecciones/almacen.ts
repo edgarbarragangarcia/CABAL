@@ -481,7 +481,15 @@ export async function estadoAlmacen(): Promise<EstadoAlmacen> {
   if (!c) return { configurada: false, tabla: false };
   // Con GET (no HEAD): una petición HEAD a una tabla inexistente no devuelve error y no deja distinguir los dos casos.
   for (const tabla of [TABLA, CATALOGO]) {
-    const { error } = await c.from(tabla).select("eleccion").limit(1);
+    // Supabase tarda unos segundos en reconocer una tabla tras un cambio (o cuando recarga su caché): se vuelve a preguntar un par
+    // de veces antes de decir que faltan, para no mostrar «crea las tablas» cuando en realidad solo fue un tropiezo pasajero.
+    let error: ErrorSb | null = null;
+    for (let intento = 1; intento <= 3; intento++) {
+      const r = await c.from(tabla).select("eleccion").limit(1);
+      error = r.error;
+      if (!error) break;
+      if (intento < 3) await pausa(1_500);
+    }
     if (error) return faltaTabla(error) ? { configurada: true, tabla: false } : { configurada: true, tabla: false, error: error.message };
   }
   return { configurada: true, tabla: true };
