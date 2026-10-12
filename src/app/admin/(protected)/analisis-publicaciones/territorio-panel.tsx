@@ -71,7 +71,7 @@ function VotosCabal({ elecciones, lugar }: { elecciones: EleccionLugar[]; lugar:
               <tr key={e.id} className="border-b border-border/60 last:border-0">
                 <td className="px-3 py-2.5 font-medium">{e.titulo}</td>
                 {!e.guardado ? (
-                  <td colSpan={3} className="px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300">Sin resultado guardado{e.cobertura ? ` (${e.cobertura.guardados} de ${e.cobertura.total})` : ""}. Se carga en Fuente de la verdad.</td>
+                  <td colSpan={3} className="px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300">Sin resultado guardado{e.cobertura ? ` (${e.cobertura.guardados} de ${e.cobertura.total})` : ""}. Se carga en Gestor documental.</td>
                 ) : e.noPublicado ? (
                   <td colSpan={3} className="px-3 py-2.5 text-xs text-muted-foreground">La Registraduría no publica este lugar.</td>
                 ) : e.cabal ? (
@@ -263,7 +263,7 @@ function Explorar({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) =>
       {(votos.estado === "listo" ? votos.data.elecciones : [{ id: "congreso-2022", titulo: "Senado 2022" }, { id: "congreso-2018", titulo: "Senado 2018" }]).map((e) => (
         <button key={e.id} type="button" onClick={() => setEleccion(e.id)} className={`rounded-full px-3 py-1 font-semibold ${eleccion === e.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border text-muted-foreground hover:text-foreground"}`}>{e.titulo}</button>
       ))}
-      {votos.estado === "listo" && votos.data.guardados === 0 && <span className="text-muted-foreground">Aún no hay resultados guardados de esta elección para estos lugares (se cargan en Fuente de la verdad).</span>}
+      {votos.estado === "listo" && votos.data.guardados === 0 && <span className="text-muted-foreground">Aún no hay resultados guardados de esta elección para estos lugares (se cargan en Gestor documental).</span>}
       {votos.estado === "error" && <span className="text-muted-foreground">{votos.error}</span>}
     </div>
   );

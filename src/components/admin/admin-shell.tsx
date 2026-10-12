@@ -4,7 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Database, GraduationCap, LayoutTemplate, LogOut, Menu, Newspaper, Settings, Users, X } from "lucide-react";
+import { BarChart3, GraduationCap, LayoutTemplate, Library, LogOut, Menu, Newspaper, Settings, Users, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 const NAV = [
   { href: "/admin/analisis-publicaciones", label: "Análisis", icon: BarChart3 },
-  { href: "/admin/fuente-de-la-verdad", label: "Fuente de la verdad", icon: Database },
+  { href: "/admin/fuente-de-la-verdad", label: "Gestor documental", icon: Library },
   { href: "/admin/lms", label: "LMS", icon: GraduationCap },
   { href: "/admin/redactor", label: "Redactor", icon: Newspaper },
   { href: "/admin/comunidad", label: "Comunidad", icon: Users },

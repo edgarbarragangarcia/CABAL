@@ -10,7 +10,7 @@ import { DocumentosTab } from "../analisis-publicaciones/documentos-tab";
 
 const OPCIONES = [
   { id: "datos", label: "Datos electorales", icon: Database },
-  { id: "documentos", label: "Gestor documental", icon: Library },
+  { id: "documentos", label: "Documentos", icon: Library },
 ] as const;
 
 /** Ambas quedan montadas una vez abiertas: tienen cargas en curso que no deben cortarse al cambiar de pestaña. */
