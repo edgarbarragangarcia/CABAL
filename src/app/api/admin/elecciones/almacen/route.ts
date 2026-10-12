@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { asegurarCatalogo, estadoAlmacen, olvidarNoPublicados, reiniciarInterruptor } from "@/lib/gov-data/elecciones/almacen";
 import { detenerCarga, ejecutarTramo, estadoDeCarga, iniciarCarga } from "@/lib/gov-data/elecciones/carga";
-import { SQL_CARGA_ELECTORAL, SQL_ELECCIONES } from "@/lib/gov-data/elecciones/sql";
+import { SQL_CARGA_ELECTORAL, SQL_ELECCIONES, SQL_INDICES_CARGA } from "@/lib/gov-data/elecciones/sql";
 import { NIVELES_SINCRONIZACION, PARES, estadoSincronizacion, sincronizarLote } from "@/lib/gov-data/elecciones/sincronizar";
 
 export const runtime = "nodejs";
@@ -19,8 +19,11 @@ const editorSql = () => {
 async function cargaEnSegundoPlano() {
   try {
     const e = await estadoDeCarga();
+    // Si Supabase ha estado agotando el tiempo, el panel ofrece el SQL de los índices que lo evitan.
+    const lenta = /timeout|statement|tiempo|tardó demasiado/i.test(e.carga?.mensaje ?? "") || (e.carga?.transitorios ?? 0) > 0;
+    const indices = lenta ? { sqlIndices: SQL_INDICES_CARGA, editorSql: editorSql() } : {};
     // Sin la tabla, o sin el aviso automático, el panel muestra el SQL (es el mismo bloque y se puede repetir).
-    return e.disponible && e.aviso ? e : { ...e, sql: SQL_CARGA_ELECTORAL, editorSql: editorSql() };
+    return e.disponible && e.aviso ? { ...e, ...indices } : { ...e, sql: SQL_CARGA_ELECTORAL, editorSql: editorSql(), ...indices };
   } catch (err) {
     return { disponible: false, aviso: false, carga: null, error: err instanceof Error ? err.message : "No se pudo leer la carga." };
   }

@@ -167,7 +167,8 @@ export async function sincronizarLote(p: { eleccion?: string; corporacion?: stri
     const sinPublicar: FilaResultado[] = [];
     /** Sube lo acumulado; solo lo que Supabase confirma cuenta como guardado. */
     const subir = async (filas = porSubir.splice(0)) => {
-      if (filas.length === 0) return;
+      // Si ya falló un envío (tras sus reintentos) la base está sobrecargada: no se insiste en este tramo.
+      if (filas.length === 0 || errorBase) return;
       try {
         await guardarFilas(filas, true);
         vacios += filas.filter((f) => f.vacio).length;

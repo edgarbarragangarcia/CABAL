@@ -2,6 +2,7 @@ import "server-only";
 
 import { createPurposeToken } from "@/lib/admin-auth";
 import { abrirCarga, anotarCarga, asegurarCatalogo, avisarPorBaseDeDatos, avisoAutomaticoDisponible, cerrarCarga, leerCarga, type DetalleCarga, type FilaCarga } from "./almacen";
+import { esErrorTransitorio } from "./almacen-puro";
 import { sincronizarLote } from "./sincronizar";
 
 /**
@@ -26,6 +27,12 @@ const ENFRIAR_MS = Math.max(0, Number(process.env.CARGA_ELECTORAL_ENFRIAR_MS) ||
 const ESPERA_AVISO_MS = Math.max(300, Number(process.env.CARGA_ELECTORAL_ESPERA_AVISO_MS) || 9_000);
 const MAX_LIMITADAS = 5;
 const MAX_ESTANCADOS = 3;
+/**
+ * Tramos seguidos que pueden fallar por algo pasajero de Supabase (tiempo agotado, conexión cortada) antes de darse por vencida:
+ * en cada uno se espera la pausa de enfriamiento, así que son unos 15 minutos de reintentos sin que nadie pulse nada.
+ */
+const MAX_TRANSITORIOS = 20;
+const MENSAJE_TRANSITORIO = "Supabase tardó demasiado en responder (límite de tiempo de la base). Se espera un momento y la carga sigue sola.";
 const MAX_TRAMOS = 3_000;
 /** Un tramo dura menos de un minuto: si pasa bastante más sin noticias, la cadena se cortó. */
 const VIVA_MS = 150_000;
@@ -135,6 +142,7 @@ export async function ejecutarTramo(cadena: string, origen: string, enfriar = fa
     }
 
     const lote = await sincronizarLote({ eleccion: detalle.eleccion, corporacion: detalle.corporacion, nivelMax: detalle.nivelMax ?? 3, presupuestoMs: PRESUPUESTO_TRAMO_MS });
+    const transitorio = !!lote.errorBase && esErrorTransitorio(lote.errorBase);
     detalle = {
       ...detalle,
       lotes: (detalle.lotes ?? 0) + 1,
@@ -145,9 +153,16 @@ export async function ejecutarTramo(cadena: string, origen: string, enfriar = fa
       pendientes: lote.pendientes,
       total: lote.total,
       limitadasSeguidas: lote.limitada ? (detalle.limitadasSeguidas ?? 0) + 1 : 0,
-      estancados: !lote.limitada && !lote.terminado && lote.guardados + lote.vacios === 0 ? (detalle.estancados ?? 0) + 1 : 0,
-      mensaje: lote.mensaje ?? null,
+      estancados: !lote.limitada && !lote.terminado && !transitorio && lote.guardados + lote.vacios === 0 ? (detalle.estancados ?? 0) + 1 : 0,
+      transitorios: transitorio ? (detalle.transitorios ?? 0) + 1 : 0,
+      mensaje: transitorio ? MENSAJE_TRANSITORIO : (lote.mensaje ?? null),
     };
+
+    // Un fallo pasajero de la base no detiene la carga: se anota, se espera la pausa de enfriamiento y el tramo siguiente sigue.
+    if (transitorio && (detalle.transitorios ?? 0) <= MAX_TRANSITORIOS) {
+      await anotarCarga(cadena, detalle);
+      return await seguir(cadena, origen, detalle, true, inicio);
+    }
 
     const cierre = motivoDeCierre(detalle, lote);
     if (cierre) {
@@ -159,13 +174,26 @@ export async function ejecutarTramo(cadena: string, origen: string, enfriar = fa
   } catch (err) {
     console.error("[carga electoral]", err);
     const mensaje = err instanceof Error ? err.message : "Error inesperado en la carga.";
+    // Un fallo pasajero de la base (tiempo agotado, conexión cortada) no debe detener la carga: se espera y se sigue.
+    if (esErrorTransitorio(err) && Object.keys(detalle).length > 0 && (detalle.transitorios ?? 0) < MAX_TRANSITORIOS) {
+      try {
+        const d: DetalleCarga = { ...detalle, transitorios: (detalle.transitorios ?? 0) + 1, mensaje: MENSAJE_TRANSITORIO };
+        await anotarCarga(cadena, d);
+        return await seguir(cadena, origen, d, true, inicio);
+      } catch {
+        /* ni siquiera se pudo anotar: se cierra como error, abajo */
+      }
+    }
     await cerrarCarga({ ...detalle, fin: "error", terminadaEn: ahora(), mensaje: `${mensaje} Lo guardado queda; pulsa «Continuar» para seguir.` }, cadena).catch(() => {});
   }
 }
 
 function motivoDeCierre(d: DetalleCarga, lote: Awaited<ReturnType<typeof sincronizarLote>>): Pick<DetalleCarga, "fin" | "mensaje"> | null {
   if (lote.terminado) return { fin: "listo", mensaje: "Listo: todo lo pedido quedó guardado en Supabase." };
-  if (lote.errorBase) return { fin: "error", mensaje: lote.errorBase };
+  if (lote.errorBase) {
+    const pista = esErrorTransitorio(lote.errorBase) ? " Supabase sigue agotando el tiempo: ejecuta el SQL «Para que no se detenga» de esta pantalla (crea índices que aceleran los conteos) y pulsa «Continuar»." : "";
+    return { fin: "error", mensaje: `${lote.errorBase}${pista}` };
+  }
   if ((d.limitadasSeguidas ?? 0) >= MAX_LIMITADAS) {
     return { fin: "error", mensaje: `${lote.mensaje ?? "La fuente está limitando las consultas."} Se esperó varios minutos sin que cediera; lo guardado queda. Pulsa «Continuar» más tarde.` };
   }

@@ -4,7 +4,7 @@ import { after } from "next/server";
 
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { ELECCIONES, type EleccionInfo } from "./catalogo";
-import { enLotes, sigueVigente, type FilaResultado } from "./almacen-puro";
+import { enLotes, esErrorTransitorio, sigueVigente, type FilaResultado } from "./almacen-puro";
 import type { Resultado } from "./resultados";
 
 /**
@@ -133,6 +133,50 @@ export async function leerGuardados(eleccion: EleccionInfo, corporacion: string,
 
 // ---------------------------------------------------------- escritura ---
 
+const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Repite una operación contra Supabase cuando falla por algo pasajero (tiempo agotado, conexión cortada): la base de un plan
+ * pequeño se pone lenta cuando se le piden muchas escrituras seguidas, y casi siempre el segundo intento pasa.
+ */
+async function conReintento<T>(operacion: () => Promise<T>, intentos = 3): Promise<T> {
+  for (let n = 1; ; n++) {
+    try {
+      return await operacion();
+    } catch (e) {
+      if (n >= intentos || !esErrorTransitorio(e)) throw e;
+      await pausa(1_200 * n);
+    }
+  }
+}
+
+/** Sube un lote; si la base agota el tiempo, lo parte a la mitad y reintenta (un lote más chico siempre cabe). */
+async function subirLote(c: NonNullable<ReturnType<typeof getSupabaseServerClient>>, lote: FilaResultado[], reemplazar: boolean, ahora: string, intento = 0): Promise<void> {
+  let error: ErrorSb | null = null;
+  try {
+    const r = await c.from(TABLA).upsert(
+      lote.map((f) => ({ ...f, actualizado_en: ahora })),
+      { onConflict: CONFLICTO, ignoreDuplicates: !reemplazar }
+    );
+    error = r.error;
+  } catch (e) {
+    error = { message: e instanceof Error ? e.message : String(e) };
+  }
+  if (!error) return;
+  if (esErrorTransitorio(error) && intento < 3) {
+    await pausa(1_000 * (intento + 1));
+    if (lote.length > 3) {
+      const mitad = Math.ceil(lote.length / 2);
+      await subirLote(c, lote.slice(0, mitad), reemplazar, ahora, intento + 1);
+      await subirLote(c, lote.slice(mitad), reemplazar, ahora, intento + 1);
+    } else {
+      await subirLote(c, lote, reemplazar, ahora, intento + 1);
+    }
+    return;
+  }
+  throw errorDeTablas(error);
+}
+
 /** Sube las filas, en lotes. Con `reemplazar` pisa lo que hubiera; si no, deja intacto lo que ya está guardado. Lanza si Supabase falla. */
 export async function guardarFilas(filas: FilaResultado[], reemplazar: boolean): Promise<void> {
   const c = getSupabaseServerClient();
@@ -140,13 +184,7 @@ export async function guardarFilas(filas: FilaResultado[], reemplazar: boolean):
   // Que el catálogo (los nombres de cada elección y cargo, que usan las vistas) nunca quede vacío cuando ya hay resultados.
   void asegurarCatalogo();
   const ahora = new Date().toISOString();
-  for (const lote of enLotes(filas)) {
-    const { error } = await c.from(TABLA).upsert(
-      lote.map((f) => ({ ...f, actualizado_en: ahora })),
-      { onConflict: CONFLICTO, ignoreDuplicates: !reemplazar }
-    );
-    if (error) throw errorDeTablas(error);
-  }
+  for (const lote of enLotes(filas)) await subirLote(c, lote, reemplazar, ahora);
 }
 
 function errorDeTablas(e: ErrorSb) {
@@ -250,6 +288,8 @@ export type DetalleCarga = {
   limitadasSeguidas?: number;
   /** Tramos seguidos sin guardar nada. */
   estancados?: number;
+  /** Tramos seguidos en los que Supabase agotó el tiempo o cortó la conexión (se espera y se sigue sola). */
+  transitorios?: number;
   actual?: string | null;
   mensaje?: string | null;
   pendientes?: number | null;
@@ -342,9 +382,11 @@ async function contar(eleccion: string, corporacion: string, filtro: { nivel?: n
   if (filtro.nivel !== undefined) q = q.eq("nivel", filtro.nivel);
   if (filtro.nivelMax !== undefined) q = q.lte("nivel", filtro.nivelMax);
   if (filtro.vacio !== undefined) q = q.eq("vacio", filtro.vacio);
-  const { count, error } = await q;
-  if (error) throw errorDeTablas(error);
-  return count ?? 0;
+  return conReintento(async () => {
+    const { count, error } = await q;
+    if (error) throw errorDeTablas(error);
+    return count ?? 0;
+  });
 }
 
 /** Territorios ya guardados de un cargo hasta cierto nivel (con resultado o marcados como no publicados). */
@@ -407,24 +449,27 @@ export async function olvidarNoPublicados(): Promise<number> {
   return (data ?? []).length;
 }
 
-/** Códigos de territorio ya guardados (incluidos los que la fuente no publica) hasta cierto nivel. */
+/**
+ * Códigos de territorio ya guardados (incluidos los que la fuente no publica) hasta cierto nivel. Se lee por páginas con
+ * «desde el último código» y no con desplazamiento: con decenas de miles de filas, saltar filas en cada página se volvía lentísimo.
+ */
 export async function codigosGuardados(eleccion: string, corporacion: string, nivelMax: number): Promise<Set<string>> {
   const c = getSupabaseServerClient();
   if (!c) throw new Error("Falta conectar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY).");
   const codigos = new Set<string>();
   const pagina = 1000;
-  for (let desde = 0; ; desde += pagina) {
-    const { data, error } = await c
-      .from(TABLA)
-      .select("ambito")
-      .eq("eleccion", eleccion)
-      .eq("corporacion", corporacion)
-      .lte("nivel", nivelMax)
-      .order("ambito")
-      .range(desde, desde + pagina - 1);
-    if (error) throw errorDeTablas(error);
-    for (const f of (data ?? []) as Fila[]) codigos.add(f.ambito);
-    if ((data ?? []).length < pagina) return codigos;
+  let ultimo = "";
+  for (;;) {
+    const filas = await conReintento(async () => {
+      let consulta = c.from(TABLA).select("ambito").eq("eleccion", eleccion).eq("corporacion", corporacion).lte("nivel", nivelMax).order("ambito").limit(pagina);
+      if (ultimo) consulta = consulta.gt("ambito", ultimo);
+      const { data, error } = await consulta;
+      if (error) throw errorDeTablas(error);
+      return (data ?? []) as Fila[];
+    });
+    for (const f of filas) codigos.add(f.ambito);
+    if (filas.length < pagina) return codigos;
+    ultimo = filas[filas.length - 1].ambito;
   }
 }
 

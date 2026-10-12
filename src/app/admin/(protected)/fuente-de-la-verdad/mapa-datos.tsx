@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, Database, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, Copy, Database, ExternalLink, RefreshCw } from "lucide-react";
 
 import type { ModuloMapa, RespuestaMapa, TablaMapa } from "@/lib/gestor/mapa";
 
@@ -50,6 +50,12 @@ export function MapaDatos() {
   const r = usePeticion<RespuestaMapa>(`/api/admin/gestor/mapa${v ? `?v=${v}` : ""}`);
   const datos = r.estado === "listo" ? r.data : undefined;
   const [sel, setSel] = React.useState<{ modulo: string; tabla?: string } | null>(null);
+  const [copiado, setCopiado] = React.useState<string | null>(null);
+  const copiar = (clave: string, texto: string) => {
+    navigator.clipboard?.writeText(texto);
+    setCopiado(clave);
+    setTimeout(() => setCopiado(null), 1600);
+  };
 
   const { hubs, nodos } = React.useMemo(() => (datos ? distribuir(datos.modulos) : { hubs: [], nodos: [] }), [datos]);
   const actual = datos ? datos.modulos.find((m) => m.id === (sel?.modulo ?? datos.modulos[0]?.id)) : undefined;
@@ -87,6 +93,15 @@ export function MapaDatos() {
               </div>
             ))}
           </div>
+
+          {datos.sqlFaltante && (
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
+              <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+              <p className="min-w-0 flex-1 basis-64">Hay <strong>{faltan}</strong> {faltan === 1 ? "tabla" : "tablas"} sin crear. Copia el SQL que falta (ya va en el orden correcto, con lo que cada módulo necesita antes) y ejecútalo una sola vez en el editor SQL de Supabase.</p>
+              <button type="button" onClick={() => copiar("todo", datos.sqlFaltante ?? "")} className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground">{copiado === "todo" ? <Check className="size-4" /> : <Copy className="size-4" />}{copiado === "todo" ? "Copiado" : "Copiar el SQL que falta"}</button>
+              {datos.editorSql && <a href={datos.editorSql} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1.5 text-xs font-semibold underline">Abrir el editor SQL <ExternalLink className="size-3.5" /></a>}
+            </div>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
             <div className="overflow-hidden rounded-2xl bg-slate-950 ring-1 ring-border">
@@ -134,6 +149,11 @@ export function MapaDatos() {
               <aside className="min-w-0 rounded-2xl border border-border bg-surface p-4">
                 <p className="flex items-center gap-2 text-sm font-semibold"><span className="size-3 rounded-full" style={{ background: COLOR[actual.id] }} />{actual.nombre}</p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">SQL: {actual.archivo}</p>
+                {actual.sql && (
+                  <button type="button" onClick={() => copiar(actual.id, actual.sql ?? "")} className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-500/10 dark:text-amber-200">
+                    {copiado === actual.id ? <Check className="size-3" /> : <Copy className="size-3" />}{copiado === actual.id ? "Copiado" : "Copiar el SQL de este módulo"}
+                  </button>
+                )}
                 {tablaSel && (
                   <p className="mt-3 rounded-xl bg-surface-muted p-3 text-xs"><strong>{tablaSel.tabla}</strong><br />{tablaSel.sirve}<br /><span className="text-muted-foreground">{tablaSel.filas === null ? "La tabla no existe todavía." : `${num(tablaSel.filas)} filas`}</span></p>
                 )}

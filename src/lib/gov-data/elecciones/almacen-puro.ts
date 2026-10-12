@@ -112,3 +112,15 @@ export function enLotes<T extends { datos: unknown }>(filas: T[], maxFilas = 40,
   if (actual.length > 0) lotes.push(actual);
   return lotes;
 }
+
+/**
+ * ¿Es un fallo pasajero de la base de datos o de la red (tiempo agotado, conexión cortada, sobrecarga)? Esos no deben detener la
+ * carga: se espera un poco y se sigue. Un fallo de verdad (faltan las tablas, una clave inválida) no cuenta.
+ */
+export function esErrorTransitorio(e: unknown): boolean {
+  const o = (e && typeof e === "object" ? e : {}) as { message?: unknown; code?: unknown };
+  const mensaje = typeof e === "string" ? e : typeof o.message === "string" ? o.message : "";
+  if (typeof o.code === "string" && ["57014", "40001", "40P01", "53300", "53400", "57P01", "08006", "08003", "08001"].includes(o.code)) return true;
+  if (/faltan las tablas|does not exist|no existe|invalid api key|jwt/i.test(mensaje)) return false;
+  return /statement timeout|canceling statement|timeout|timed out|etimedout|econnreset|fetch failed|socket hang up|terminating connection|too many connections|connection (reset|closed|terminated)|deadlock|server closed|temporarily unavailable|bad gateway|gateway time|service unavailable|overload|http 5\d\d/i.test(mensaje);
+}

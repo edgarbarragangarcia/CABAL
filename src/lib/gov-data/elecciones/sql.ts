@@ -107,7 +107,7 @@ where r.datos is not null;
 -- Cuántos territorios hay guardados por elección, cargo y nivel (lo usa el panel Análisis > Datos).
 create or replace function cobertura_electoral()
 returns table (eleccion text, corporacion text, nivel smallint, guardados bigint, vacios bigint, ultima timestamptz)
-language sql stable security invoker set search_path = public as $$
+language sql stable security invoker set search_path = public set statement_timeout = '120s' as $$
   select r.eleccion, r.corporacion, r.nivel,
          count(*) filter (where not r.vacio),
          count(*) filter (where r.vacio),
@@ -184,6 +184,29 @@ grant execute on function carga_aviso_disponible() to service_role;
 revoke all on catalogo_electoral, resultados_electorales from anon, authenticated;
 revoke all on partidos_electorales, candidatos_electorales, ganadores_electorales from anon, authenticated;
 revoke all on function cobertura_electoral() from public, anon, authenticated;
+`;
+
+/** Copia exacta de supabase/carga-indices.sql: índices que evitan que la carga se detenga por «statement timeout». */
+export const SQL_INDICES_CARGA = `-- Índices que aceleran la carga electoral (opcional, pero evita que se detenga con «statement timeout»).
+-- Pegar completo en Supabase > SQL Editor > Run. Puede tardar uno o dos minutos la primera vez (recorre la tabla una sola vez);
+-- se puede repetir sin problema: si el índice ya existe, no hace nada.
+--
+-- Con cientos de miles de filas, contar y listar lo guardado obligaba a leer toda la tabla (cada fila lleva su resultado completo);
+-- en un plan pequeño de Supabase eso agota el tiempo. Este índice incluye las columnas que la carga consulta, así que esas
+-- consultas se resuelven leyendo solo el índice.
+
+begin;
+set local statement_timeout = 0;
+
+create index if not exists resultados_electorales_cobertura_idx
+  on resultados_electorales (eleccion, corporacion, nivel) include (ambito, vacio, actualizado_en);
+
+-- El índice anterior por elección, cargo y nivel queda cubierto por el nuevo: quitarlo hace más livianas las escrituras.
+drop index if exists resultados_electorales_nivel_idx;
+
+commit;
+
+analyze resultados_electorales;
 `;
 
 /** Solo la tabla de la carga en segundo plano (la parte de supabase/elecciones.sql entre las marcas [carga]): para quien ya tenía lo demás. */

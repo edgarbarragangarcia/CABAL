@@ -2,15 +2,17 @@ import "server-only";
 
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
+import { ORDEN_SQL, SQL_POR_ARCHIVO } from "./sql";
+
 /**
  * El mapa de lo que hay en Supabase: módulos del panel y sus tablas, con cuántas filas tiene cada una. Las tablas que aún no se
  * han creado (falta ejecutar su SQL) salen con `filas: null` para que se vea qué falta.
  */
-export type Modulo = { id: string; nombre: string; archivo: string; ancla: string; tablas: { tabla: string; sirve: string }[] };
+export type Modulo = { id: string; nombre: string; archivo: string; /** Archivos de supabase/ que lo crean, en el orden en que deben ejecutarse (incluye los que necesita antes). */ archivos: string[]; ancla: string; tablas: { tabla: string; sirve: string }[] };
 
 export const MODULOS: Modulo[] = [
   {
-    id: "electoral", nombre: "Datos electorales", archivo: "elecciones.sql", ancla: "resultados_electorales",
+    id: "electoral", nombre: "Datos electorales", archivo: "elecciones.sql", archivos: ["elecciones"], ancla: "resultados_electorales",
     tablas: [
       { tabla: "resultados_electorales", sirve: "Resultados por elección, cargo y territorio" },
       { tabla: "catalogo_electoral", sirve: "Nombres de elecciones y cargos" },
@@ -18,7 +20,7 @@ export const MODULOS: Modulo[] = [
     ],
   },
   {
-    id: "documentos", nombre: "Documentos", archivo: "documentos.sql y gestor-documental.sql", ancla: "documentos",
+    id: "documentos", nombre: "Documentos", archivo: "documentos.sql y gestor-documental.sql", archivos: ["documentos", "gestor-documental"], ancla: "documentos",
     tablas: [
       { tabla: "documentos", sirve: "Un registro por archivo subido" },
       { tabla: "documento_fragmentos", sirve: "Trozos de texto con su vector para buscar por significado" },
@@ -26,10 +28,10 @@ export const MODULOS: Modulo[] = [
       { tabla: "documento_eventos", sirve: "Historial: quién hizo qué" },
     ],
   },
-  { id: "monitoreo", nombre: "Monitoreo", archivo: "monitoreo.sql", ancla: "monitoreo_items", tablas: [{ tabla: "monitoreo_items", sirve: "Videos y titulares de cada político, con la marca «nombra a María Fernanda»" }] },
-  { id: "territorio", nombre: "Territorio", archivo: "territorio.sql", ancla: "indicadores_territoriales", tablas: [{ tabla: "indicadores_territoriales", sirve: "Indicadores oficiales por municipio (DANE, víctimas, homicidios…)" }] },
+  { id: "monitoreo", nombre: "Monitoreo", archivo: "monitoreo.sql", archivos: ["monitoreo"], ancla: "monitoreo_items", tablas: [{ tabla: "monitoreo_items", sirve: "Videos y titulares de cada político, con la marca «nombra a María Fernanda»" }] },
+  { id: "territorio", nombre: "Territorio", archivo: "territorio.sql", archivos: ["territorio"], ancla: "indicadores_territoriales", tablas: [{ tabla: "indicadores_territoriales", sirve: "Indicadores oficiales por municipio (DANE, víctimas, homicidios…)" }] },
   {
-    id: "comunidad", nombre: "Comunidad", archivo: "comunidad.sql", ancla: "miembros",
+    id: "comunidad", nombre: "Comunidad", archivo: "comunidad.sql", archivos: ["comunidad"], ancla: "miembros",
     tablas: [
       { tabla: "miembros", sirve: "Afiliados de la comunidad" },
       { tabla: "seguidores", sirve: "Quién sigue a quién" },
@@ -41,7 +43,7 @@ export const MODULOS: Modulo[] = [
     ],
   },
   {
-    id: "portales", nombre: "Portales", archivo: "portales.sql, portales-crm.sql y portales-cms-pro.sql", ancla: "portales",
+    id: "portales", nombre: "Portales", archivo: "comunidad.sql, portales.sql, portales-crm.sql y portales-cms-pro.sql (en ese orden)", archivos: ["comunidad", "portales", "portales-crm", "portales-cms-pro"], ancla: "portales",
     tablas: [
       { tabla: "portales", sirve: "Cada portal temático" },
       { tabla: "portal_articulos", sirve: "Artículos" },
@@ -62,14 +64,36 @@ export const MODULOS: Modulo[] = [
 ];
 
 export type TablaMapa = { tabla: string; sirve: string; filas: number | null };
-export type ModuloMapa = { id: string; nombre: string; archivo: string; ancla: string; tablas: TablaMapa[] };
+export type ModuloMapa = { id: string; nombre: string; archivo: string; archivos: string[]; ancla: string; tablas: TablaMapa[]; /** SQL (en orden) que crea lo que falta; solo si falta alguna tabla. */ sql?: string };
 export type DetalleMapa = {
   carpetas: { nombre: string; documentos: number }[];
   sinCarpeta: number;
   elecciones: { eleccion: string; corporacion: string; guardados: number; vacios: number }[];
   personajes: { personaje: string; items: number; nombran: number }[];
 };
-export type RespuestaMapa = { conectado: boolean; generadoEn: string; modulos: ModuloMapa[]; detalle: DetalleMapa };
+export type RespuestaMapa = {
+  conectado: boolean;
+  generadoEn: string;
+  modulos: ModuloMapa[];
+  detalle: DetalleMapa;
+  /** Todo el SQL de lo que falta, en el orden correcto, para ejecutarlo de una vez. */
+  sqlFaltante?: string;
+  editorSql?: string;
+};
+
+const unirSql = (archivos: Iterable<string>) => {
+  const piden = new Set(archivos);
+  return ORDEN_SQL.filter((n) => piden.has(n)).map((n) => `-- ===== ${n}.sql =====\n${SQL_POR_ARCHIVO[n]}`).join("\n\n");
+};
+
+const editorSql = () => {
+  try {
+    const ref = process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).hostname.split(".")[0] : "";
+    return ref ? `https://supabase.com/dashboard/project/${ref}/sql/new` : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export async function mapaDeDatos(): Promise<RespuestaMapa> {
   const c = getSupabaseServerClient();
@@ -122,5 +146,8 @@ export async function mapaDeDatos(): Promise<RespuestaMapa> {
     }
     detalle.personajes = [...por.entries()].map(([personaje, v]) => ({ personaje, ...v }));
   } catch {}
-  return { conectado: true, generadoEn: new Date().toISOString(), modulos, detalle };
+  // Lo que falta: el SQL de cada módulo con tablas sin crear (con lo que necesita antes) y todo junto, en orden.
+  const conFaltantes = modulos.map((m) => ({ ...m, sql: m.tablas.some((t) => t.filas === null) ? unirSql(m.archivos) : undefined }));
+  const archivos = new Set(conFaltantes.filter((m) => m.sql).flatMap((m) => m.archivos));
+  return { conectado: true, generadoEn: new Date().toISOString(), modulos: conFaltantes, detalle, ...(archivos.size ? { sqlFaltante: unirSql(archivos) } : {}), editorSql: editorSql() };
 }

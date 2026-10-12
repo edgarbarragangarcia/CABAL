@@ -38,12 +38,13 @@ type VistaCarga = {
   guardados?: number;
   vacios?: number;
   errores?: number;
+  transitorios?: number;
   actual?: string | null;
   mensaje?: string | null;
   pendientes?: number | null;
   total?: number | null;
 };
-type EstadoCarga = { disponible: boolean; /** El aviso automático entre tramos (pg_net) está instalado. */ aviso?: boolean; carga: VistaCarga | null; sql?: string; editorSql?: string; error?: string };
+type EstadoCarga = { disponible: boolean; /** El aviso automático entre tramos (pg_net) está instalado. */ aviso?: boolean; carga: VistaCarga | null; sql?: string; /** SQL de índices: se ofrece cuando Supabase ha agotado el tiempo. */ sqlIndices?: string; editorSql?: string; error?: string };
 type Estado = { configurada: boolean; tabla: boolean; pares: Par[]; sql?: string; editorSql?: string; error?: string; carga?: EstadoCarga };
 type Lote = { guardados: number; vacios: number; errores: number; limitada: boolean; errorBase?: string; mensaje?: string; actual: string | null; pendientes: number; total: number; terminado: boolean };
 type Profundidad = 2 | 3 | 5 | 6;
@@ -106,6 +107,7 @@ export function DatosTab() {
   const [corriendo, setCorriendo] = React.useState<string | null>(null);
   const [iniciando, setIniciando] = React.useState(false);
   const [copiadoCarga, setCopiadoCarga] = React.useState(false);
+  const [copiadoIndices, setCopiadoIndices] = React.useState(false);
   const [lote, setLote] = React.useState<Lote | null>(null);
   const [aviso, setAviso] = React.useState<{ ok: boolean; texto: string } | null>(null);
   const [copiado, setCopiado] = React.useState(false);
@@ -423,6 +425,20 @@ export function DatosTab() {
                   </div>
                 </>
               )}
+            </section>
+          )}
+
+          {estado.carga?.sqlIndices && (
+            <section className={`${tarjeta} space-y-3 border-amber-400/50 p-5`}>
+              <h3 className="font-display text-lg font-semibold">Para que la carga no se detenga por «statement timeout»</h3>
+              <p className="text-sm text-muted-foreground">
+                Supabase agota el tiempo al contar lo guardado porque lee toda la tabla. La carga ya reintenta sola (espera y sigue), pero este SQL crea un índice que lo resuelve de raíz. Cópialo y ejecútalo una vez en el editor SQL de Supabase: tarda uno o dos minutos y se puede repetir sin problema.
+              </p>
+              <pre className="max-h-48 overflow-auto rounded-xl bg-[#0f1613] p-4 text-xs leading-relaxed text-emerald-100">{estado.carga.sqlIndices}</pre>
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => { navigator.clipboard?.writeText(estado.carga?.sqlIndices ?? ""); setCopiadoIndices(true); setTimeout(() => setCopiadoIndices(false), 1600); }} className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground">{copiadoIndices ? <Check className="size-4" /> : <Copy className="size-4" />}{copiadoIndices ? "Copiado" : "Copiar SQL"}</button>
+                {estado.carga.editorSql && <a href={estado.carga.editorSql} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline">Abrir el editor SQL de Supabase <ExternalLink className="size-4" /></a>}
+              </div>
             </section>
           )}
 

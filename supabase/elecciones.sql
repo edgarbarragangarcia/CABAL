@@ -103,10 +103,6 @@ cross join lateral jsonb_array_elements(r.datos -> 'circunscripciones') as c
 cross join lateral jsonb_array_elements(c.value -> 'mapa') as g
 where r.datos is not null;
 
--- Índice «de cobertura»: con él, contar lo guardado se resuelve leyendo solo el índice y no toda la tabla (con cientos de miles de
--- filas con datos, recorrer la tabla entera superaba el límite de tiempo de Supabase y la carga se detenía a cada rato).
-create index if not exists resultados_electorales_cobertura_idx on resultados_electorales (eleccion, corporacion, nivel) include (vacio, actualizado_en);
-
 -- Cuántos territorios hay guardados por elección, cargo y nivel (lo usa el panel Análisis > Datos).
 create or replace function cobertura_electoral()
 returns table (eleccion text, corporacion text, nivel smallint, guardados bigint, vacios bigint, ultima timestamptz)
