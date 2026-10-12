@@ -37,6 +37,8 @@ export type EleccionLugar = {
   corporacion: string;
   /** Hay resultado guardado para este lugar. */
   guardado: boolean;
+  /** Lugares sumados (zonas o puestos): cuántos hay y cuántos están guardados. Solo en localidades, barrios y puestos. */
+  cobertura?: { total: number; guardados: number };
   /** La Registraduría no publica este lugar para este cargo (marca guardada). */
   noPublicado?: boolean;
   validos: number;

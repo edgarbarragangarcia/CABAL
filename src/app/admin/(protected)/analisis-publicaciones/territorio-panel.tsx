@@ -1,14 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDownRight, ArrowUpRight, Database, Flame, Loader2, MapPinned, Network as NetworkIcon, Scale, ShieldAlert, TriangleAlert, Users, Vote } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Database, Flame, Loader2, MapPinned, Scale, Search, ShieldAlert, TriangleAlert, Vote } from "lucide-react";
 
 import { buildNetwork, type Mapping } from "@/lib/crm/network";
 import { seguidoresEn } from "@/lib/crm/seguidores";
 import { DIMENSIONS, type CrmSnapshot } from "@/lib/crm/types";
 import type { Indicadores, ItemIndicador } from "@/lib/territorio/indicadores";
 import { GRUPOS, type Grupo } from "@/lib/territorio/catalogo";
-import type { Lugar } from "@/lib/territorio/lugares";
+import type { Coincidencia, Lugar } from "@/lib/territorio/jerarquia";
 import type { Relacion } from "@/lib/territorio/relacion";
 import type { EleccionLugar, FilaRanking } from "@/lib/territorio/votacion";
 import { titulo } from "./nombres";
@@ -22,29 +22,26 @@ import { FuentesTerritorio } from "./territorio-fuentes";
  * Supabase; las cifras del conflicto se cargan desde datos.gov.co con el panel de fuentes de abajo.
  */
 
-type Lista = { departamentos: { dane: string; nombre: string }[]; municipios: { dane: string; nombre: string; dep: string }[] };
-type Respuesta = { lugar: Lugar; elecciones: EleccionLugar[]; indicadores: Indicadores; relacion: Relacion | null };
+type Respuesta = { lugar: Lugar; elecciones: EleccionLugar[]; indicadores: Indicadores | null; relacion: Relacion | null; error?: string };
 
 const tarjeta = "rounded-2xl border border-border bg-surface shadow-sm";
 const fmt = (n: number) => Math.round(n).toLocaleString("es-CO");
 const dec = (n: number, d = 1) => n.toLocaleString("es-CO", { maximumFractionDigits: d, minimumFractionDigits: d });
-const CLAVE_LUGAR = "el-admin-territorio-v1";
+const CLAVE_LUGAR = "el-admin-territorio-v2";
 const CLAVE_CAMPOS = "el-admin-red-crm-campos-v1";
 const TODAS: ReadonlySet<(typeof DIMENSIONS)[number]> = new Set(DIMENSIONS);
 
-function leerLugar(): { dep: string; muni: string } {
+function leerLugar(): string {
   try {
-    const v = JSON.parse(localStorage.getItem(CLAVE_LUGAR) ?? "null") as { dep?: string; muni?: string } | null;
-    if (v?.dep) return { dep: v.dep, muni: v.muni ?? "" };
+    return localStorage.getItem(CLAVE_LUGAR) || "co";
   } catch {
-    /* sin almacenamiento: se arranca en Bolívar */
+    return "co";
   }
-  return { dep: "13", muni: "" };
 }
 
-function guardarLugar(dep: string, muni: string) {
+function guardarLugar(id: string) {
   try {
-    localStorage.setItem(CLAVE_LUGAR, JSON.stringify({ dep, muni }));
+    localStorage.setItem(CLAVE_LUGAR, id);
   } catch {
     /* la preferencia dura mientras la pestaña esté abierta */
   }
@@ -56,17 +53,6 @@ function leerCampos(): Mapping {
   } catch {
     return {};
   }
-}
-
-function Tarjeta({ icono: Icono, etiqueta, valor, sub, estilo }: { icono: React.ComponentType<{ className?: string }>; etiqueta: string; valor: string; sub: string; estilo: string }) {
-  return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${estilo} p-4 text-white shadow-lg`}>
-      <div aria-hidden="true" className="absolute -right-6 -bottom-8 size-24 rounded-full bg-white/15" />
-      <div className="relative flex items-center justify-between"><p className="text-xs font-medium text-white/85">{etiqueta}</p><span className="grid size-8 place-items-center rounded-xl bg-white/20 backdrop-blur"><Icono className="size-4" /></span></div>
-      <p className="relative mt-3 text-2xl font-bold tracking-tight tabular-nums">{valor}</p>
-      <p className="relative mt-0.5 text-xs text-white/80">{sub}</p>
-    </div>
-  );
 }
 
 function Etiqueta({ children, tono }: { children: React.ReactNode; tono: "cabal" | "oposicion" }) {
@@ -90,12 +76,14 @@ function FilaPartido({ p, maximo }: { p: FilaRanking; maximo: number }) {
 
 /** El ranking de una elección en el lugar: María Fernanda, la oposición y los demás partidos y candidatos. */
 function Votacion({ e, lugar }: { e: EleccionLugar; lugar: string }) {
-  if (!e.guardado) return <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-4 shrink-0" />El resultado de {e.titulo} para {lugar} todavía no está guardado en Supabase (se guarda en Análisis &gt; Datos electorales).</p>;
+  if (!e.guardado) return <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-4 shrink-0" />El resultado de {e.titulo} para {lugar} todavía no está guardado en Supabase{e.cobertura ? ` (0 de ${e.cobertura.total} ${e.cobertura.total === 1 ? "lugar" : "lugares"} guardados)` : ""}. Se guarda en Fuente de la verdad &gt; Datos electorales{e.cobertura ? ", cargando hasta zonas o puestos" : ""}.</p>;
   if (e.noPublicado) return <p className="rounded-xl bg-surface-muted/70 px-4 py-3 text-sm text-muted-foreground">La Registraduría no publica resultados de {e.titulo} para {lugar}.</p>;
   const esLista = e.corporacion !== "PR";
+  const parcial = e.cobertura && e.cobertura.guardados < e.cobertura.total;
   const maximo = Math.max(...e.partidos.map((p) => p.votos), 0);
   return (
     <div className="space-y-4">
+      {parcial && <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />Suma de {e.cobertura!.guardados} de {e.cobertura!.total} lugares guardados: las cifras son un mínimo.</p>}
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-sky-400/40 bg-sky-500/5 p-4">
           <p className="flex items-center gap-2 text-xs font-bold tracking-wide text-sky-700 uppercase dark:text-sky-300"><Vote className="size-3.5" /> María Fernanda Cabal</p>
@@ -234,135 +222,241 @@ function Conflicto({ ind, alCargar }: { ind: Indicadores; alCargar: () => void }
   );
 }
 
-function Seccion({ icono: Icono, titulo: t, sub, children }: { icono: React.ComponentType<{ className?: string }>; titulo: string; sub?: string; children: React.ReactNode }) {
+const PRINCIPALES = [
+  ["11001", "Bogotá"],
+  ["05001", "Medellín"],
+  ["76001", "Cali"],
+  ["08001", "Barranquilla"],
+  ["13001", "Cartagena"],
+  ["68001", "Bucaramanga"],
+] as const;
+const NIVEL_TEXTO: Record<string, string> = { pais: "País", departamento: "Departamento", municipio: "Municipio", localidad: "Localidad o comuna", barrio: "Barrio", puesto: "Puesto de votación" };
+const LIMITE = 48;
+
+/** Escribir un lugar y elegirlo de la lista: la forma más corta de llegar a cualquier nivel. */
+function Buscador({ alElegir }: { alElegir: (id: string) => void }) {
+  const [q, setQ] = React.useState("");
+  const [lista, setLista] = React.useState<Coincidencia[]>([]);
+  React.useEffect(() => {
+    if (q.trim().length < 2) return;
+    let viva = true;
+    const t = setTimeout(() => {
+      fetch(`/api/admin/territorio/buscar?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((j: { resultados?: Coincidencia[] }) => viva && setLista(j.resultados ?? []))
+        .catch(() => viva && setLista([]));
+    }, 200);
+    return () => {
+      viva = false;
+      clearTimeout(t);
+    };
+  }, [q]);
+  const visibles = q.trim().length >= 2 ? lista : [];
   return (
-    <section className={`${tarjeta} p-5`}>
-      <h3 className="flex items-center gap-2 font-display text-lg font-semibold"><Icono className="size-5 text-brand" aria-hidden="true" /> {t}</h3>
-      {sub && <p className="mt-0.5 text-sm text-muted-foreground">{sub}</p>}
-      <div className="mt-4">{children}</div>
-    </section>
+    <div className="relative">
+      <label className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2.5 focus-within:border-brand">
+        <Search className="size-4 text-muted-foreground" aria-hidden="true" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Busca un departamento, ciudad, localidad, barrio o puesto…" aria-label="Buscar un lugar" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+      </label>
+      {visibles.length > 0 && (
+        <ul className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-2xl border border-border bg-surface p-1 shadow-xl">
+          {visibles.map((c) => (
+            <li key={c.id}>
+              <button type="button" onClick={() => { setQ(""); setLista([]); alElegir(c.id); }} className="flex w-full flex-col rounded-xl px-3 py-2 text-left hover:bg-surface-muted">
+                <span className="text-sm font-semibold">{titulo(c.nombre)}</span>
+                <span className="text-xs text-muted-foreground">{titulo(c.contexto)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
+/** Lo que se puede elegir ahora, un nivel más abajo. */
+function Elegir({ lugar, alElegir }: { lugar: Lugar; alElegir: (id: string) => void }) {
+  const [vista, setVista] = React.useState(0);
+  const [filtro, setFiltro] = React.useState("");
+  const [todo, setTodo] = React.useState(false);
+  const v = lugar.vistas[Math.min(vista, lugar.vistas.length - 1)];
+  if (!v) return null;
+  const f = filtro.trim().toLowerCase();
+  const items = f ? v.items.filter((i) => i.nombre.toLowerCase().includes(f)) : v.items;
+  const ver = todo || f ? items : items.slice(0, LIMITE);
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {lugar.vistas.length > 1 ? (
+          <div role="tablist" className="flex gap-1.5">
+            {lugar.vistas.map((x, i) => (
+              <button key={x.clave} type="button" role="tab" aria-selected={i === vista} onClick={() => { setVista(i); setFiltro(""); setTodo(false); }} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold ${i === vista ? "bg-brand text-brand-foreground" : "text-muted-foreground ring-1 ring-border hover:text-foreground"}`}>{x.titulo} ({x.items.length})</button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm font-semibold">{v.titulo} <span className="font-normal text-muted-foreground">({v.items.length})</span></p>
+        )}
+        {v.items.length > 12 && <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Filtrar…" aria-label="Filtrar la lista" className="ml-auto w-44 rounded-full border border-border bg-surface px-3 py-1.5 text-xs outline-none focus:border-brand" />}
+      </div>
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {ver.map((i) => (
+          <li key={i.id}>
+            <button type="button" onClick={() => alElegir(i.id)} className="flex h-full w-full items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left transition hover:border-brand hover:bg-surface-muted">
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{titulo(i.nombre)}</span>{i.detalle && <span className="block truncate text-xs text-muted-foreground">{i.detalle}</span>}</span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {items.length === 0 && <p className="text-sm text-muted-foreground">Nada coincide con «{filtro}».</p>}
+      {!todo && !f && items.length > LIMITE && <button type="button" onClick={() => setTodo(true)} className="rounded-full border border-border px-4 py-1.5 text-xs font-semibold hover:bg-surface-muted">Ver los {items.length}</button>}
+    </div>
+  );
+}
+
+type Pestana = "votacion" | "conflicto" | "seguidores" | "municipios";
+
 export function TerritorioPanel({ snapshot, demo }: { snapshot: CrmSnapshot; demo: boolean }) {
-  const [{ dep, muni }, setLugar] = React.useState(leerLugar);
+  const [id, setId] = React.useState(leerLugar);
   const [version, setVersion] = React.useState(0);
   const [eleccionId, setEleccionId] = React.useState<string>("");
+  const [pestana, setPestana] = React.useState<Pestana>("votacion");
   const [fuentesAbiertas, setFuentesAbiertas] = React.useState(false);
-  const lista = usePeticion<Lista>("/api/admin/territorio/lugares");
-  const dane = muni || dep;
-  const datos = usePeticion<Respuesta>(dep ? `/api/admin/territorio?dane=${dane}&v=${version}` : null);
+  const datos = usePeticion<Respuesta>(`/api/admin/territorio?id=${encodeURIComponent(id)}&v=${version}`);
 
   const red = React.useMemo(() => buildNetwork(snapshot, leerCampos(), TODAS), [snapshot]);
   const d = datos.estado === "listo" ? datos.data : null;
-  const seguidores = React.useMemo(
-    () => (d ? seguidoresEn(snapshot, red, { nivel: d.lugar.nivel, nombre: d.lugar.nombre, departamento: d.lugar.departamento?.nombre }, 8) : null),
-    [d, snapshot, red]
-  );
-
-  const cambiar = (nuevoDep: string, nuevoMuni = "") => {
-    setLugar({ dep: nuevoDep, muni: nuevoMuni });
-    guardarLugar(nuevoDep, nuevoMuni);
+  const lugar = d?.lugar ?? null;
+  const ir = (nuevo: string) => {
+    setId(nuevo);
+    guardarLugar(nuevo);
+    setPestana("votacion");
   };
-  const municipios = lista.estado === "listo" ? lista.data.municipios.filter((m) => m.dep === dep) : [];
-  const eleccion = d?.elecciones.find((e) => e.id === eleccionId) ?? d?.elecciones[0];
-  const nombreLugar = d ? (d.lugar.nivel === "municipio" ? `${d.lugar.nombre}, ${d.lugar.departamento?.nombre}` : d.lugar.nombre) : "";
 
-  // Las cuatro tarjetas de arriba: lo más reciente de cada cosa.
-  const senado2022 = d?.elecciones.find((e) => e.id === "congreso-2022");
-  const cabalReciente = d?.elecciones.find((e) => e.cabal && e.guardado);
-  const presidencia = d?.elecciones.find((e) => e.id === "presidencia-2026-2v");
-  const victimas = d?.indicadores.items.find((i) => i.clave === "victimas_total");
+  // Seguidores: el CRM ubica por departamento o municipio; en un barrio o puesto se muestran los del municipio.
+  const seguidores = React.useMemo(() => {
+    if (!lugar || lugar.nivel === "pais") return null;
+    const m = lugar.municipio;
+    return seguidoresEn(snapshot, red, m ? { nivel: "municipio", nombre: m.nombre, departamento: lugar.departamento?.nombre } : { nivel: "departamento", nombre: lugar.departamento!.nombre }, 8);
+  }, [lugar, snapshot, red]);
+
+  const eleccion = d?.elecciones.find((e) => e.id === eleccionId) ?? d?.elecciones[0];
+  const nombreLugar = lugar ? titulo(lugar.nombre) : "";
+  const hayInfo = !!lugar && lugar.nivel !== "pais";
+  const bajo = lugar && (lugar.nivel === "localidad" || lugar.nivel === "barrio" || lugar.nivel === "puesto");
+  const pestanas: [Pestana, string][] = [["votacion", "Votación"], ["conflicto", "Conflicto y problemas"], ["seguidores", "Seguidores"], ...(d?.relacion ? ([["municipios", "Municipio por municipio"]] as [Pestana, string][]) : [])];
 
   return (
-    <div className="space-y-5">
-      <div className={`${tarjeta} p-5`}>
-        <div className="flex flex-wrap items-start gap-4">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand"><MapPinned className="size-6" /></span>
-          <div className="min-w-[min(100%,16rem)] flex-1">
-            <h2 className="font-display text-lg font-semibold">Territorio: votación, conflicto y seguidores</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Elige un lugar para ver cómo le fue a María Fernanda Cabal y a la oposición, qué conflicto armado y qué problemas hay, cómo se relacionan municipio por municipio y quiénes son tus principales seguidores allí.</p>
+    <div className="space-y-4">
+      <div className={`${tarjeta} space-y-4 p-5`}>
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand"><MapPinned className="size-5" /></span>
+          <div>
+            <h2 className="font-display text-lg font-semibold">Territorio</h2>
+            <p className="text-sm text-muted-foreground">Elige un lugar, de lo general a lo particular. Cuando lo elijas verás cómo le fue a María Fernanda Cabal y a la oposición, el conflicto y tus seguidores allí.</p>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm"><span className="font-semibold">Departamento</span>
-            <select value={dep} onChange={(e) => cambiar(e.target.value)} disabled={lista.estado !== "listo"} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold outline-none focus:border-brand">
-              {lista.estado === "listo" ? lista.data.departamentos.map((x) => <option key={x.dane} value={x.dane}>{x.nombre}</option>) : <option>Cargando…</option>}
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-sm"><span className="font-semibold">Municipio</span>
-            <select value={muni} onChange={(e) => cambiar(dep, e.target.value)} disabled={lista.estado !== "listo"} className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold outline-none focus:border-brand">
-              <option value="">Todo el departamento</option>
-              {municipios.map((m) => <option key={m.dane} value={m.dane}>{m.nombre}</option>)}
-            </select>
-          </label>
-          {datos.estado === "cargando" && <Loader2 className="size-4 animate-spin text-brand" aria-label="Cargando" />}
-        </div>
+        <Buscador alElegir={ir} />
+
+        {lugar && lugar.nivel !== "pais" && (
+          <nav aria-label="Dónde estás" className="flex flex-wrap items-center gap-1 text-sm">
+            {lugar.ruta.map((m, i) => (
+              <React.Fragment key={m.id}>
+                {i > 0 && <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden="true" />}
+                {i === lugar.ruta.length - 1 ? <span className="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-brand-foreground">{titulo(m.nombre)}</span> : <button type="button" onClick={() => ir(m.id)} className="rounded-full px-2.5 py-1 text-xs font-semibold text-brand hover:bg-brand-soft">{titulo(m.nombre)}</button>}
+              </React.Fragment>
+            ))}
+            <span className="ml-2 text-xs text-muted-foreground">{NIVEL_TEXTO[lugar.nivel]}</span>
+          </nav>
+        )}
+
+        {datos.estado === "cargando" && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Cargando…</p>}
+        {datos.estado === "error" && <p className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-800 dark:text-rose-300">{datos.error}</p>}
+
+        {lugar?.nivel === "pais" && (
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Ciudades principales</p>
+              <div className="flex flex-wrap gap-2">{PRINCIPALES.map(([c, n]) => <button key={c} type="button" onClick={() => ir(c)} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:border-brand hover:bg-surface-muted">{n}</button>)}</div>
+            </div>
+            <Elegir lugar={lugar} alElegir={ir} />
+          </div>
+        )}
+        {lugar && lugar.nivel !== "pais" && lugar.vistas.length > 0 && (
+          <div className="border-t border-border pt-4"><Elegir key={lugar.id} lugar={lugar} alElegir={ir} /></div>
+        )}
+        {lugar?.puesto && (
+          <div className="rounded-xl bg-surface-muted/70 p-4 text-sm">
+            <p className="font-semibold">{nombreLugar}</p>
+            <p className="text-muted-foreground">{lugar.puesto.direccion ? titulo(lugar.puesto.direccion) : "Sin dirección oficial"} · {lugar.puesto.mesas} mesas{lugar.puesto.barrio ? <> · barrio <button type="button" onClick={() => ir(lugar.puesto!.barrio!.id)} className="font-semibold text-brand hover:underline">{titulo(lugar.puesto.barrio.nombre)}</button></> : ""}</p>
+          </div>
+        )}
+        {lugar?.cercanos && (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">Puestos más cercanos</p>
+            <ul className="grid gap-2 sm:grid-cols-2">{lugar.cercanos.map((c) => <li key={c.id}><button type="button" onClick={() => ir(c.id)} className="w-full rounded-xl border border-border px-3 py-2 text-left hover:border-brand"><span className="block truncate text-sm font-semibold">{titulo(c.nombre)}</span><span className="text-xs text-muted-foreground">a {c.metros >= 1000 ? `${(c.metros / 1000).toFixed(1)} km` : `${c.metros} m`}</span></button></li>)}</ul>
+          </div>
+        )}
+        {lugar && lugar.notas.map((n) => <p key={n} className="flex items-start gap-2 text-xs text-muted-foreground"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{n}</p>)}
       </div>
 
-      {datos.estado === "error" && <p className="rounded-xl bg-rose-500/10 p-4 text-sm text-rose-800 dark:text-rose-300">{datos.error}</p>}
-
-      {d && (
-        <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Tarjeta icono={Users} etiqueta="Población" valor={d.indicadores.poblacion ? fmt(d.indicadores.poblacion) : "—"} sub={`${nombreLugar} · DANE ${d.indicadores.anioPoblacion}`} estilo="from-emerald-500 to-teal-600" />
-            <Tarjeta icono={Vote} etiqueta="María Fernanda Cabal" valor={cabalReciente?.cabal ? fmt(cabalReciente.cabal.votos) : "—"} sub={cabalReciente?.cabal ? `${cabalReciente.titulo}: ${dec(cabalReciente.cabal.pct, 2)} %, puesto ${cabalReciente.cabal.puesto}` : senado2022?.guardado ? "Sin votos propios en este lugar" : "Sin datos guardados"} estilo="from-sky-500 to-indigo-600" />
-            <Tarjeta icono={Scale} etiqueta="Oposición (2ª vuelta 2026)" valor={presidencia?.oposicion ? `${dec(presidencia.oposicion.pct)} %` : "—"} sub={presidencia?.oposicion ? `Puesto ${presidencia.oposicion.puesto} de ${presidencia.partidos.length}` : "Sin datos guardados"} estilo="from-fuchsia-500 to-rose-600" />
-            <Tarjeta icono={Flame} etiqueta="Víctimas del conflicto" valor={victimas ? fmt(victimas.valor) : "—"} sub={victimas?.tasa ? `${fmt(victimas.tasa.cantidad)} por 1.000 hab.${victimas.veces ? ` · ${dec(victimas.veces)} × el país` : ""}` : "Sin cifras cargadas"} estilo="from-amber-400 to-orange-600" />
+      {hayInfo && d && (
+        <div className={`${tarjeta} p-5`}>
+          <div role="tablist" className="flex flex-wrap gap-1 border-b border-border">
+            {pestanas.map(([k, t]) => <button key={k} type="button" role="tab" aria-selected={pestana === k} onClick={() => setPestana(k)} className={`-mb-px border-b-2 px-4 py-2.5 text-sm ${pestana === k ? "border-brand font-semibold text-brand" : "border-transparent font-medium text-muted-foreground hover:text-foreground"}`}>{t}</button>)}
           </div>
+          {d.error && <p className="mt-4 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">{d.error}</p>}
 
-          <Seccion icono={Vote} titulo={`Votación en ${nombreLugar}`} sub="Ranking de partidos y candidatos, con María Fernanda y la oposición señaladas. Se lee de los resultados guardados en Supabase.">
-            <div className="space-y-4">
-              <div role="tablist" aria-label="Elección" className="flex flex-wrap gap-1.5">
-                {d.elecciones.map((e) => (
-                  <button key={e.id} type="button" role="tab" aria-selected={eleccion?.id === e.id} onClick={() => setEleccionId(e.id)} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${eleccion?.id === e.id ? "bg-brand text-brand-foreground shadow" : "text-muted-foreground ring-1 ring-border hover:text-foreground"}`}>{e.titulo}</button>
-                ))}
-              </div>
-              {eleccion && <Votacion e={eleccion} lugar={nombreLugar} />}
-              <div>
-                <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Cómo le fue a la oposición, elección por elección</p>
-                <Evolucion elecciones={d.elecciones} />
-                <p className="mt-2 text-[11px] text-muted-foreground">La oposición se toma como el Pacto Histórico (y su lista de 2018, la Lista de la Decencia). En 2026 el Centro Democrático fue con lista cerrada: no hay votos por candidato.</p>
-              </div>
-            </div>
-          </Seccion>
-
-          <Seccion icono={Flame} titulo="Conflicto armado y problemas" sub={`Cifras oficiales de ${nombreLugar}, guardadas en Supabase desde datos.gov.co, comparadas con el promedio del país.`}>
-            <Conflicto ind={d.indicadores} alCargar={() => setVersion((v) => v + 1)} />
-          </Seccion>
-
-          {d.relacion && (
-            <Seccion icono={Scale} titulo={`Relación en los municipios de ${d.lugar.nombre}`} sub="Cómo votó cada municipio frente a cuánto conflicto tiene. Elige una columna para ordenar.">
-              <RelacionTerritorio relacion={d.relacion} departamento={d.lugar.nombre} />
-            </Seccion>
-          )}
-
-          <Seccion icono={NetworkIcon} titulo={`Tus principales seguidores en ${nombreLugar}`} sub="Los contactos del CRM que viven aquí, ordenados por a cuánta gente trajeron y con cuántos están conectados (la red de abajo).">
-            {demo && <p className="mb-3 flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />Son contactos de ejemplo (inventados). Cuando conectes Bitrix24 aquí aparecerán los reales.</p>}
-            {!seguidores ? null : !seguidores.hayCampo ? (
-              <p className="text-sm text-muted-foreground">El CRM no tiene un campo de {d.lugar.nivel === "departamento" ? "departamento" : "municipio"} con el que ubicar a los contactos.</p>
-            ) : seguidores.total === 0 ? (
-              <p className="text-sm text-muted-foreground">Todavía no hay contactos del CRM en {nombreLugar}.</p>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground"><b className="text-foreground">{fmt(seguidores.total)}</b> contactos en {nombreLugar}{seguidores.total > seguidores.seguidores.length ? `; estos son los ${seguidores.seguidores.length} con más influencia` : ""}.</p>
-                <ol className="grid gap-2 sm:grid-cols-2">
-                  {seguidores.seguidores.map((s, i) => (
-                    <li key={s.id} className="flex items-center gap-3 rounded-xl border border-border p-3">
-                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand">{i + 1}</span>
-                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{s.nombre}</span><span className="block truncate text-xs text-muted-foreground">{s.municipio ? `${s.municipio} · ` : ""}trajo a {fmt(s.trajo)} · conectado con {fmt(s.conexiones)}</span></span>
-                    </li>
-                  ))}
-                </ol>
+          <div className="mt-5">
+            {pestana === "votacion" && !d.error && (
+              <div className="space-y-4">
+                {bajo && <p className="text-xs text-muted-foreground">{lugar!.nivel === "puesto" ? "Votos de este puesto." : lugar!.nivel === "barrio" ? "Suma de los puestos de votación del barrio." : "Suma de las zonas electorales de la localidad o comuna."}</p>}
+                <div role="tablist" aria-label="Elección" className="flex flex-wrap gap-1.5">
+                  {d.elecciones.map((e) => <button key={e.id} type="button" role="tab" aria-selected={eleccion?.id === e.id} onClick={() => setEleccionId(e.id)} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${eleccion?.id === e.id ? "bg-brand text-brand-foreground shadow" : "text-muted-foreground ring-1 ring-border hover:text-foreground"}`}>{e.titulo}</button>)}
+                </div>
+                {eleccion && <Votacion e={eleccion} lugar={nombreLugar} />}
+                <details className="rounded-xl border border-border p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">Cómo le fue a la oposición, elección por elección</summary>
+                  <div className="mt-3"><Evolucion elecciones={d.elecciones} /><p className="mt-2 text-[11px] text-muted-foreground">La oposición se toma como el Pacto Histórico (y su lista de 2018, la Lista de la Decencia).</p></div>
+                </details>
               </div>
             )}
-          </Seccion>
-
-          <details className={`${tarjeta} p-5`} open={fuentesAbiertas} onToggle={(e) => setFuentesAbiertas((e.currentTarget as HTMLDetailsElement).open)}>
-            <summary className="flex cursor-pointer items-center gap-2 font-display text-base font-semibold"><Database className="size-4 text-brand" /> Fuentes de las cifras del territorio</summary>
-            <div className="mt-4">{fuentesAbiertas && <FuentesTerritorio alCargar={() => setVersion((v) => v + 1)} />}</div>
-          </details>
-        </>
+            {pestana === "conflicto" && d.indicadores && (
+              <div className="space-y-4">
+                {bajo && lugar!.municipio && <p className="text-xs text-muted-foreground">Las cifras de conflicto existen por municipio, no por {lugar!.nivel === "barrio" ? "barrio" : lugar!.nivel === "puesto" ? "puesto" : "localidad"}: estas son las de {titulo(lugar!.municipio.nombre)}.</p>}
+                <Conflicto ind={d.indicadores} alCargar={() => setVersion((v) => v + 1)} />
+                <details className="rounded-xl border border-border p-3" open={fuentesAbiertas} onToggle={(e) => setFuentesAbiertas((e.currentTarget as HTMLDetailsElement).open)}>
+                  <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold"><Database className="size-4 text-brand" /> Fuentes de estas cifras</summary>
+                  <div className="mt-3">{fuentesAbiertas && <FuentesTerritorio alCargar={() => setVersion((v) => v + 1)} />}</div>
+                </details>
+              </div>
+            )}
+            {pestana === "seguidores" && seguidores && (
+              <div className="space-y-2">
+                {demo && <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />Son contactos de ejemplo (inventados). Cuando conectes Bitrix24 aquí aparecerán los reales.</p>}
+                {bajo && <p className="text-xs text-muted-foreground">El CRM ubica a los contactos por municipio: se muestran los de {lugar!.municipio ? titulo(lugar!.municipio.nombre) : ""}.</p>}
+                {!seguidores.hayCampo ? (
+                  <p className="text-sm text-muted-foreground">El CRM no tiene un campo de departamento o municipio con el que ubicar a los contactos.</p>
+                ) : seguidores.total === 0 ? (
+                  <p className="text-sm text-muted-foreground">Todavía no hay contactos del CRM en este lugar.</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground"><b className="text-foreground">{fmt(seguidores.total)}</b> contactos{seguidores.total > seguidores.seguidores.length ? `; estos son los ${seguidores.seguidores.length} con más influencia` : ""}.</p>
+                    <ol className="grid gap-2 sm:grid-cols-2">
+                      {seguidores.seguidores.map((s, i) => (
+                        <li key={s.id} className="flex items-center gap-3 rounded-xl border border-border p-3">
+                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand">{i + 1}</span>
+                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{s.nombre}</span><span className="block truncate text-xs text-muted-foreground">{s.municipio ? `${s.municipio} · ` : ""}trajo a {fmt(s.trajo)} · conectado con {fmt(s.conexiones)}</span></span>
+                        </li>
+                      ))}
+                    </ol>
+                  </>
+                )}
+              </div>
+            )}
+            {pestana === "municipios" && d.relacion && <RelacionTerritorio relacion={d.relacion} departamento={lugar!.nombre} />}
+          </div>
+        </div>
       )}
     </div>
   );
