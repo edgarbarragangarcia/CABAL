@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, useReducedMotion, useScroll, useTransform, type MotionValue } from "framer-motion";
+import { motion, useMotionValue, useReducedMotion, useScroll, useTransform, type MotionValue } from "framer-motion";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -242,9 +242,51 @@ function suscribirMQ(cb: () => void) {
   mq.addEventListener("change", cb);
   return () => mq.removeEventListener("change", cb);
 }
-/** El efecto de scroll solo corre en pantallas anchas y sin «reducir movimiento»: en el resto el hero es el de siempre. */
+/** El efecto de scroll del escritorio: pantallas anchas y sin «reducir movimiento». */
 function useScrollActivo() {
   return React.useSyncExternalStore(suscribirMQ, () => window.matchMedia(MQ_SCROLL).matches, () => false);
+}
+
+const MQ_MOVIL = "(max-width: 1023.98px) and (prefers-reduced-motion: no-preference)";
+function suscribirMovil(cb: () => void) {
+  const mq = window.matchMedia(MQ_MOVIL);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+/** El del celular y la tableta: una sección fija, a pantalla completa, debajo del retrato. Sin «reducir movimiento» no se monta. */
+function useMovilActivo() {
+  return React.useSyncExternalStore(suscribirMovil, () => window.matchMedia(MQ_MOVIL).matches, () => false);
+}
+
+/**
+ * Progreso (0 a 1) del recorrido por una pista alta: 0 cuando su borde de arriba toca el de la ventana y 1 cuando su borde de
+ * abajo llega al de abajo. Se calcula a mano y no con `useScroll`: con ese, framer-motion enlaza las opacidades a la línea de
+ * tiempo nativa del navegador (ScrollTimeline), que en algunos navegadores se queda en 0 % o deja de avisar los cambios.
+ * Medir el bloque en cada fotograma tampoco se desfasa si la página de arriba cambia de alto al cargar imágenes o fuentes.
+ */
+function useProgreso(ref: React.RefObject<HTMLElement | null>) {
+  const p = useMotionValue(0);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Sin requestAnimationFrame: el navegador ya junta los eventos de scroll en uno por fotograma, y con la pestaña oculta
+    // o en segundo plano un rAF no corre y el progreso se quedaría atrasado.
+    const calcular = () => {
+      const total = el.offsetHeight - window.innerHeight;
+      p.set(total > 0 ? Math.min(1, Math.max(0, -el.getBoundingClientRect().top / total)) : 0);
+    };
+    calcular();
+    window.addEventListener("scroll", calcular, { passive: true });
+    window.addEventListener("resize", calcular);
+    const ro = new ResizeObserver(calcular);
+    ro.observe(el);
+    return () => {
+      window.removeEventListener("scroll", calcular);
+      window.removeEventListener("resize", calcular);
+      ro.disconnect();
+    };
+  }, [ref, p]);
+  return p;
 }
 
 const MOMENTOS: { verbo: string; area: string; texto: string; href: string; cta: string; rango: [number, number, number, number] }[] = [
@@ -253,18 +295,18 @@ const MOMENTOS: { verbo: string; area: string; texto: string; href: string; cta:
   { verbo: "Acompañamos", area: "Comunidad", texto: "Una red de personas que trabaja unida por el futuro de Colombia.", href: "/unete", cta: "Únete a la comunidad", rango: [0.82, 0.9, 0.98, 1] },
 ];
 
-function Momento({ m, progreso, indice }: { m: (typeof MOMENTOS)[number]; progreso: MotionValue<number>; indice: number }) {
+function Momento({ m, progreso, indice, className = "grid place-items-center" }: { m: (typeof MOMENTOS)[number]; progreso: MotionValue<number>; indice: number; className?: string }) {
   const opacity = useTransform(progreso, m.rango, [0, 1, 1, indice === MOMENTOS.length - 1 ? 1 : 0]);
   const y = useTransform(progreso, m.rango, [48, 0, 0, indice === MOMENTOS.length - 1 ? 0 : -48]);
   const eventos = useTransform(opacity, (o) => (o > 0.5 ? "auto" : "none"));
   return (
-    <motion.div style={{ opacity, y, pointerEvents: eventos }} className="absolute inset-0 grid place-items-center">
+    <motion.div style={{ opacity, y, pointerEvents: eventos }} className={`absolute inset-0 ${className}`}>
       <div className="max-w-xl px-8 text-[#f1efe9]">
         <span className="inline-flex items-center gap-2.5 text-xs font-semibold tracking-[0.2em] text-[#e0bd7c] uppercase">
           <span className="h-px w-10 bg-[#e0bd7c]/60" aria-hidden="true" />
           {String(indice + 1).padStart(2, "0")} · {m.area}
         </span>
-        <p className="mt-5 font-display text-[clamp(3rem,6vw,5.5rem)] font-bold leading-none tracking-[-0.03em]">{m.verbo}</p>
+        <p className="mt-5 font-display text-[clamp(2.5rem,6vw,5.5rem)] font-bold leading-none tracking-[-0.03em]">{m.verbo}</p>
         <p className="mt-6 max-w-md text-lg leading-relaxed text-[#f1efe9]/80">{m.texto}</p>
         <Link href={m.href} className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#e0bd7c] px-6 py-3 text-sm font-semibold text-[#1c1405] transition-transform hover:translate-x-0.5">
           {m.cta} <ArrowRight weight="bold" className="size-4" aria-hidden="true" />
@@ -274,18 +316,62 @@ function Momento({ m, progreso, indice }: { m: (typeof MOMENTOS)[number]; progre
   );
 }
 
+/**
+ * Celular y tableta: el hero no se puede fijar (el retrato, el titular y la declaración suman más que la pantalla), así que justo
+ * debajo del retrato empieza una sección fija a pantalla completa, del mismo verde, que recorre los tres momentos con el scroll
+ * mientras el retrato sube y crece. Termina y la página sigue normal.
+ */
+const RANGO_MOVIL: [number, number, number, number][] = [[0.04, 0.14, 0.3, 0.38], [0.34, 0.44, 0.6, 0.68], [0.64, 0.74, 0.96, 1]];
+
+function MundoMovil() {
+  const pista = React.useRef<HTMLDivElement>(null);
+  const p = useProgreso(pista);
+  const retratoY = useTransform(p, [0, 1], ["22%", "0%"]);
+  const retratoEscala = useTransform(p, [0, 1], [0.9, 1.04]);
+  const luz = useTransform(p, [0, 1], [0.3, 0.85]);
+  const barra = useTransform(p, [0, 1], ["0%", "100%"]);
+  return (
+    <div ref={pista} className="relative h-[380svh] lg:hidden">
+      <div className="sticky top-0 isolate h-svh overflow-hidden bg-[linear-gradient(170deg,#031610_0%,#06281c_45%,#0c5a3f_100%)] text-[#f1efe9]">
+        <div aria-hidden className="bg-grain absolute inset-0 opacity-[0.14] mix-blend-overlay" />
+        <motion.div aria-hidden style={{ opacity: luz }} className="absolute left-1/2 top-[38%] size-[120vw] max-w-[640px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(48,170,120,0.55),transparent)]" />
+        {ICONOS_PANEL.slice(0, 5).map(({ Icono }, i) => (
+          <Icono key={i} aria-hidden weight="thin" className="absolute size-20 text-white/[0.07]" style={{ left: `${[8, 72, 80, 4, 40][i]}%`, top: `${[10, 6, 52, 58, 78][i]}%`, rotate: `${[-14, 12, -8, 10, -16][i]}deg` }} />
+        ))}
+
+        {/* Retrato: sale desde abajo y crece mientras se lee; se desvanece hacia arriba para no pisar el texto */}
+        <motion.div style={{ y: retratoY, scale: retratoEscala }} className="absolute inset-x-0 bottom-0 mx-auto h-[56svh] w-[min(100vw,24rem)] origin-bottom">
+          <Image src="/cabal-recorte.webp" alt="" aria-hidden width={928} height={1456} sizes="(max-width: 1024px) 100vw, 420px" className="size-full object-contain object-bottom [mask-image:linear-gradient(to_bottom,transparent_0%,#000_34%)] drop-shadow-[0_22px_28px_rgba(2,18,12,0.45)]" />
+        </motion.div>
+        <div aria-hidden className="absolute inset-x-0 top-0 h-[58svh] bg-gradient-to-b from-[#031610] via-[#031610]/75 to-transparent" />
+
+        <div className="absolute inset-x-0 top-0 h-[58svh]">
+          {MOMENTOS.map((m, i) => (
+            <Momento key={m.verbo} m={{ ...m, rango: RANGO_MOVIL[i] }} progreso={p} indice={i} className="grid place-items-center content-center" />
+          ))}
+        </div>
+
+        <div aria-hidden className="absolute inset-x-6 bottom-6 z-10 h-px bg-white/20">
+          <motion.span style={{ width: barra }} className="block h-full bg-[#e0bd7c]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ───────────────────────────────────── Hero ───────────────────────────────────── */
 
 export function Hero() {
   const marquee = [...cabalBills, ...cabalBills];
   const activo = useScrollActivo();
+  const movil = useMovilActivo();
   const pista = React.useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: pista, offset: ["start start", "end end"] });
+  const scrollYProgress = useProgreso(pista);
   // 0 → 0,12 reposo · 0,12 → 0,45 el panel avanza y cubre la pantalla · 0,4 → 1 los tres momentos
   const dx = useTransform(scrollYProgress, [0.12, 0.45], ["0vw", "-100vw"]);
   const textoOpacity = useTransform(scrollYProgress, [0.08, 0.28], [1, 0]);
   const textoY = useTransform(scrollYProgress, [0.08, 0.28], [0, -70]);
-  const retratoX = useTransform(scrollYProgress, [0.12, 0.5], ["0vw", "-25vw"]);
+  const retratoX = useTransform(scrollYProgress, [0.12, 0.5], ["0vw", "5vw"]);
   const retratoEscala = useTransform(scrollYProgress, [0.12, 0.5], [1, 1.12]);
   const declaracionOpacity = useTransform(scrollYProgress, [0.06, 0.2], [1, 0]);
   const indicador = useTransform(scrollYProgress, [0, 0.06], [1, 0]);
@@ -375,7 +461,7 @@ export function Hero() {
         <>
           <div className="pointer-events-none absolute inset-0 z-20">
             {MOMENTOS.map((m, i) => (
-              <Momento key={m.verbo} m={m} progreso={scrollYProgress} indice={i} />
+              <Momento key={m.verbo} m={m} progreso={scrollYProgress} indice={i} className="grid place-items-center justify-items-start pl-[6vw] xl:pl-[9vw]" />
             ))}
           </div>
           <motion.div aria-hidden style={{ opacity: indicador }} className="absolute bottom-8 left-1/2 z-20 -translate-x-1/2 text-center text-[0.65rem] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
@@ -387,6 +473,8 @@ export function Hero() {
       </div>
       </div>
       </div>
+
+      {movil && <MundoMovil />}
 
       <Trayectoria />
 
