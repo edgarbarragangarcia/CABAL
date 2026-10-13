@@ -7,7 +7,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
  * se acumula aquí: así el panel muestra más que la última búsqueda y no depende de que la fuente siga mostrándolo.
  * Nunca rompe la consulta: sin Supabase o sin la tabla, devuelve undefined y el panel usa lo que trajo la fuente en vivo.
  */
-export type TipoItem = "video" | "dicho" | "cruce" | "prensa" | "x";
+export type TipoItem = "video" | "dicho" | "cruce" | "prensa" | "x" | "web";
 export type ItemMonitoreo = { personaje: string; tipo: TipoItem; enlace: string; titulo: string; medio: string | null; fecha: string; vistas: number | null; nombra: boolean; donde: string | null; contexto: string | null };
 
 const TABLA = "monitoreo_items";

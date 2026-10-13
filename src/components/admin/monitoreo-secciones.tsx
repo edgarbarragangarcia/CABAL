@@ -1,16 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { AtSign, Database, ExternalLink, Newspaper, RefreshCw, Search, Share2, Users } from "lucide-react";
+import { AtSign, Database, ExternalLink, Globe, Newspaper, RefreshCw, Search, Share2, Users } from "lucide-react";
 
 import { BannerEnVivo, MonitoreoWidget, RedesWidget, useMonitoreo, useRedes } from "@/components/admin/monitoreo-panel";
 import { usePeticion } from "@/app/admin/(protected)/analisis-publicaciones/peticion";
 import type { DatosPersonaje, NoticiaMarcada, RespuestaPersonajes } from "@/lib/monitoreo/personajes";
+import type { PlataformaId, RespuestaMenciones } from "@/lib/monitoreo/menciones-web";
 
-type Seccion = "prensa" | "redes" | "politicos";
+type Seccion = "prensa" | "redes" | "todo" | "politicos";
 const SECCIONES: { id: Seccion; label: string; sub: string; icon: typeof Newspaper }[] = [
   { id: "prensa", label: "Prensa sobre María Fernanda", sub: "Noticias, medios, videos y reacción pública", icon: Newspaper },
   { id: "redes", label: "Redes de María Fernanda", sub: "YouTube y X: lo que dicen de ella y sus videos", icon: Share2 },
+  { id: "todo", label: "En todas partes", sub: "Facebook, Instagram, TikTok, X, YouTube y la web: dónde la nombran", icon: Globe },
   { id: "politicos", label: "Otros políticos", sub: "Qué dicen en sus videos y en la prensa, y si nombran a María Fernanda", icon: Users },
 ];
 
@@ -234,6 +236,88 @@ function Politicos() {
   );
 }
 
+const COLOR_PLATAFORMA: Record<PlataformaId, string> = {
+  prensa: "#0f766e", facebook: "#1877f2", instagram: "#e1306c", tiktok: "#111827", x: "#374151", youtube: "#dc2626",
+  threads: "#4b5563", reddit: "#f97316", linkedin: "#0a66c2", telegram: "#0ea5e9", web: "#6b7280",
+};
+
+/** Dónde nombran a María Fernanda: prensa y lo público de las redes que un buscador indexa, todo en una lista. */
+function EnTodasPartes() {
+  const [v, setV] = React.useState(0);
+  const [filtro, setFiltro] = React.useState<PlataformaId | "todas">("todas");
+  const [mostrar, setMostrar] = React.useState(40);
+  const r = usePeticion<RespuestaMenciones>(`/api/admin/monitoreo/menciones${v ? `?forzar=1&v=${v}` : ""}`);
+  const cargando = r.estado === "cargando";
+  const datos = r.estado === "listo" ? r.data : undefined;
+  const lista = datos ? datos.menciones.filter((m) => filtro === "todas" || m.plataforma === filtro) : [];
+  const conDatos = datos?.plataformas.filter((p) => p.total > 0) ?? [];
+  const masActiva = [...conDatos].sort((a, b) => b.total - a.total)[0];
+  const ultima = datos?.menciones[0];
+  const redes = conDatos.filter((p) => p.id !== "prensa");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">Busca el nombre de María Fernanda en la prensa, Facebook, Instagram, TikTok, X, YouTube y más, sin claves. Se actualiza al abrir y con el botón.</p>
+        <button type="button" onClick={() => { setV((n) => n + 1); setMostrar(40); }} disabled={cargando} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60">
+          <RefreshCw className={`size-3 ${cargando ? "animate-spin" : ""}`} aria-hidden="true" /> Actualizar
+        </button>
+      </div>
+      {r.estado === "error" && <p className="rounded-xl bg-red-500/10 p-3 text-xs text-red-600">{r.error}</p>}
+      {!datos && cargando && <p className="text-sm text-muted-foreground">Buscando en todas las fuentes… (puede tardar unos segundos)</p>}
+
+      {datos && (
+        <>
+          <div className="rounded-2xl bg-sky-500/10 p-4">
+            <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Lo más importante</p>
+            <p className="mt-1 text-sm leading-relaxed sm:text-base">
+              {datos.menciones.length === 0 ? "No se encontraron menciones públicas en este momento." : (
+                <>
+                  Se encontraron <strong>{datos.menciones.length}</strong> menciones públicas en <strong>{conDatos.length}</strong> {conDatos.length === 1 ? "fuente" : "fuentes"}
+                  {masActiva ? <>; la más activa es <strong>{masActiva.nombre}</strong> ({masActiva.total})</> : null}.
+                  {redes.length > 0 ? <> En redes: {redes.map((p) => `${p.nombre} ${p.total}`).join(" · ")}.</> : " No apareció nada en redes sociales indexadas."}
+                  {ultima ? <> La más reciente es de {hace(ultima.fecha)} ({ultima.fuente}).</> : null}
+                </>
+              )}
+            </p>
+          </div>
+
+          <div role="tablist" aria-label="Plataforma" className="flex flex-wrap gap-1.5">
+            <button type="button" role="tab" aria-selected={filtro === "todas"} onClick={() => { setFiltro("todas"); setMostrar(40); }} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filtro === "todas" ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}>Todas <span className="tabular-nums opacity-70">{datos.menciones.length}</span></button>
+            {datos.plataformas.map((p) => (
+              <button key={p.id} type="button" role="tab" aria-selected={filtro === p.id} disabled={p.total === 0} onClick={() => { setFiltro(p.id); setMostrar(40); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${filtro === p.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`} title={p.consultada ? undefined : "No respondió en esta consulta"}>
+                <span className="size-2 rounded-full" style={{ background: COLOR_PLATAFORMA[p.id] }} aria-hidden="true" />{p.nombre} <span className="tabular-nums opacity-70">{p.total}</span>
+              </button>
+            ))}
+          </div>
+
+          {lista.length === 0 ? <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Sin menciones en esta fuente.</p> : (
+            <ul className="divide-y divide-border rounded-2xl border border-border">
+              {lista.slice(0, mostrar).map((m) => (
+                <li key={`${m.plataforma}${m.enlace}`} className="px-4 py-3 text-sm">
+                  <a href={m.enlace} target="_blank" rel="noreferrer noopener" className="line-clamp-2 font-medium hover:underline">{m.titulo}</a>
+                  <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-white" style={{ background: COLOR_PLATAFORMA[m.plataforma] }}>{datos.plataformas.find((p) => p.id === m.plataforma)?.nombre ?? m.plataforma}</span>
+                    {m.fuente} · {hace(m.fecha)}{m.extracto && m.plataforma === "youtube" ? ` · ${m.extracto}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {lista.length > mostrar && <button type="button" onClick={() => setMostrar((n) => n + 40)} className="rounded-full border border-border px-4 py-2 text-xs font-semibold hover:bg-surface-muted">Ver más ({lista.length - mostrar})</button>}
+
+          <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+            <Database className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+            <span>
+              {datos.guardado ? "Lo encontrado se guarda en Supabase y la lista acumula 30 días." : "Aún no se guarda el historial: ejecuta supabase/monitoreo.sql en Supabase."} Solo se ven publicaciones públicas que Google, Bing y YouTube indexan: no hay acceso a grupos privados, historias ni comentarios, y Meta y TikTok no permiten buscar su contenido sin ser una institución de investigación o pagar una herramienta de escucha.
+            </span>
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** Monitoreo en tres partes: la prensa sobre María Fernanda, sus redes, y lo que publican otros políticos. Cada parte consulta al abrirse. */
 export function MonitoreoSecciones() {
   const [seccion, setSeccion] = React.useState<Seccion>("prensa");
@@ -242,7 +326,7 @@ export function MonitoreoSecciones() {
   return (
     <div className="space-y-4">
       <BannerEnVivo datos={monitoreo.datos} />
-      <div role="tablist" className="grid gap-2 sm:grid-cols-3">
+      <div role="tablist" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {SECCIONES.map((s) => (
           <button key={s.id} type="button" role="tab" aria-selected={seccion === s.id} onClick={() => setSeccion(s.id)} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${seccion === s.id ? "border-brand bg-brand-soft" : "border-border hover:bg-surface-muted"}`}>
             <s.icon className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
@@ -253,6 +337,7 @@ export function MonitoreoSecciones() {
       <div className="rounded-3xl border border-border bg-surface p-5">
         {seccion === "prensa" && <MonitoreoWidget {...monitoreo} />}
         {seccion === "redes" && <RedesWidget {...redes} />}
+        {seccion === "todo" && <EnTodasPartes />}
         {seccion === "politicos" && <Politicos />}
       </div>
     </div>
