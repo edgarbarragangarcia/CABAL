@@ -3,6 +3,8 @@ import "server-only";
 import { entidades } from "@/lib/informe/fuentes";
 import { guardarItems, leerItems, type ItemMonitoreo } from "./historial";
 import { nombraAMariaFernanda } from "./menciones";
+import { lugarDelTexto } from "./lugares";
+import { MEDIOS_REGIONALES, medioPorDominio, medioPorFb, medioPorInicio, type MedioRegional } from "./medios-regionales";
 
 /**
  * Dónde nombran a María Fernanda Cabal, sin claves de pago: Google Noticias (y con él, lo público de Facebook, Instagram, TikTok, X,
@@ -14,9 +16,15 @@ import { nombraAMariaFernanda } from "./menciones";
  */
 
 export type PlataformaId = "prensa" | "facebook" | "instagram" | "tiktok" | "x" | "youtube" | "reddit" | "threads" | "linkedin" | "telegram" | "web";
-export type MencionWeb = { plataforma: PlataformaId; fuente: string; titulo: string; fecha: string; enlace: string; extracto: string | null };
+/** Dónde se ubica una mención: el portal que la publica (y su ciudad) y el lugar que nombra el titular. */
+export type GeoMencion = {
+  medio?: { id: string; nombre: string; ciudad: string; dane: string; departamento: string; lat: number; lon: number };
+  texto?: { nivel: "municipio" | "departamento"; dane: string; nombre: string; departamento: string; lat: number; lon: number };
+};
+export type MencionWeb = { plataforma: PlataformaId; fuente: string; titulo: string; fecha: string; enlace: string; extracto: string | null; dominio?: string; geo?: GeoMencion; /** El nombre de María Fernanda está en el titular (si no, la nombra el texto de la nota). */ enTitular?: boolean };
 export type ResumenPlataforma = { id: PlataformaId; nombre: string; total: number; consultada: boolean };
-export type RespuestaMenciones = { generadoEn: string; guardado: boolean; plataformas: ResumenPlataforma[]; menciones: MencionWeb[] };
+
+export type RespuestaMenciones = { generadoEn: string; guardado: boolean; plataformas: ResumenPlataforma[]; menciones: MencionWeb[]; /** Qué portales y páginas de Facebook del directorio respondieron esta vez (para no leer un fallo como «sin menciones»). */ consultados: { portales: string[]; paginas: string[] } };
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 export const PLATAFORMAS: { id: PlataformaId; nombre: string; sitio?: string }[] = [
@@ -70,13 +78,20 @@ async function googleNoticias(q: string, plataforma: PlataformaId, limite: numbe
   for (const it of xml.match(/<item>[\s\S]*?<\/item>/g) ?? []) {
     if (lista.length >= limite) break;
     const fuente = texto(etiqueta(it, "source")) || "Sin nombre";
+    const url = it.match(/<source url="([^"]+)"/)?.[1];
+    let dominio: string | undefined;
+    try {
+      dominio = url ? new URL(url).hostname.replace(/^www\./, "") : undefined;
+    } catch {
+      dominio = undefined;
+    }
     let titulo = texto(etiqueta(it, "title"));
     if (fuente && titulo.endsWith(` - ${fuente}`)) titulo = titulo.slice(0, -(fuente.length + 3));
     const fecha = etiqueta(it, "pubDate");
     const clave = titulo.toLowerCase().replace(/\W+/g, " ").slice(0, 120);
     if (!titulo || !fecha || vistos.has(clave)) continue;
     vistos.add(clave);
-    lista.push({ plataforma, fuente, titulo, fecha: new Date(fecha).toISOString(), enlace: texto(etiqueta(it, "link")), extracto: null });
+    lista.push({ plataforma, fuente, titulo, fecha: new Date(fecha).toISOString(), enlace: texto(etiqueta(it, "link")), extracto: null, dominio });
   }
   return lista;
 }
@@ -131,14 +146,20 @@ async function youtubeBusqueda(): Promise<MencionWeb[]> {
 let memoria: { en: number; datos: RespuestaMenciones } | null = null;
 const TTL = 15 * 60_000;
 const PERSONAJE = "mafe";
+/** Pasado este tiempo ya no se lanzan más consultas: lo que falte queda como «no consultado» y no como «sin menciones». */
+const PRESUPUESTO_MS = 48_000;
+const GRUPO = 5;
 
-async function conLimite<T>(tareas: (() => Promise<T>)[], limite: number): Promise<PromiseSettledResult<T>[]> {
-  const salida: PromiseSettledResult<T>[] = new Array(tareas.length);
+type Tarea = { plataforma: PlataformaId; ejecutar: () => Promise<MencionWeb[]>; /** Portales o páginas que cubre esta consulta. */ cubre?: { portales?: string[]; paginas?: string[] } };
+
+async function conLimite<T>(tareas: (() => Promise<T>)[], limite: number, hasta: number): Promise<(PromiseSettledResult<T> | undefined)[]> {
+  const salida: (PromiseSettledResult<T> | undefined)[] = new Array(tareas.length);
   let i = 0;
   await Promise.all(
     Array.from({ length: Math.min(limite, tareas.length) }, async () => {
       while (i < tareas.length) {
         const k = i++;
+        if (Date.now() > hasta) return; // se acabó el tiempo: las que faltan quedan sin resultado (undefined)
         try {
           salida[k] = { status: "fulfilled", value: await tareas[k]() };
         } catch (reason) {
@@ -150,10 +171,58 @@ async function conLimite<T>(tareas: (() => Promise<T>)[], limite: number): Promi
   return salida;
 }
 
+/**
+ * Las consultas a los portales y a las páginas de Facebook regionales (directorio en medios-regionales.ts):
+ *  - los portales se buscan de a cinco con `site:` (Google Noticias dice de qué dominio es cada noticia);
+ *  - cada página de Facebook se busca sola con `site:facebook.com/<página>`, así se sabe de qué portal, y de qué ciudad, es cada publicación.
+ */
+function tareasRegionales(): Tarea[] {
+  const tareas: Tarea[] = [];
+  const web = MEDIOS_REGIONALES.filter((m) => m.web);
+  for (let i = 0; i < web.length; i += GRUPO) {
+    const grupo = web.slice(i, i + GRUPO);
+    tareas.push({
+      plataforma: "prensa",
+      cubre: { portales: grupo.map((m) => m.id) },
+      ejecutar: async () => (await googleNoticias(`${NOMBRE} (${grupo.map((m) => `site:${m.dominio}`).join(" OR ")}) when:30d`, "prensa", 100)).filter((m) => !!m.dominio && !!medioPorDominio(m.dominio)),
+    });
+  }
+  for (const m of MEDIOS_REGIONALES.filter((x) => x.fb && x.fbIndexado)) {
+    tareas.push({
+      plataforma: "facebook",
+      cubre: { paginas: [m.id] },
+      ejecutar: async () =>
+        (await googleNoticias(`${NOMBRE} site:facebook.com/${m.fb} when:30d`, "facebook", 60))
+          .filter((x) => nombraAMariaFernanda(x.titulo))
+          .map((x) => ({ ...x, fuente: m.nombre, dominio: `facebook.com/${m.fb}` })),
+    });
+  }
+  return tareas;
+}
+
+const claveDe = (t: string) => t.toLowerCase().replace(/\W+/g, " ").slice(0, 100);
+
+/** Pone a una mención su ubicación: el portal que la publica y el lugar que nombra el titular. */
+function ubicar(m: MencionWeb): MencionWeb {
+  let portal: MedioRegional | null = null;
+  const d = m.dominio ?? "";
+  if (d.startsWith("facebook.com/")) portal = medioPorFb(d.slice("facebook.com/".length));
+  else if (d && d !== "facebook.com") portal = medioPorDominio(d);
+  // Las publicaciones de Facebook que llegan por la búsqueda general empiezan, muchas veces, por el nombre de la página.
+  if (!portal && m.plataforma === "facebook") portal = medioPorInicio(m.titulo);
+  const lugar = lugarDelTexto(`${m.titulo} ${m.extracto ?? ""}`);
+  const geo: GeoMencion = {};
+  if (portal) geo.medio = { id: portal.id, nombre: portal.nombre, ciudad: portal.ciudad, dane: portal.dane, departamento: portal.departamento, lat: portal.lat, lon: portal.lon };
+  if (lugar) geo.texto = lugar;
+  const enTitular = nombraAMariaFernanda(m.titulo);
+  return geo.medio || geo.texto ? { ...m, geo, enTitular } : { ...m, enTitular };
+}
+
 export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> {
   if (!forzar && memoria && Date.now() - memoria.en < TTL) return memoria.datos;
+  const hasta = Date.now() + PRESUPUESTO_MS;
 
-  const trabajos: { plataforma: PlataformaId; ejecutar: () => Promise<MencionWeb[]> }[] = [
+  const generales: Tarea[] = [
     { plataforma: "prensa", ejecutar: () => googleNoticias(`${NOMBRE} when:14d`, "prensa", 60) },
     { plataforma: "prensa", ejecutar: bingNoticias },
     // En las redes, Google a veces devuelve publicaciones que la nombran solo en el texto completo o en una respuesta: se dejan las que
@@ -162,21 +231,28 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
       plataforma: p.id,
       ejecutar: async () => (await googleNoticias(`${NOMBRE} site:${p.sitio} when:30d`, p.id, 100)).filter((m) => nombraAMariaFernanda(m.titulo)).slice(0, 60),
     })),
-    { plataforma: "youtube", ejecutar: youtubeBusqueda },
+    { plataforma: "youtube" as PlataformaId, ejecutar: youtubeBusqueda },
   ];
-  const resultados = await conLimite(trabajos.map((t) => t.ejecutar), 4);
+  const regionales = tareasRegionales();
+  const trabajos = [...generales, ...regionales];
+  const resultados = await conLimite(trabajos.map((t) => t.ejecutar), 5, hasta);
 
   const consultada = new Set<PlataformaId>();
+  const consultados = { portales: new Set<string>(), paginas: new Set<string>() };
   const nuevas: MencionWeb[] = [];
   resultados.forEach((r, i) => {
-    if (r.status !== "fulfilled") return;
-    consultada.add(trabajos[i].plataforma);
+    if (r?.status !== "fulfilled") return;
+    const t = trabajos[i];
+    consultada.add(t.plataforma);
+    t.cubre?.portales?.forEach((id) => consultados.portales.add(id));
+    t.cubre?.paginas?.forEach((id) => consultados.paginas.add(id));
     nuevas.push(...r.value);
   });
 
   // Se guarda en Supabase: así el panel acumula lo que va apareciendo aunque la fuente deje de mostrarlo.
+  // `medio` guarda «plataforma|fuente|dominio»: con el dominio (o la página de Facebook) se vuelve a ubicar al leer el historial.
   const guardado = await guardarItems(
-    nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto }))
+    nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}|${m.dominio ?? ""}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto }))
   );
   let todas = nuevas;
   if (guardado) {
@@ -185,27 +261,28 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
       todas = previas
         .filter((p) => p.personaje === PERSONAJE && p.tipo === "web")
         .map((p): MencionWeb => {
-          const [plataforma, ...resto] = (p.medio ?? "web|").split("|");
-          return { plataforma: (plataforma as PlataformaId) || "web", fuente: resto.join("|") || "Web", titulo: p.titulo, fecha: p.fecha, enlace: p.enlace, extracto: p.contexto };
+          const [plataforma, fuente, dominio] = (p.medio ?? "web||").split("|");
+          return { plataforma: (plataforma as PlataformaId) || "web", fuente: fuente || "Web", titulo: p.titulo, fecha: p.fecha, enlace: p.enlace, extracto: p.contexto, dominio: dominio || undefined };
         });
     }
   }
-  // Sin repetir (mismo enlace o mismo titular en la misma plataforma) y lo más reciente primero.
+  // Se ubica cada mención; al quitar repetidas (mismo enlace o mismo titular en la misma plataforma) gana la que tiene ubicación del portal.
+  const ubicadas = todas.map(ubicar).sort((a, b) => Number(!!b.geo?.medio) - Number(!!a.geo?.medio) || b.fecha.localeCompare(a.fecha));
   const vistos = new Set<string>();
-  const menciones = todas
+  const menciones = ubicadas
     .filter((m) => {
       const k = `${m.plataforma}|${m.enlace}`;
-      const t = `${m.plataforma}|${m.titulo.toLowerCase().replace(/\W+/g, " ").slice(0, 100)}`;
+      const t = `${m.plataforma}|${claveDe(m.titulo)}`;
       if (vistos.has(k) || vistos.has(t)) return false;
       vistos.add(k);
       vistos.add(t);
       return true;
     })
     .sort((a, b) => b.fecha.localeCompare(a.fecha))
-    .slice(0, 400);
+    .slice(0, 600);
 
   const plataformas = PLATAFORMAS.map((p) => ({ id: p.id, nombre: p.nombre, total: menciones.filter((m) => m.plataforma === p.id).length, consultada: consultada.has(p.id) }));
-  const respuesta = { generadoEn: new Date().toISOString(), guardado, plataformas, menciones };
+  const respuesta = { generadoEn: new Date().toISOString(), guardado, plataformas, menciones, consultados: { portales: [...consultados.portales], paginas: [...consultados.paginas] } };
   memoria = { en: Date.now(), datos: respuesta };
   return respuesta;
 }

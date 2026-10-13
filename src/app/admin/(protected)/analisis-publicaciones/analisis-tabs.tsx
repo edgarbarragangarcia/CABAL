@@ -60,8 +60,8 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
       <div className="mt-6">
         {tab === "centro" && (
           <Lienzo>
-            <Portada icono={LayoutDashboard} etiqueta="Prensa y redes" titulo="Monitoreo" descripcion="Qué se dice de María Fernanda Cabal en la prensa, qué publica ella en redes y qué hacen otros políticos. La información se trae al abrir y con el botón Actualizar.">
-              <ChipPortada icono={Eye}>Tres miradas: prensa, redes de María Fernanda y otros políticos</ChipPortada>
+            <Portada icono={LayoutDashboard} etiqueta="Prensa y redes" titulo="Monitoreo" descripcion="Qué se dice de María Fernanda Cabal en la prensa, en los portales y páginas de Facebook de cada región y en redes, de qué ciudad viene cada noticia, y qué hacen otros políticos. La información se trae al abrir y con el botón Actualizar.">
+              <ChipPortada icono={Eye}>Todo sobre María Fernanda en un solo lugar, con mapa de regiones, y otros políticos</ChipPortada>
             </Portada>
             <MonitoreoSecciones />
           </Lienzo>

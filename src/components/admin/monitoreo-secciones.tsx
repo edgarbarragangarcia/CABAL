@@ -1,25 +1,26 @@
 "use client";
 
 import * as React from "react";
-import { AtSign, Database, ExternalLink, Globe, Newspaper, RefreshCw, Search, Share2, Users } from "lucide-react";
+import { AtSign, Database, ExternalLink, Globe, MapPin, ThumbsUp, Newspaper, RefreshCw, Search, Users } from "lucide-react";
 
 import { BannerEnVivo, MonitoreoWidget, RedesWidget, useMonitoreo, useRedes } from "@/components/admin/monitoreo-panel";
 import { usePeticion } from "@/app/admin/(protected)/analisis-publicaciones/peticion";
 import type { DatosPersonaje, NoticiaMarcada, RespuestaPersonajes } from "@/lib/monitoreo/personajes";
-import type { PlataformaId, RespuestaMenciones } from "@/lib/monitoreo/menciones-web";
+import { MapaMedios } from "@/components/admin/mapa-medios";
+import { DEPARTAMENTOS_CO, calcularCobertura, type PuntoCobertura } from "@/lib/monitoreo/cobertura";
+import { MEDIOS_REGIONALES } from "@/lib/monitoreo/medios-regionales";
+import type { MencionWeb, PlataformaId, RespuestaMenciones } from "@/lib/monitoreo/menciones-web";
 
-type Seccion = "prensa" | "redes" | "todo" | "politicos";
+type Seccion = "mafe" | "politicos";
 const SECCIONES: { id: Seccion; label: string; sub: string; icon: typeof Newspaper }[] = [
-  { id: "prensa", label: "Prensa sobre María Fernanda", sub: "Noticias, medios, videos y reacción pública", icon: Newspaper },
-  { id: "redes", label: "Redes de María Fernanda", sub: "YouTube y X: lo que dicen de ella y sus videos", icon: Share2 },
-  { id: "todo", label: "En todas partes", sub: "Facebook, Instagram, TikTok, X, YouTube y la web: dónde la nombran", icon: Globe },
+  { id: "mafe", label: "María Fernanda en medios y redes", sub: "Prensa nacional y regional, Facebook, YouTube, X y más, con la ciudad de cada portal", icon: Globe },
   { id: "politicos", label: "Otros políticos", sub: "Qué dicen en sus videos y en la prensa, y si nombran a María Fernanda", icon: Users },
 ];
 
 const BANDO = { oposicion: "Oposición", derecha: "Derecha", centro: "Centro" } as const;
 const hace = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
-  return m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
+  return m < 1 ? "hace un momento" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
 };
 const miles = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(".", ",")} M` : n >= 10_000 ? `${Math.round(n / 1000)} mil` : n.toLocaleString("es-CO"));
 
@@ -241,92 +242,272 @@ const COLOR_PLATAFORMA: Record<PlataformaId, string> = {
   threads: "#4b5563", reddit: "#f97316", linkedin: "#0a66c2", telegram: "#0ea5e9", web: "#6b7280",
 };
 
-/** Dónde nombran a María Fernanda: prensa y lo público de las redes que un buscador indexa, todo en una lista. */
-function EnTodasPartes() {
+type Pestana = "menciones" | "mapa" | "prensa" | "redes";
+type Modo = "publicadas" | "mencionadas";
+type Filtro = PlataformaId | "todas" | "regional";
+type Lugar = { modo: Modo; dane: string };
+
+/** Las burbujas del mapa y su lista: cuántas menciones vienen de cada ciudad (o hablan de ella). */
+function Ranking({ puntos, color, elegido, alElegir }: { puntos: PuntoCobertura[]; color: string; elegido: string | null; alElegir: (dane: string) => void }) {
+  if (puntos.length === 0) return <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Sin menciones con lugar conocido con este filtro.</p>;
+  const max = Math.max(1, ...puntos.map((p) => p.total));
+  return (
+    <ol className="space-y-1.5">
+      {puntos.slice(0, 14).map((p, i) => (
+        <li key={p.dane}>
+          <button type="button" onClick={() => alElegir(p.dane)} aria-pressed={elegido === p.dane} className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left transition hover:bg-surface-muted ${elegido === p.dane ? "bg-brand-soft" : ""}`}>
+            <span className="w-5 text-right text-[11px] text-muted-foreground tabular-nums">{i + 1}</span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline gap-2 text-sm"><span className="truncate font-semibold">{p.nombre}</span><span className="truncate text-[11px] text-muted-foreground">{p.dane.length === 2 ? "departamento" : p.departamento}</span></span>
+              <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-surface-muted"><span className="block h-full rounded-full" style={{ width: `${Math.max(3, (p.total / max) * 100)}%`, background: color }} /></span>
+              {p.medios.length > 0 && <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{p.medios.slice(0, 3).map((m) => `${m.nombre} ${m.total}`).join(" · ")}</span>}
+            </span>
+            <span className="text-sm font-bold tabular-nums">{p.total}</span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Una mención con su ubicación: de qué portal y ciudad viene, y de qué lugar habla. */
+function FilaMencion({ m, plataformas, alLugar }: { m: MencionWeb; plataformas: RespuestaMenciones["plataformas"]; alLugar: (l: Lugar) => void }) {
+  const g = m.geo;
+  const sitio = g?.texto && g.texto.dane !== g.medio?.dane ? g.texto : null;
+  return (
+    <li className="px-4 py-3 text-sm">
+      <a href={m.enlace} target="_blank" rel="noreferrer noopener" className="line-clamp-2 font-medium hover:underline">{m.titulo}</a>
+      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-white" style={{ background: COLOR_PLATAFORMA[m.plataforma] }}>{plataformas.find((p) => p.id === m.plataforma)?.nombre ?? m.plataforma}</span>
+        {m.fuente} · {hace(m.fecha)}
+        {!m.enTitular && <span className="rounded-full bg-surface-muted px-2 py-0.5 font-semibold" title="El titular no trae su nombre: la nota la menciona en el texto.">en el texto</span>}
+        {g?.medio && (
+          <button type="button" onClick={() => alLugar({ modo: "publicadas", dane: g.medio!.dane })} className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-800 hover:bg-emerald-500/20 dark:text-emerald-300" title={`Portal regional: ${g.medio.nombre}`}>
+            <MapPin className="size-3" aria-hidden="true" />Publica: {g.medio.ciudad}
+          </button>
+        )}
+        {sitio && (
+          <button type="button" onClick={() => alLugar({ modo: "mencionadas", dane: sitio.dane })} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-800 hover:bg-amber-500/20 dark:text-amber-300" title="Lugar que nombra el titular">
+            <MapPin className="size-3" aria-hidden="true" />Habla de: {sitio.nombre}
+          </button>
+        )}
+      </span>
+    </li>
+  );
+}
+
+/** Todo lo que se sabe de María Fernanda en un solo lugar: menciones en prensa y redes (con su ciudad), mapa regional, reacción de la prensa y redes oficiales. */
+function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<typeof useMonitoreo>; redes: ReturnType<typeof useRedes> }) {
   const [v, setV] = React.useState(0);
-  const [filtro, setFiltro] = React.useState<PlataformaId | "todas">("todas");
+  const [pestana, setPestana] = React.useState<Pestana>("menciones");
+  const [filtro, setFiltro] = React.useState<Filtro>("todas");
+  const [soloTitular, setSoloTitular] = React.useState(true);
+  const [modo, setModo] = React.useState<Modo>("publicadas");
+  const [lugar, setLugar] = React.useState<Lugar | null>(null);
   const [mostrar, setMostrar] = React.useState(40);
   const r = usePeticion<RespuestaMenciones>(`/api/admin/monitoreo/menciones${v ? `?forzar=1&v=${v}` : ""}`);
   const cargando = r.estado === "cargando";
   const datos = r.estado === "listo" ? r.data : undefined;
-  const lista = datos ? datos.menciones.filter((m) => filtro === "todas" || m.plataforma === filtro) : [];
+
+  const base = React.useMemo(() => (datos ? datos.menciones.filter((m) => !soloTitular || m.enTitular) : []), [datos, soloTitular]);
+  const cob = React.useMemo(() => (datos ? calcularCobertura(base, datos.consultados) : null), [datos, base]);
+  const lista = React.useMemo(
+    () =>
+      base.filter((m) => {
+        if (filtro === "regional" ? !m.geo?.medio : filtro !== "todas" && m.plataforma !== filtro) return false;
+        if (!lugar) return true;
+        return lugar.modo === "publicadas" ? m.geo?.medio?.dane === lugar.dane : m.geo?.texto?.dane === lugar.dane;
+      }),
+    [base, filtro, lugar]
+  );
+  const elegir = (l: Lugar | null) => {
+    setLugar(l);
+    setMostrar(40);
+  };
+
+  const puntos = cob ? (modo === "publicadas" ? cob.publicadas : cob.mencionadas) : [];
+  const depTotales = React.useMemo(() => Object.fromEntries((cob?.departamentos ?? []).map((d) => [d.dep, modo === "publicadas" ? d.publicadas : d.mencionadas])), [cob, modo]);
+  const colorModo = modo === "publicadas" ? "#0f766e" : "#d97706";
+  const regionales = base.filter((m) => m.geo?.medio).length;
   const conDatos = datos?.plataformas.filter((p) => p.total > 0) ?? [];
-  const masActiva = [...conDatos].sort((a, b) => b.total - a.total)[0];
-  const ultima = datos?.menciones[0];
-  const redes = conDatos.filter((p) => p.id !== "prensa");
+  const ultima = base[0];
+  const nombreLugar = lugar && cob ? [...cob.publicadas, ...cob.mencionadas].find((p) => p.dane === lugar.dane)?.nombre : undefined;
+  const cubiertos = new Set(MEDIOS_REGIONALES.map((m) => m.dane.slice(0, 2)));
+  const sinPortal = DEPARTAMENTOS_CO.filter(([d]) => !cubiertos.has(d)).map(([, n]) => n);
+  const paginasFb = MEDIOS_REGIONALES.filter((m) => m.fb).map((m) => ({ m, n: base.filter((x) => x.plataforma === "facebook" && x.geo?.medio?.id === m.id).length }));
+
+  const pestanas: { id: Pestana; label: string; n?: number }[] = [
+    { id: "menciones", label: "Menciones", n: datos ? base.length : undefined },
+    { id: "mapa", label: "De dónde vienen" },
+    { id: "prensa", label: "Prensa y reacción" },
+    { id: "redes", label: "Redes oficiales" },
+  ];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">Busca el nombre de María Fernanda en la prensa, Facebook, Instagram, TikTok, X, YouTube y más, sin claves. Se actualiza al abrir y con el botón.</p>
+        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">Dónde nombran a María Fernanda: prensa nacional y regional, Facebook (páginas de portales de cada región), Instagram, TikTok, X, YouTube y más, sin claves. Cada nota lleva la ciudad del portal que la publica.</p>
         <button type="button" onClick={() => { setV((n) => n + 1); setMostrar(40); }} disabled={cargando} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60">
           <RefreshCw className={`size-3 ${cargando ? "animate-spin" : ""}`} aria-hidden="true" /> Actualizar
         </button>
       </div>
       {r.estado === "error" && <p className="rounded-xl bg-red-500/10 p-3 text-xs text-red-600">{r.error}</p>}
-      {!datos && cargando && <p className="text-sm text-muted-foreground">Buscando en todas las fuentes… (puede tardar unos segundos)</p>}
+      {!datos && cargando && <p className="text-sm text-muted-foreground">Buscando en la prensa, en los portales y en las páginas de Facebook de cada región… (puede tardar unos segundos)</p>}
 
-      {datos && (
+      {datos && cob && (
+        <div className="rounded-2xl bg-sky-500/10 p-4">
+          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Lo más importante</p>
+          <p className="mt-1 text-sm leading-relaxed sm:text-base">
+            {base.length === 0 ? "No se encontraron menciones públicas en este momento." : (
+              <>
+                Se encontraron <strong>{base.length}</strong> menciones {soloTitular ? "en titulares" : "en titulares y textos"} en <strong>{conDatos.length}</strong> {conDatos.length === 1 ? "fuente" : "fuentes"}.
+                {regionales > 0 ? <> De ellas, <strong>{regionales}</strong> vienen de <strong>{cob.directorio.portalesConMenciones}</strong> portales y páginas de Facebook regionales, publicadas desde <strong>{cob.publicadas.length}</strong> {cob.publicadas.length === 1 ? "ciudad" : "ciudades"}{cob.publicadas[0] ? <>; la que más es <strong>{cob.publicadas[0].nombre}</strong> ({cob.publicadas[0].total})</> : null}.</> : <> Ninguna viene de portales regionales.</>}
+                {ultima ? <> La más reciente es de {hace(ultima.fecha)} ({ultima.fuente}).</> : null}
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
+      <div role="tablist" aria-label="Vista" className="flex gap-1 overflow-x-auto rounded-full bg-surface-muted p-1 [scrollbar-width:none]">
+        {pestanas.map((p) => (
+          <button key={p.id} type="button" role="tab" aria-selected={pestana === p.id} onClick={() => setPestana(p.id)} className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${pestana === p.id ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            {p.label}{p.n !== undefined && <span className="ml-1 tabular-nums opacity-70">{p.n}</span>}
+          </button>
+        ))}
+      </div>
+
+      {(pestana === "menciones" || pestana === "mapa") && datos && cob && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <label className="inline-flex cursor-pointer items-center gap-2 font-semibold">
+            <input type="checkbox" checked={soloTitular} onChange={(e) => { setSoloTitular(e.target.checked); setMostrar(40); }} className="size-4 accent-[var(--brand)]" />
+            Solo si el titular la nombra
+          </label>
+          <span className="text-muted-foreground">{soloTitular ? "Cuenta solo notas con su nombre en el titular: se pueden comprobar de un vistazo." : "También cuenta notas que la nombran solo en el texto: pueden ser menciones de pasada."}</span>
+        </div>
+      )}
+
+      {pestana === "menciones" && datos && cob && (
         <>
-          <div className="rounded-2xl bg-sky-500/10 p-4">
-            <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Lo más importante</p>
-            <p className="mt-1 text-sm leading-relaxed sm:text-base">
-              {datos.menciones.length === 0 ? "No se encontraron menciones públicas en este momento." : (
-                <>
-                  Se encontraron <strong>{datos.menciones.length}</strong> menciones públicas en <strong>{conDatos.length}</strong> {conDatos.length === 1 ? "fuente" : "fuentes"}
-                  {masActiva ? <>; la más activa es <strong>{masActiva.nombre}</strong> ({masActiva.total})</> : null}.
-                  {redes.length > 0 ? <> En redes: {redes.map((p) => `${p.nombre} ${p.total}`).join(" · ")}.</> : " No apareció nada en redes sociales indexadas."}
-                  {ultima ? <> La más reciente es de {hace(ultima.fecha)} ({ultima.fuente}).</> : null}
-                </>
-              )}
-            </p>
-          </div>
-
           <div role="tablist" aria-label="Plataforma" className="flex flex-wrap gap-1.5">
-            <button type="button" role="tab" aria-selected={filtro === "todas"} onClick={() => { setFiltro("todas"); setMostrar(40); }} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filtro === "todas" ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}>Todas <span className="tabular-nums opacity-70">{datos.menciones.length}</span></button>
-            {datos.plataformas.map((p) => (
-              <button key={p.id} type="button" role="tab" aria-selected={filtro === p.id} disabled={p.total === 0} onClick={() => { setFiltro(p.id); setMostrar(40); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${filtro === p.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`} title={p.consultada ? undefined : "No respondió en esta consulta"}>
-                <span className="size-2 rounded-full" style={{ background: COLOR_PLATAFORMA[p.id] }} aria-hidden="true" />{p.nombre} <span className="tabular-nums opacity-70">{p.total}</span>
-              </button>
-            ))}
+            <button type="button" role="tab" aria-selected={filtro === "todas"} onClick={() => { setFiltro("todas"); setMostrar(40); }} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filtro === "todas" ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}>Todas <span className="tabular-nums opacity-70">{base.length}</span></button>
+            <button type="button" role="tab" aria-selected={filtro === "regional"} onClick={() => { setFiltro("regional"); setMostrar(40); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${filtro === "regional" ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}><MapPin className="size-3" aria-hidden="true" />Regionales <span className="tabular-nums opacity-70">{regionales}</span></button>
+            {datos.plataformas.map((p) => {
+              const n = base.filter((m) => m.plataforma === p.id).length;
+              return (
+                <button key={p.id} type="button" role="tab" aria-selected={filtro === p.id} disabled={n === 0} onClick={() => { setFiltro(p.id); setMostrar(40); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${filtro === p.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`} title={p.consultada ? undefined : "No respondió en esta consulta"}>
+                  <span className="size-2 rounded-full" style={{ background: COLOR_PLATAFORMA[p.id] }} aria-hidden="true" />{p.nombre} <span className="tabular-nums opacity-70">{n}</span>
+                </button>
+              );
+            })}
           </div>
-
-          {lista.length === 0 ? <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Sin menciones en esta fuente.</p> : (
+          {lugar && (
+            <p className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-soft px-3 py-2 text-xs font-semibold">
+              <MapPin className="size-3.5" aria-hidden="true" />
+              {lugar.modo === "publicadas" ? "Publicadas desde" : "Que hablan de"} {nombreLugar ?? "este lugar"}: {lista.length}
+              <button type="button" onClick={() => elegir(null)} className="ml-auto rounded-full border border-border bg-surface px-2.5 py-0.5 hover:bg-surface-muted">Quitar filtro</button>
+            </p>
+          )}
+          {lista.length === 0 ? <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Sin menciones con este filtro.</p> : (
             <ul className="divide-y divide-border rounded-2xl border border-border">
-              {lista.slice(0, mostrar).map((m) => (
-                <li key={`${m.plataforma}${m.enlace}`} className="px-4 py-3 text-sm">
-                  <a href={m.enlace} target="_blank" rel="noreferrer noopener" className="line-clamp-2 font-medium hover:underline">{m.titulo}</a>
-                  <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-white" style={{ background: COLOR_PLATAFORMA[m.plataforma] }}>{datos.plataformas.find((p) => p.id === m.plataforma)?.nombre ?? m.plataforma}</span>
-                    {m.fuente} · {hace(m.fecha)}{m.extracto && m.plataforma === "youtube" ? ` · ${m.extracto}` : ""}
-                  </span>
-                </li>
-              ))}
+              {lista.slice(0, mostrar).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} plataformas={datos.plataformas} alLugar={(l) => { elegir(l); setModo(l.modo); }} />)}
             </ul>
           )}
           {lista.length > mostrar && <button type="button" onClick={() => setMostrar((n) => n + 40)} className="rounded-full border border-border px-4 py-2 text-xs font-semibold hover:bg-surface-muted">Ver más ({lista.length - mostrar})</button>}
+        </>
+      )}
+
+      {pestana === "mapa" && datos && cob && (
+        <div className="space-y-4">
+          <div role="tablist" aria-label="Qué mostrar en el mapa" className="flex flex-wrap gap-1.5">
+            {([["publicadas", "Dónde se publica", "La ciudad del portal que publica la nota"], ["mencionadas", "De qué lugar hablan", "El lugar que nombra el titular"]] as const).map(([id, texto, ayuda]) => (
+              <button key={id} type="button" role="tab" aria-selected={modo === id} title={ayuda} onClick={() => { setModo(id); setLugar(null); }} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${modo === id ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}>{texto} <span className="tabular-nums opacity-70">{(id === "publicadas" ? cob.publicadas : cob.mencionadas).reduce((s, p) => s + p.total, 0)}</span></button>
+            ))}
+          </div>
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+            <MapaMedios puntos={puntos} departamentos={depTotales} color={colorModo} elegido={lugar?.modo === modo ? lugar.dane : null} alElegir={(dane) => elegir(dane ? { modo, dane } : null)} etiqueta={modo === "publicadas" ? "Ciudades desde las que se publica" : "Lugares de los que hablan los titulares"} />
+            <div>
+              <p className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{modo === "publicadas" ? "Ciudades desde las que se publica" : "Lugares de los que hablan los titulares"}</p>
+              <Ranking puntos={puntos} color={colorModo} elegido={lugar?.modo === modo ? lugar.dane : null} alElegir={(dane) => { const activo = lugar?.modo === modo && lugar.dane === dane; elegir(activo ? null : { modo, dane }); }} />
+              {lugar?.modo === modo && lista.length > 0 && (
+                <div className="mt-3 rounded-2xl border border-border">
+                  <p className="border-b border-border px-4 py-2 text-xs font-semibold">{nombreLugar}: {lista.length} {lista.length === 1 ? "mención" : "menciones"}</p>
+                  <ul className="divide-y divide-border">{lista.slice(0, 4).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} plataformas={datos.plataformas} alLugar={(l) => { elegir(l); setModo(l.modo); }} />)}</ul>
+                  {lista.length > 4 && <button type="button" onClick={() => setPestana("menciones")} className="w-full border-t border-border px-4 py-2 text-xs font-semibold text-brand hover:bg-surface-muted">Ver las {lista.length} en la lista</button>}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["Portales y páginas", `${cob.directorio.portales}`, `en ${cob.directorio.departamentos} departamentos`],
+              ["Portales consultados", `${cob.directorio.portalesConsultados}`, "con Google Noticias, esta vez"],
+              ["Páginas de Facebook leídas", `${cob.directorio.paginasConsultadas}`, `de ${cob.directorio.conFacebook} conocidas`],
+              ["Que la nombran", `${cob.directorio.portalesConMenciones}`, `portales o páginas, ${cob.sinUbicar} notas sin ubicar`],
+            ].map(([t, n, sub]) => (
+              <div key={t} className="rounded-2xl border border-border bg-surface p-3">
+                <p className="text-2xl font-bold tabular-nums">{n}</p>
+                <p className="text-xs font-semibold">{t}</p>
+                <p className="text-[11px] text-muted-foreground">{sub}</p>
+              </div>
+            ))}
+          </div>
+
+          <details className="rounded-2xl border border-border p-4">
+            <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold"><ThumbsUp className="size-4 text-[#1877f2]" aria-hidden="true" /> Páginas de Facebook de portales regionales ({cob.directorio.conFacebook})</summary>
+            <p className="mt-2 text-xs text-muted-foreground">Facebook no deja leer sus páginas sin ser una institución de investigación, así que se buscan las publicaciones que Google Noticias indexa de cada página ({cob.directorio.facebookLegible} de {cob.directorio.conFacebook}). Las otras se pueden abrir y buscar «Cabal» a mano.</p>
+            <ul className="mt-3 grid gap-x-6 sm:grid-cols-2">
+              {paginasFb.sort((a, b) => b.n - a.n || a.m.nombre.localeCompare(b.m.nombre)).map(({ m, n }) => (
+                <li key={m.id} className="flex items-baseline gap-2 border-b border-border/60 py-1.5 text-xs">
+                  <a href={`https://www.facebook.com/${m.fb}`} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1 truncate font-semibold hover:underline">{m.nombre}<span className="font-normal text-muted-foreground"> · {m.ciudad}</span></a>
+                  {m.fbIndexado ? <span className={`tabular-nums ${n > 0 ? "font-bold" : "text-muted-foreground"}`}>{n}</span> : <a href={`https://www.google.com/search?q=${encodeURIComponent(`"María Fernanda Cabal" site:facebook.com/${m.fb}`)}`} target="_blank" rel="noreferrer noopener" className="text-[11px] text-muted-foreground hover:underline" title="Google no entrega sus publicaciones aquí: búscalas a mano">buscar a mano</a>}
+                </li>
+              ))}
+            </ul>
+          </details>
+
+          <details className="rounded-2xl border border-border p-4">
+            <summary className="cursor-pointer text-sm font-semibold">Portales regionales que no la nombran ({cob.sinMenciones.length})</summary>
+            <p className="mt-2 text-xs text-muted-foreground">Se consultaron y no aparece su nombre {soloTitular ? "en ningún titular" : "en ninguna nota"} de los últimos 30 días.</p>
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {cob.sinMenciones.map((m) => <li key={m.id} className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px]"><a href={`https://${m.dominio}`} target="_blank" rel="noreferrer noopener" className="hover:underline">{m.nombre}</a><span className="text-muted-foreground"> · {m.ciudad}</span></li>)}
+            </ul>
+          </details>
 
           <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
             <Database className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
             <span>
-              {datos.guardado ? "Lo encontrado se guarda en Supabase y la lista acumula 30 días." : "Aún no se guarda el historial: ejecuta supabase/monitoreo.sql en Supabase."} Solo se ven publicaciones públicas que Google, Bing y YouTube indexan: no hay acceso a grupos privados, historias ni comentarios, y Meta y TikTok no permiten buscar su contenido sin ser una institución de investigación o pagar una herramienta de escucha.
+              Sin portal en el directorio: {sinPortal.join(", ")}. Las notas de esos lugares se ubican por lo que dice el titular. La ciudad de un portal sale de su propia página (dirección, nombre, cobertura); el lugar de un titular, de los nombres de municipios y departamentos que trae: es una estimación y no ubica los que no nombran lugar.
             </span>
           </p>
-        </>
+        </div>
+      )}
+
+      {pestana === "prensa" && <MonitoreoWidget {...monitoreo} />}
+      {pestana === "redes" && <RedesWidget {...redes} />}
+
+      {datos && (
+        <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+          <Database className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          <span>
+            {datos.guardado ? "Lo encontrado se guarda en Supabase y la lista acumula 30 días." : "Aún no se guarda el historial: ejecuta supabase/monitoreo.sql en Supabase."} Solo se ven publicaciones públicas que Google, Bing y YouTube indexan: no hay acceso a grupos privados, historias ni comentarios, y Meta y TikTok no permiten buscar su contenido sin ser una institución de investigación o pagar una herramienta de escucha.
+          </span>
+        </p>
       )}
     </div>
   );
 }
 
-/** Monitoreo en tres partes: la prensa sobre María Fernanda, sus redes, y lo que publican otros políticos. Cada parte consulta al abrirse. */
+/** Monitoreo en dos partes: todo sobre María Fernanda (prensa, redes, regiones) y lo que publican otros políticos. Cada parte consulta al abrirse. */
 export function MonitoreoSecciones() {
-  const [seccion, setSeccion] = React.useState<Seccion>("prensa");
+  const [seccion, setSeccion] = React.useState<Seccion>("mafe");
   const monitoreo = useMonitoreo();
   const redes = useRedes();
   return (
     <div className="space-y-4">
       <BannerEnVivo datos={monitoreo.datos} />
-      <div role="tablist" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div role="tablist" className="grid gap-2 sm:grid-cols-2">
         {SECCIONES.map((s) => (
           <button key={s.id} type="button" role="tab" aria-selected={seccion === s.id} onClick={() => setSeccion(s.id)} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${seccion === s.id ? "border-brand bg-brand-soft" : "border-border hover:bg-surface-muted"}`}>
             <s.icon className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
@@ -335,9 +516,7 @@ export function MonitoreoSecciones() {
         ))}
       </div>
       <div className="rounded-3xl border border-border bg-surface p-5">
-        {seccion === "prensa" && <MonitoreoWidget {...monitoreo} />}
-        {seccion === "redes" && <RedesWidget {...redes} />}
-        {seccion === "todo" && <EnTodasPartes />}
+        {seccion === "mafe" && <MariaFernandaEnTodas monitoreo={monitoreo} redes={redes} />}
         {seccion === "politicos" && <Politicos />}
       </div>
     </div>

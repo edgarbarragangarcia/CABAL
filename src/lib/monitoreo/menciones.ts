@@ -7,7 +7,8 @@
 const PATRON = /\b(?:Cabal|CABAL|MaFe)\b|MariaFdaCabal/;
 
 export function nombraAMariaFernanda(texto: string): boolean {
-  return PATRON.test(texto);
+  // «Santa Rosa de Cabal» es un municipio de Risaralda: no cuenta como mención.
+  return PATRON.test(texto.replace(/Santa Rosa de Cabal/gi, " "));
 }
 
 /** El fragmento donde aparece, para mostrar en qué contexto la nombran (null si no aparece). */
