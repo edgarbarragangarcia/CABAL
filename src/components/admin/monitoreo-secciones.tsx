@@ -6,7 +6,6 @@ import { AtSign, Database, ExternalLink, Globe, MapPin, ThumbsUp, Newspaper, Ref
 import { BannerEnVivo, MonitoreoWidget, RedesWidget, useMonitoreo, useRedes } from "@/components/admin/monitoreo-panel";
 import { usePeticion } from "@/app/admin/(protected)/analisis-publicaciones/peticion";
 import type { DatosPersonaje, NoticiaMarcada, RespuestaPersonajes } from "@/lib/monitoreo/personajes";
-import { MapaMedios } from "@/components/admin/mapa-medios";
 import { DEPARTAMENTOS_CO, calcularCobertura, type PuntoCobertura } from "@/lib/monitoreo/cobertura";
 import { MEDIOS_REGIONALES } from "@/lib/monitoreo/medios-regionales";
 import type { MencionWeb, PlataformaId, RespuestaMenciones } from "@/lib/monitoreo/menciones-web";
@@ -327,7 +326,6 @@ function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<type
   };
 
   const puntos = cob ? (modo === "publicadas" ? cob.publicadas : cob.mencionadas) : [];
-  const depTotales = React.useMemo(() => Object.fromEntries((cob?.departamentos ?? []).map((d) => [d.dep, modo === "publicadas" ? d.publicadas : d.mencionadas])), [cob, modo]);
   const colorModo = modo === "publicadas" ? "#0f766e" : "#d97706";
   const regionales = base.filter((m) => m.geo?.medio).length;
   const conDatos = datos?.plataformas.filter((p) => p.total > 0) ?? [];
@@ -425,8 +423,7 @@ function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<type
               <button key={id} type="button" role="tab" aria-selected={modo === id} title={ayuda} onClick={() => { setModo(id); setLugar(null); }} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${modo === id ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}>{texto} <span className="tabular-nums opacity-70">{(id === "publicadas" ? cob.publicadas : cob.mencionadas).reduce((s, p) => s + p.total, 0)}</span></button>
             ))}
           </div>
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-            <MapaMedios puntos={puntos} departamentos={depTotales} color={colorModo} elegido={lugar?.modo === modo ? lugar.dane : null} alElegir={(dane) => elegir(dane ? { modo, dane } : null)} etiqueta={modo === "publicadas" ? "Ciudades desde las que se publica" : "Lugares de los que hablan los titulares"} />
+          <div>
             <div>
               <p className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{modo === "publicadas" ? "Ciudades desde las que se publica" : "Lugares de los que hablan los titulares"}</p>
               <Ranking puntos={puntos} color={colorModo} elegido={lugar?.modo === modo ? lugar.dane : null} alElegir={(dane) => { const activo = lugar?.modo === modo && lugar.dane === dane; elegir(activo ? null : { modo, dane }); }} detalle={
