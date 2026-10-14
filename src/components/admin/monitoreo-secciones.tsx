@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AtSign, Database, ExternalLink, Eye, Globe, Loader2, MapPin, MessageCircle, Sparkles, ThumbsUp, Newspaper, RefreshCw, Search, Users } from "lucide-react";
+import { Archive, AtSign, BadgeCheck, Clock, Database, ExternalLink, Eye, Globe, Loader2, MapPin, MessageCircle, Sparkles, ThumbsUp, Newspaper, RefreshCw, Search, Users } from "lucide-react";
 
 import { BannerEnVivo, RedesWidget, useMonitoreo, useRedes } from "@/components/admin/monitoreo-panel";
 import { usePeticion } from "@/app/admin/(protected)/analisis-publicaciones/peticion";
@@ -10,6 +10,8 @@ import { MapaMedios } from "@/components/admin/mapa-medios";
 import { DEPARTAMENTOS_CO, calcularCobertura, type PuntoCobertura } from "@/lib/monitoreo/cobertura";
 import { colorDeIndice, COLOR_TONO, type Tono } from "@/lib/monitoreo/tono";
 import { MEDIOS_REGIONALES } from "@/lib/monitoreo/medios-regionales";
+import type { EstadoArchivo } from "@/lib/monitoreo/archivo";
+import type { FichaVideo } from "@/lib/monitoreo/ficha-video";
 import type { MencionWeb, PlataformaId, RespuestaMenciones } from "@/lib/monitoreo/menciones-web";
 
 type Seccion = "mafe" | "politicos";
@@ -350,47 +352,270 @@ function Cronologia({ lista, tonoDe }: { lista: MencionWeb[]; tonoDe: (m: Mencio
   );
 }
 
-/** Una mención con su ubicación (de qué portal y ciudad viene, de qué lugar habla), su tono, sus cifras y cuándo se publicó. */
-function FilaMencion({ m, tono, plataformas, alLugar }: { m: MencionWeb; tono: Tono; plataformas: RespuestaMenciones["plataformas"]; alLugar: (l: Lugar) => void }) {
+const idYouTube = (enlace: string) => enlace.match(/[?&]v=([\w-]{6,15})/)?.[1];
+/** 2292 → «38:12»; 3725 → «1:02:05». */
+const duracion = (seg: number) => {
+  const h = Math.floor(seg / 3600);
+  const m = Math.floor((seg % 3600) / 60);
+  const s = seg % 60;
+  return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s).padStart(2, "0")}`;
+};
+
+/**
+ * Una mención con todo lo que se sabe de ella: miniatura, duración, canal (con insignia y suscriptores), fecha y hora exactas,
+ * vistas, me gusta, categoría y descripción; además su ubicación (de qué portal y ciudad viene, de qué lugar habla) y su tono.
+ * La ficha completa de un video de YouTube llega aparte (`ficha`) y completa lo que la búsqueda no da.
+ */
+function FilaMencion({ m, tono, plataformas, alLugar, ficha }: { m: MencionWeb; tono: Tono; plataformas: RespuestaMenciones["plataformas"]; alLugar: (l: Lugar) => void; ficha?: FichaVideo }) {
   const g = m.geo;
   const sitio = g?.texto && g.texto.dane !== g.medio?.dane ? g.texto : null;
+  const id = m.plataforma === "youtube" ? idYouTube(m.enlace) : undefined;
+  const imagen = m.imagen ?? (id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : undefined);
+  const segundos = ficha?.segundos ?? null;
+  const dur = segundos ? duracion(segundos) : m.duracion;
+  // La búsqueda de YouTube solo dice «hace 2 meses»: sin la ficha no se inventa una hora.
+  const aprox = !ficha?.publicado && (m.fechaAprox || m.plataforma === "youtube");
+  const cuando = ficha?.publicado ? `${fechaHora(ficha.publicado)} · ${hace(ficha.publicado)}` : aprox ? `${m.cuando ?? hace(m.fecha)} (aprox.)` : `${fechaHora(m.fecha)} · ${hace(m.fecha)}`;
+  const vistas = ficha?.vistas ?? m.metricas?.vistas;
+  const likes = ficha?.likes ?? m.metricas?.likes;
+  const descripcion = (ficha?.descripcion || m.descripcion || (m.plataforma === "prensa" ? m.extracto : "") || "").replace(/\s+/g, " ").trim();
+  const canal = ficha?.canal || m.fuente;
   return (
-    <li className="px-4 py-3 text-sm">
-      <a href={m.enlace} target="_blank" rel="noreferrer noopener" className="flex items-start gap-2 font-medium hover:underline">
-        <span className="mt-1.5"><PuntoTono tono={tono} /></span>
-        <span className="line-clamp-2">{m.titulo}</span>
-      </a>
-      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-4 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-white" style={{ background: COLOR_PLATAFORMA[m.plataforma] }}>{plataformas.find((p) => p.id === m.plataforma)?.nombre ?? m.plataforma}</span>
-        {m.fuente} · {fechaHora(m.fecha)} · {hace(m.fecha)}
-        <Cifras likes={m.metricas?.likes} comentarios={m.metricas?.comentarios} vistas={m.metricas?.vistas} />
-        {!m.enTitular && <span className="rounded-full bg-surface-muted px-2 py-0.5 font-semibold" title="El titular no trae su nombre: la nota la menciona en el texto.">en el texto</span>}
-        {g?.medio && (
-          <button type="button" onClick={() => alLugar({ modo: "lugar", dane: g.medio!.dane })} className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-800 hover:bg-emerald-500/20 dark:text-emerald-300" title={g.medio.estimado ? `Ciudad estimada por lo que dice la página de ${g.medio.nombre}` : `Portal regional: ${g.medio.nombre}`}>
-            <MapPin className="size-3" aria-hidden="true" />Publica: {g.medio.ciudad}{g.medio.estimado ? " (estimado)" : ""}
-          </button>
+    <li className="flex gap-3 px-4 py-3 text-sm">
+      {imagen && (
+        <a href={m.enlace} target="_blank" rel="noreferrer noopener" tabIndex={-1} aria-hidden="true" className="relative mt-0.5 block aspect-video w-28 shrink-0 self-start overflow-hidden rounded-lg bg-surface-muted sm:w-40">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imagen} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-full object-cover" />
+          {dur && <span className="absolute right-1 bottom-1 rounded bg-black/80 px-1 py-0.5 text-[10px] font-semibold text-white tabular-nums">{dur}</span>}
+        </a>
+      )}
+      <div className="min-w-0 flex-1">
+        <a href={m.enlace} target="_blank" rel="noreferrer noopener" className="flex items-start gap-2 font-medium hover:underline">
+          <span className="mt-1.5"><PuntoTono tono={tono} /></span>
+          <span className="line-clamp-2">{m.titulo}</span>
+        </a>
+        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-4 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-white" style={{ background: COLOR_PLATAFORMA[m.plataforma] }}>{plataformas.find((p) => p.id === m.plataforma)?.nombre ?? m.plataforma}</span>
+          <span className="inline-flex items-center gap-1 font-semibold text-foreground">{canal}{(m.verificado || ficha) && m.verificado && <BadgeCheck className="size-3.5 text-sky-600" aria-label="Canal verificado" />}</span>
+          {!!ficha?.suscriptores && <span>{miles(ficha.suscriptores)} suscriptores</span>}
+          <span>{cuando}</span>
+          {dur && !imagen && <span className="inline-flex items-center gap-1"><Clock className="size-3" aria-hidden="true" />{dur}</span>}
+          <Cifras likes={likes} comentarios={m.metricas?.comentarios} vistas={vistas} />
+          {ficha?.categoria && <span className="rounded-full bg-surface-muted px-2 py-0.5 font-semibold">{ficha.categoria}</span>}
+          {ficha?.enVivo && <span className="rounded-full bg-red-500/10 px-2 py-0.5 font-semibold text-red-700 dark:text-red-300">transmisión</span>}
+          {!m.enTitular && <span className="rounded-full bg-surface-muted px-2 py-0.5 font-semibold" title="El titular no trae su nombre: la nota la menciona en el texto.">en el texto</span>}
+          {g?.medio && (
+            <button type="button" onClick={() => alLugar({ modo: "lugar", dane: g.medio!.dane })} className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-800 hover:bg-emerald-500/20 dark:text-emerald-300" title="Ver este lugar en el mapa">
+              <MapPin className="size-3" aria-hidden="true" />Publica: {g.medio.ciudad}{g.medio.estimado ? " (estimado)" : ""}
+            </button>
+          )}
+          {sitio && (
+            <button type="button" onClick={() => alLugar({ modo: "lugar", dane: sitio.dane })} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-800 hover:bg-amber-500/20 dark:text-amber-300" title="Lugar que nombra el titular">
+              <MapPin className="size-3" aria-hidden="true" />Habla de: {sitio.nombre}
+            </button>
+          )}
+          {m.nacional && !g?.medio && <span className="rounded-full bg-surface-muted px-2 py-0.5 font-semibold">prensa nacional</span>}
+        </span>
+        {descripcion && <p className="mt-1.5 line-clamp-2 pl-4 text-xs text-muted-foreground">{descripcion}</p>}
+        {m.comentariosMuestra && m.comentariosMuestra.length > 0 && (
+          <details className="mt-1.5 pl-4">
+            <summary className="cursor-pointer text-[11px] font-semibold text-brand">Qué dicen en los comentarios ({m.comentariosMuestra.length} de los más relevantes)</summary>
+            <ul className="mt-1.5 space-y-1.5">
+              {m.comentariosMuestra.map((c, i) => (
+                <li key={i} className="flex items-start gap-2 text-[11px]">
+                  <span className="mt-1"><PuntoTono tono={c.tono} /></span>
+                  <span><span className="font-semibold">{c.autor}</span> · {c.likes} me gusta<span className="block text-muted-foreground">{c.texto}</span></span>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
-        {sitio && (
-          <button type="button" onClick={() => alLugar({ modo: "lugar", dane: sitio.dane })} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-800 hover:bg-amber-500/20 dark:text-amber-300" title="Lugar que nombra el titular">
-            <MapPin className="size-3" aria-hidden="true" />Habla de: {sitio.nombre}
-          </button>
+      </div>
+    </li>
+  );
+}
+
+type PasoArchivo = { id: string; texto: string; estado: "espera" | "corriendo" | "listo" | "aviso"; detalle?: string };
+
+/**
+ * El archivo de menciones en Supabase. «Barrido de hoy» busca lo nuevo, completa las fichas de los videos (vistas, me gusta,
+ * suscriptores, fecha exacta) y mide con IA el tono solo de lo que aún no se midió: cada cosa se guarda y no se paga dos veces.
+ * «Análisis fuerte del último mes» además recorre todas las ciudades y los 33 departamentos.
+ */
+function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
+  const [lectura, setLectura] = React.useState(0);
+  const lecturaArchivo = usePeticion<EstadoArchivo>(`/api/admin/monitoreo/archivo?v=${lectura}`);
+  const estado = lecturaArchivo.estado === "listo" ? lecturaArchivo.data : null;
+  const error = lecturaArchivo.estado === "error" ? lecturaArchivo.error : "";
+  const [pasos, setPasos] = React.useState<PasoArchivo[]>([]);
+  const [corriendo, setCorriendo] = React.useState(false);
+  const [abierto, setAbierto] = React.useState(false);
+  const parar = React.useRef(false);
+  const leer = () => setLectura((n) => n + 1);
+
+  const poner = (id: string, cambio: Partial<PasoArchivo>) => setPasos((p) => p.map((x) => (x.id === id ? { ...x, ...cambio } : x)));
+  const json = async <T,>(url: string, init?: RequestInit): Promise<T> => {
+    const res = await fetch(url, { cache: "no-store", ...init });
+    const j = (await res.json().catch(() => ({}))) as T & { error?: string };
+    if (!res.ok) throw new Error(j.error ?? `Error ${res.status}`);
+    return j;
+  };
+
+  async function correr(modo: "hoy" | "mes") {
+    parar.current = false;
+    setCorriendo(true);
+    setAbierto(true);
+    const lista: PasoArchivo[] = [
+      { id: "buscar", texto: "Buscar en prensa, redes y YouTube", estado: "espera" },
+      ...(modo === "mes" ? [{ id: "ciudades", texto: "Recorrer las ciudades y municipios", estado: "espera" as const }, { id: "deptos", texto: "Investigar los 33 departamentos", estado: "espera" as const }] : []),
+      { id: "fichas", texto: "Completar la ficha de cada video (vistas, me gusta, suscriptores, fecha exacta)", estado: "espera" },
+      { id: "tono", texto: "Medir el tono con IA (solo lo que falta)", estado: "espera" },
+    ];
+    setPasos(lista);
+    try {
+      poner("buscar", { estado: "corriendo" });
+      try {
+        const r = await json<RespuestaMenciones>("/api/admin/monitoreo/menciones?forzar=1");
+        poner("buscar", { estado: "listo", detalle: `${r.menciones.length} menciones` });
+      } catch (e) {
+        poner("buscar", { estado: "aviso", detalle: e instanceof Error ? e.message : "No respondió" });
+      }
+
+      if (modo === "mes" && !parar.current) {
+        poner("ciudades", { estado: "corriendo" });
+        let tandas = 27;
+        let hechas = 0;
+        let limitado = false;
+        for (let k = 0; k < tandas && !parar.current; k++) {
+          try {
+            const t = await json<{ tandas: number; limitado: boolean }>(`/api/admin/monitoreo/barrido?tanda=${k}`);
+            tandas = t.tandas;
+            hechas = k + 1;
+            poner("ciudades", { detalle: `${hechas} de ${tandas} grupos de lugares` });
+            if (t.limitado) {
+              limitado = true;
+              break;
+            }
+          } catch {
+            break;
+          }
+        }
+        poner("ciudades", { estado: limitado || hechas < tandas ? "aviso" : "listo", detalle: limitado ? `Google pidió bajar el ritmo en ${hechas} de ${tandas}: vuelve a correrlo más tarde` : `${hechas} de ${tandas} grupos de lugares` });
+
+        poner("deptos", { estado: "corriendo" });
+        let n = 0;
+        let alto = false;
+        for (const [dep] of DEPARTAMENTOS_CO) {
+          if (parar.current) break;
+          try {
+            const i = await json<{ limitado?: boolean }>(`/api/admin/monitoreo/departamento?dep=${dep}`);
+            n++;
+            poner("deptos", { detalle: `${n} de ${DEPARTAMENTOS_CO.length} departamentos` });
+            if (i.limitado) {
+              alto = true;
+              break;
+            }
+          } catch {
+            /* un departamento que no responde no detiene al resto */
+          }
+        }
+        poner("deptos", { estado: alto || n < DEPARTAMENTOS_CO.length ? "aviso" : "listo", detalle: alto ? `Google pidió bajar el ritmo tras ${n}: vuelve a correrlo más tarde` : `${n} de ${DEPARTAMENTOS_CO.length} departamentos` });
+      }
+
+      for (const [id, accion] of [["fichas", "fichas"], ["tono", "tono"]] as const) {
+        if (parar.current) break;
+        poner(id, { estado: "corriendo" });
+        let total = 0;
+        let ultimoError = "";
+        for (let vuelta = 0; vuelta < 40 && !parar.current; vuelta++) {
+          try {
+            const r = await json<{ hechos: number; pendientes: number }>("/api/admin/monitoreo/archivo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion }) });
+            total += r.hechos;
+            poner(id, { detalle: `${total} hechos · faltan ${r.pendientes}` });
+            if (r.pendientes === 0 || r.hechos === 0) break;
+          } catch (e) {
+            ultimoError = e instanceof Error ? e.message : "No respondió";
+            break;
+          }
+        }
+        poner(id, ultimoError ? { estado: "aviso", detalle: `${ultimoError}${total ? ` · ${total} hechos` : ""}` } : { estado: "listo", detalle: `${total} hechos` });
+      }
+    } finally {
+      setCorriendo(false);
+      leer();
+      alTerminar();
+    }
+  }
+
+  const NOMBRE_RED: Record<string, string> = { prensa: "Prensa y medios", facebook: "Facebook", instagram: "Instagram", tiktok: "TikTok", x: "X", youtube: "YouTube", reddit: "Reddit", threads: "Threads", linkedin: "LinkedIn", telegram: "Telegram", web: "Web" };
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><Archive className="size-5" aria-hidden="true" /></span>
+        <div className="min-w-0 flex-1 basis-56">
+          <p className="text-sm font-semibold">Archivo en Supabase · último mes</p>
+          <p className="text-xs text-muted-foreground">
+            {error ? error : !estado ? "Leyendo el archivo…" : !estado.disponible ? "Para guardar cifras y tono falta ejecutar supabase/monitoreo.sql (Gestor documental › Mapa de datos › «Copiar el SQL que falta»)." : `${fmtN(estado.total)} menciones guardadas${estado.ultimaActualizacion ? ` · actualizado ${hace(estado.ultimaActualizacion)}` : ""} · faltan ${fmtN(estado.pendientes.fichas)} fichas de video y ${fmtN(estado.pendientes.tono)} tonos por medir`}
+          </p>
+        </div>
+        {estado?.sql && !corriendo && (
+          <button type="button" onClick={() => { void navigator.clipboard?.writeText(estado.sql ?? ""); }} className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-500/10 dark:text-amber-200" title="Copia el SQL de monitoreo.sql y ejecútalo en el editor SQL de Supabase (se puede repetir)">Copiar el SQL</button>
         )}
-        {m.nacional && !g?.medio && <span className="rounded-full bg-surface-muted px-2 py-0.5 font-semibold">prensa nacional</span>}
-      </span>
-      {m.comentariosMuestra && m.comentariosMuestra.length > 0 && (
-        <details className="mt-1.5 pl-4">
-          <summary className="cursor-pointer text-[11px] font-semibold text-brand">Qué dicen en los comentarios ({m.comentariosMuestra.length} de los más relevantes)</summary>
-          <ul className="mt-1.5 space-y-1.5">
-            {m.comentariosMuestra.map((c, i) => (
-              <li key={i} className="flex items-start gap-2 text-[11px]">
-                <span className="mt-1"><PuntoTono tono={c.tono} /></span>
-                <span><span className="font-semibold">{c.autor}</span> · {c.likes} me gusta<span className="block text-muted-foreground">{c.texto}</span></span>
-              </li>
-            ))}
-          </ul>
+        {corriendo ? (
+          <button type="button" onClick={() => { parar.current = true; }} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-surface-muted"><Loader2 className="size-3 animate-spin" aria-hidden="true" /> Detener</button>
+        ) : (
+          <>
+            <button type="button" onClick={() => void correr("hoy")} className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground" title="Busca lo nuevo y completa las fichas y el tono solo de lo que falta">Barrido de hoy</button>
+            <button type="button" onClick={() => void correr("mes")} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-muted" title="Además recorre todas las ciudades y los 33 departamentos: tarda un buen rato">Análisis fuerte del último mes</button>
+          </>
+        )}
+      </div>
+
+      {pasos.length > 0 && (
+        <ol className="mt-3 space-y-1.5 rounded-xl bg-surface-muted/60 p-3 text-xs">
+          {pasos.map((p) => (
+            <li key={p.id} className="flex items-start gap-2">
+              <span className="mt-0.5 shrink-0">{p.estado === "corriendo" ? <Loader2 className="size-3.5 animate-spin text-brand" aria-hidden="true" /> : p.estado === "listo" ? <span className="text-emerald-600">✓</span> : p.estado === "aviso" ? <span className="text-amber-600">!</span> : <span className="text-muted-foreground">·</span>}</span>
+              <span className={p.estado === "espera" ? "text-muted-foreground" : ""}>{p.texto}{p.detalle ? <span className="text-muted-foreground"> — {p.detalle}</span> : null}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {estado && estado.porPlataforma.length > 0 && (
+        <details className="mt-3" open={abierto && !corriendo}>
+          <summary className="cursor-pointer text-xs font-semibold text-brand">Análisis por red (último mes)</summary>
+          <div className="mt-2 overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[40rem] text-left text-xs">
+              <thead className="bg-surface-muted text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <tr><th className="px-3 py-2">Red</th><th className="px-3 py-2 text-right">Menciones</th><th className="px-3 py-2 text-right">Vistas</th><th className="px-3 py-2 text-right">Me gusta</th><th className="px-3 py-2 text-right">Cuentas</th><th className="px-3 py-2 text-right">Seguidores (máx.)</th><th className="px-3 py-2">Tono</th><th className="px-3 py-2 text-right">Medido con IA</th></tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {estado.porPlataforma.map((r) => (
+                  <tr key={r.plataforma}>
+                    <td className="px-3 py-2 font-semibold">{NOMBRE_RED[r.plataforma] ?? r.plataforma}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtN(r.total)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.vistas ? fmtN(r.vistas) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.likes ? fmtN(r.likes) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtN(r.cuentas)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.seguidoresMax ? fmtN(r.seguidoresMax) : "—"}</td>
+                    <td className="px-3 py-2">
+                      <span className="inline-flex h-2 w-24 overflow-hidden rounded-full bg-surface-muted align-middle" role="img" aria-label={`${r.positivo} positivas, ${r.neutral} neutrales, ${r.negativo} negativas`}>
+                        {(["positivo", "neutral", "negativo"] as const).map((t) => (r[t] ? <span key={t} style={{ width: `${(r[t] / r.total) * 100}%`, background: COLOR_TONO[t] }} /> : null))}
+                      </span>
+                      <span className="ml-2 text-[11px] text-muted-foreground">{r.positivo}+ · {r.negativo}−</span>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.conTonoIa}/{r.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">Vistas, me gusta y seguidores solo los entregan YouTube y la prensa que publica sus cifras: Facebook, Instagram, TikTok y X no dan me gusta, comentarios ni seguidores sin su API de pago, así que en esas redes solo se guarda el texto, la fecha, la fuente y el tono.</p>
         </details>
       )}
-    </li>
+    </section>
   );
 }
 
@@ -414,7 +639,12 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
     }
   });
   const [midiendo, setMidiendo] = React.useState<{ estado: "libre" | "corriendo" | "error"; error?: string }>({ estado: "libre" });
-  const r = usePeticion<RespuestaMenciones>(`/api/admin/monitoreo/menciones${v ? `?forzar=1&v=${v}` : ""}`);
+  // Al abrir se lee lo guardado en Supabase (rápido y sin gastar búsquedas); «Actualizar» sale a buscar en vivo.
+  const [modo, setModo] = React.useState<"archivo" | "vivo">("archivo");
+  const r = usePeticion<RespuestaMenciones>(modo === "archivo" ? `/api/admin/monitoreo/menciones?archivo=1&v=${v}` : `/api/admin/monitoreo/menciones${v ? `?forzar=1&v=${v}` : ""}`);
+  // Fichas completas de los videos que se ven (fecha exacta, me gusta, suscriptores…): llegan aparte y completan cada fila.
+  const [fichas, setFichas] = React.useState<Record<string, FichaVideo>>({});
+  const pedidas = React.useRef<Set<string>>(new Set());
   const cargando = r.estado === "cargando";
   const datos = r.estado === "listo" ? r.data : undefined;
 
@@ -524,6 +754,28 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
     setMostrar(40);
   };
 
+  // Los videos que están a la vista (la lista y las menciones sin lugar) piden su ficha en grupos de diez.
+  const visibles = React.useMemo(() => [...lista.slice(0, mostrar), ...(cob?.sinLugar.slice(0, 40) ?? [])], [lista, mostrar, cob]);
+  React.useEffect(() => {
+    const ids = [...new Set(visibles.map((m) => (m.plataforma === "youtube" ? idYouTube(m.enlace) : undefined)).filter((x): x is string => !!x))].filter((id) => !pedidas.current.has(id));
+    if (ids.length === 0) return;
+    ids.forEach((id) => pedidas.current.add(id));
+    let cancelado = false;
+    (async () => {
+      for (let i = 0; i < ids.length && !cancelado; i += 10) {
+        try {
+          const res = await fetch(`/api/admin/monitoreo/video?ids=${ids.slice(i, i + 10).join(",")}`, { cache: "no-store" });
+          if (!res.ok) continue;
+          const j = (await res.json()) as { fichas?: Record<string, FichaVideo> };
+          if (!cancelado && j.fichas) setFichas((f) => ({ ...f, ...j.fichas }));
+        } catch {
+          /* se queda con lo que dio la búsqueda */
+        }
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [visibles]);
+
   const puntos = cob?.lugares ?? [];
   const depTotales = cob?.porDepartamento ?? {};
   const regionales = base.filter((m) => m.geo?.medio).length;
@@ -568,7 +820,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
         </span>
       </p>
       {lista.length === 0 ? <p className="px-4 py-3 text-xs text-muted-foreground">Sin menciones con el filtro actual.</p> : (
-        <ul className="max-h-[32rem] divide-y divide-border overflow-y-auto">{lista.slice(0, mostrar).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} tono={tonoDe(m)} plataformas={datos!.plataformas} alLugar={elegir} />)}</ul>
+        <ul className="max-h-[32rem] divide-y divide-border overflow-y-auto">{lista.slice(0, mostrar).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} tono={tonoDe(m)} plataformas={datos!.plataformas} alLugar={elegir} ficha={fichas[idYouTube(m.enlace) ?? ""]} />)}</ul>
       )}
       {lista.length > mostrar && <button type="button" onClick={() => setMostrar((n) => n + 40)} className="w-full border-t border-border px-4 py-2 text-xs font-semibold text-brand hover:bg-surface-muted">Ver más ({lista.length - mostrar})</button>}
     </div>
@@ -578,7 +830,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">El termómetro del alcance de María Fernanda: dónde la nombran en todo el país (prensa, portales y emisoras regionales, páginas de Facebook, Instagram, TikTok, X, YouTube), desde qué ciudad, con qué tono y con qué cifras.</p>
-        <button type="button" onClick={() => { setV((n) => n + 1); setMostrar(40); }} disabled={cargando} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60">
+        <button type="button" onClick={() => { setModo("vivo"); setV((n) => n + 1); setMostrar(40); }} disabled={cargando} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60">
           <RefreshCw className={`size-3 ${cargando ? "animate-spin" : ""}`} aria-hidden="true" /> Actualizar
         </button>
       </div>
@@ -628,6 +880,8 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
           )}
         </div>
       )}
+
+      <ArchivoPanel alTerminar={() => { setModo("archivo"); setV((n) => n + 1); }} />
 
       <div role="tablist" aria-label="Vista" className="flex gap-1 overflow-x-auto rounded-full bg-surface-muted p-1 [scrollbar-width:none]">
         {pestanas.map((p) => (
@@ -710,7 +964,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
               <summary className="cursor-pointer text-sm font-semibold">Menciones sin lugar conocido ({cob.sinLugar.length})</summary>
               <p className="mt-2 text-xs text-muted-foreground">No tienen un portal con sede en el directorio ni nombran un lugar en el titular (muchos videos y publicaciones de redes), así que no se pueden poner en el mapa. Están aquí para que no se pierda ninguna.</p>
               <ul className="mt-2 divide-y divide-border rounded-2xl border border-border">
-                {cob.sinLugar.slice(0, 40).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} tono={tonoDe(m)} plataformas={datos.plataformas} alLugar={elegir} />)}
+                {cob.sinLugar.slice(0, 40).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} tono={tonoDe(m)} plataformas={datos.plataformas} alLugar={elegir} ficha={fichas[idYouTube(m.enlace) ?? ""]} />)}
               </ul>
               {cob.sinLugar.length > 40 && <p className="mt-2 text-[11px] text-muted-foreground">Se muestran las 40 más recientes de {cob.sinLugar.length}.</p>}
             </details>

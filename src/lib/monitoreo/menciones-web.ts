@@ -1,6 +1,7 @@
 import "server-only";
 
 import { entidades } from "@/lib/informe/fuentes";
+import type { FichaVideo } from "./ficha-video";
 import { guardarItems, leerItems, type ItemMonitoreo } from "./historial";
 import { nombraAMariaFernanda } from "./menciones";
 import { CIUDADES_BARRIDO, infoDepartamento, lugarDelTexto, lugarPredominante, lugaresDeDepartamentos } from "./lugares";
@@ -27,10 +28,10 @@ export type GeoMencion = {
 /** Cifras públicas de una publicación (solo las que la fuente entrega: YouTube y X; Facebook, Instagram y TikTok no las dan sin su API). */
 export type Metricas = { vistas?: number; likes?: number; comentarios?: number };
 export type ComentarioMuestra = { texto: string; autor: string; likes: number; fecha: string; tono: Tono };
-export type MencionWeb = { plataforma: PlataformaId; fuente: string; titulo: string; fecha: string; enlace: string; extracto: string | null; dominio?: string; geo?: GeoMencion; /** El nombre de María Fernanda está en el titular (si no, la nombra el texto de la nota). */ enTitular?: boolean; /** Estimado por palabras; el panel lo reemplaza si el usuario mide el tono con IA. */ tono?: Tono; metricas?: Metricas; comentariosMuestra?: ComentarioMuestra[]; /** Prensa nacional o internacional: no se ubica en una ciudad. */ nacional?: boolean };
+export type MencionWeb = { plataforma: PlataformaId; fuente: string; titulo: string; fecha: string; enlace: string; extracto: string | null; /** Miniatura (YouTube, Bing Noticias). */ imagen?: string; /** «38:12» en los videos. */ duracion?: string; /** El canal tiene la insignia de verificado. */ verificado?: boolean; /** Fragmento de la descripción del video. */ descripcion?: string; /** La fecha es aproximada (YouTube solo dice «hace 2 meses»): no mostrar hora. */ fechaAprox?: boolean; /** El «hace 2 meses» tal como lo da YouTube, ya en palabras. */ cuando?: string; /** La ficha completa del video, ya guardada en el archivo (fecha exacta, me gusta, suscriptores…). */ ficha?: FichaVideo; /** El tono lo midió la IA y quedó guardado (no se vuelve a medir). */ tonoIa?: boolean; dominio?: string; geo?: GeoMencion; /** El nombre de María Fernanda está en el titular (si no, la nombra el texto de la nota). */ enTitular?: boolean; /** Estimado por palabras; el panel lo reemplaza si el usuario mide el tono con IA. */ tono?: Tono; metricas?: Metricas; comentariosMuestra?: ComentarioMuestra[]; /** Prensa nacional o internacional: no se ubica en una ciudad. */ nacional?: boolean };
 export type ResumenPlataforma = { id: PlataformaId; nombre: string; total: number; consultada: boolean };
 
-export type RespuestaMenciones = { generadoEn: string; guardado: boolean; plataformas: ResumenPlataforma[]; menciones: MencionWeb[]; /** Hay clave de YouTube: las menciones de YouTube traen vistas, likes y comentarios. */ youtubeConClave?: boolean; /** Qué portales y páginas de Facebook del directorio respondieron esta vez (para no leer un fallo como «sin menciones»). */ consultados: { portales: string[]; paginas: string[] } };
+export type RespuestaMenciones = { generadoEn: string; guardado: boolean; /** Vino solo del archivo de Supabase (no se salió a buscar). */ delArchivo?: boolean; plataformas: ResumenPlataforma[]; menciones: MencionWeb[]; /** Hay clave de YouTube: las menciones de YouTube traen vistas, likes y comentarios. */ youtubeConClave?: boolean; /** Qué portales y páginas de Facebook del directorio respondieron esta vez (para no leer un fallo como «sin menciones»). */ consultados: { portales: string[]; paginas: string[] } };
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 export const PLATAFORMAS: { id: PlataformaId; nombre: string; sitio?: string }[] = [
@@ -53,21 +54,26 @@ const entidadesNumericas = (s: string) =>
   s.replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)));
 const texto = (s: string) => entidadesNumericas(entidades(entidadesNumericas(entidades(s)))).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
-/** «hace 11 m», «hace 2 sem.», «Transmitido hace 3 días»… → fecha aproximada (null si no se entiende). */
-function fechaDeYouTube(t: string, ahora: Date): string | null {
-  const m = t.toLowerCase().match(/hace\s+(\d+)\s*([a-zñáéíóú]+)/);
+/**
+ * «hace 11 min», «hace 3 h», «hace 2 días», «hace 2 sem.», «hace 2 m» (¡meses!), «hace 1 a» (año)… → fecha aproximada y el mismo
+ * texto en palabras. En el español abreviado de YouTube, «m» son MESES y los minutos son «min».
+ */
+function fechaDeYouTube(t: string, ahora: Date): { iso: string; texto: string } | null {
+  const m = t.toLowerCase().match(/hace\s+(\d+)\s*([a-zñáéíóú]+)\.?/);
   if (!m) return null;
+  const n = Number(m[1]);
   const u = m[2];
-  const ms =
-    /^(s|seg)/.test(u) ? 1_000
-    : /^(m|min)/.test(u) && !/^mes/.test(u) ? 60_000
-    : /^h/.test(u) ? 3_600_000
-    : /^d/.test(u) ? 86_400_000
-    : /^sem/.test(u) ? 7 * 86_400_000
-    : /^mes/.test(u) ? 30 * 86_400_000
-    : /^a/.test(u) ? 365 * 86_400_000
-    : 0;
-  return ms ? new Date(ahora.getTime() - Number(m[1]) * ms).toISOString() : null;
+  const un = (singular: string, plural: string) => `hace ${n} ${n === 1 ? singular : plural}`;
+  const caso: [number, string] | null =
+    /^seg|^s$/.test(u) ? [1_000, un("segundo", "segundos")]
+    : /^min/.test(u) ? [60_000, un("minuto", "minutos")]
+    : /^h/.test(u) ? [3_600_000, un("hora", "horas")]
+    : /^d/.test(u) ? [86_400_000, un("día", "días")]
+    : /^sem/.test(u) ? [7 * 86_400_000, un("semana", "semanas")]
+    : /^m(es)?(es)?$/.test(u) ? [30 * 86_400_000, un("mes", "meses")]
+    : /^a/.test(u) ? [365 * 86_400_000, un("año", "años")]
+    : null;
+  return caso ? { iso: new Date(ahora.getTime() - n * caso[0]).toISOString(), texto: caso[1] } : null;
 }
 
 async function pedir(url: string, init?: RequestInit): Promise<string> {
@@ -110,7 +116,8 @@ async function bingNoticias(): Promise<MencionWeb[]> {
     const fecha = etiqueta(it, "pubDate");
     const enlace = texto(etiqueta(it, "link"));
     if (!titulo || !fecha || !enlace) continue;
-    lista.push({ plataforma: "prensa", fuente: texto(etiqueta(it, "News:Source")) || "Bing Noticias", titulo, fecha: new Date(fecha).toISOString(), enlace, extracto: texto(etiqueta(it, "description")).slice(0, 220) || null });
+    const img = texto(etiqueta(it, "News:Image"));
+    lista.push({ plataforma: "prensa", fuente: texto(etiqueta(it, "News:Source")) || "Bing Noticias", titulo, fecha: new Date(fecha).toISOString(), enlace, extracto: texto(etiqueta(it, "description")).slice(0, 220) || null, ...(/^https:\/\//.test(img) ? { imagen: img } : {}) });
   }
   return lista;
 }
@@ -140,8 +147,18 @@ async function youtubeBusqueda(consulta = '"María Fernanda Cabal"'): Promise<Me
       const canal = String(nodo((v.ownerText as { runs?: unknown[] } | undefined)?.runs?.[0]).text ?? "");
       const cuando = String(nodo(v.publishedTimeText).simpleText ?? "");
       const vistas = String(nodo(v.viewCountText).simpleText ?? "");
-      const fecha = fechaDeYouTube(cuando, ahora) ?? ahora.toISOString();
-      if (titulo) lista.push({ plataforma: "youtube", fuente: canal || "YouTube", titulo, fecha, enlace: `https://www.youtube.com/watch?v=${v.videoId}`, extracto: vistas || null });
+      const rel = fechaDeYouTube(cuando, ahora);
+      const duracion = String(nodo(v.lengthText).simpleText ?? "");
+      const verificado = JSON.stringify(v.ownerBadges ?? "").includes("VERIFIED");
+      const snippet = ((nodo((v.detailedMetadataSnippets as unknown[] | undefined)?.[0]).snippetText as { runs?: { text?: string }[] } | undefined)?.runs ?? []).map((r) => r.text ?? "").join("");
+      if (titulo) {
+        lista.push({
+          plataforma: "youtube", fuente: canal || "YouTube", titulo, fecha: rel?.iso ?? ahora.toISOString(), enlace: `https://www.youtube.com/watch?v=${v.videoId}`, extracto: vistas || null,
+          imagen: `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`,
+          ...(duracion ? { duracion } : {}), ...(verificado ? { verificado: true } : {}), ...(snippet ? { descripcion: texto(snippet).slice(0, 240) } : {}),
+          ...(rel ? { cuando: rel.texto, fechaAprox: true } : {}),
+        });
+      }
     }
     Object.values(x as Nodo).forEach(ver);
   };
@@ -282,13 +299,18 @@ async function resolverDesconocidos(lista: MencionWeb[], max = 24): Promise<void
   await Promise.all(Array.from({ length: 6 }, async () => { while (cola.length) { const [d, n] = cola.shift()!; await ubicarDominio(d, n); } }));
 }
 
-/** «12.345 visualizaciones», «1,2 M de visualizaciones», «3,4 mil vistas» → número. */
+/**
+ * «12.345 visualizaciones», «10,200 vistas», «1,2 M de visualizaciones», «3,4 mil vistas», «45 k vistas» → número.
+ * Un grupo de tres cifras tras la coma o el punto, sin «mil»/«M»/«k», son miles (10,200 = 10 200); con «mil», «M» o «k», es decimal.
+ */
 export function vistasDeTexto(t: string | null): number | undefined {
   const m = t?.toLowerCase().match(/([\d.,]+)\s*(mil millones|millones|millón|mil|m|k)?\s*(?:de\s+)?(?:visualizaciones|vistas|views)/);
   if (!m) return undefined;
-  const num = Number(m[1].replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
-  if (!Number.isFinite(num)) return undefined;
+  const crudo = m[1];
   const f = m[2] === "mil millones" ? 1e9 : m[2] === "millones" || m[2] === "millón" || m[2] === "m" ? 1e6 : m[2] === "mil" || m[2] === "k" ? 1e3 : 1;
+  const miles = f === 1 || /^\d{1,3}([.,]\d{3})+$/.test(crudo);
+  const num = miles && /^\d{1,3}([.,]\d{3})+$/.test(crudo) ? Number(crudo.replace(/[.,]/g, "")) : Number(crudo.replace(",", "."));
+  if (!Number.isFinite(num)) return undefined;
   return Math.round(num * f);
 }
 
@@ -310,7 +332,7 @@ function ubicar(m: MencionWeb): MencionWeb {
     ...m,
     ...(geo.medio || geo.texto ? { geo } : {}),
     enTitular: nombraAMariaFernanda(m.titulo),
-    tono: tonoDeTexto(m.titulo).tono,
+    tono: m.tonoIa && m.tono ? m.tono : tonoDeTexto(m.titulo).tono,
     ...(vistas !== undefined ? { metricas: { vistas } } : {}),
     ...(d && esNacional(d) && !portal ? { nacional: true } : {}),
   };
@@ -406,20 +428,36 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
   const guardado = await guardarItems(
     nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}|${m.dominio ?? ""}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto }))
   );
-  let todas = [...nuevas];
-  if (guardado) {
-    const previas = await leerItems(new Date(Date.now() - 30 * 86_400_000).toISOString());
-    if (previas) {
-      todas = previas
-        .filter((p) => p.personaje === PERSONAJE && p.tipo === "web")
-        .map((p): MencionWeb => {
-          const [plataforma, fuente, dominio] = (p.medio ?? "web||").split("|");
-          return { plataforma: (plataforma as PlataformaId) || "web", fuente: fuente || "Web", titulo: p.titulo, fecha: p.fecha, enlace: p.enlace, extracto: p.contexto, dominio: dominio || undefined };
-        });
-    }
-  }
+  const historial = guardado ? await desdeHistorial() : null;
+  const respuesta = await armar(historial ?? [...nuevas], { guardado, consultada, consultados: { portales: [...consultados.portales], paginas: [...consultados.paginas] }, vivo: true });
+  memoria = { en: Date.now(), datos: respuesta };
+  return respuesta;
+}
+
+/** Lo guardado en el archivo (último mes) como menciones, con lo ya analizado: ficha del video y tono medido por la IA. */
+async function desdeHistorial(): Promise<MencionWeb[] | null> {
+  const previas = await leerItems(new Date(Date.now() - 31 * 86_400_000).toISOString(), { personaje: PERSONAJE, limite: 5000 });
+  if (!previas) return null;
+  return previas
+    .filter((p) => p.tipo === "web")
+    .map((p): MencionWeb => {
+      const [plataforma, fuente, dominio] = (p.medio ?? "web||").split("|");
+      const ficha = (p.datos as { ficha?: FichaVideo } | null | undefined)?.ficha;
+      return {
+        plataforma: (plataforma as PlataformaId) || "web", fuente: fuente || "Web", titulo: p.titulo, fecha: p.fecha, enlace: p.enlace, extracto: p.contexto, dominio: dominio || undefined,
+        // Lo ya analizado queda guardado: la ficha del video y el tono medido por la IA no se piden otra vez.
+        ...(ficha ? { ficha, metricas: { vistas: ficha.vistas ?? p.vistas ?? undefined, likes: ficha.likes ?? undefined } } : p.vistas ? { metricas: { vistas: p.vistas } } : {}),
+        ...(p.tono_ia && p.tono ? { tono: p.tono, tonoIa: true } : {}),
+      };
+    });
+}
+
+type ContextoArmado = { guardado: boolean; consultada: Set<PlataformaId>; consultados: { portales: string[]; paginas: string[] }; /** Se acaba de consultar en vivo: se completan las ubicaciones y las cifras de YouTube. */ vivo: boolean };
+
+/** De la lista de menciones (en vivo y/o del archivo) a la respuesta del panel: ubicadas, sin repetir y con sus totales. */
+async function armar(todas: MencionWeb[], ctx: ContextoArmado): Promise<RespuestaMenciones> {
   for (const e of extras.values()) todas.push(e);
-  await resolverDesconocidos(todas);
+  if (ctx.vivo) await resolverDesconocidos(todas);
   // Se ubica cada mención; al quitar repetidas (mismo enlace o mismo titular en la misma plataforma) gana la que tiene ubicación del portal.
   const ubicadas = todas.map(ubicar).sort((a, b) => Number(!!b.geo?.medio) - Number(!!a.geo?.medio) || b.fecha.localeCompare(a.fecha));
   const vistos = new Set<string>();
@@ -435,12 +473,19 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
     .sort((a, b) => b.fecha.localeCompare(a.fecha))
     .slice(0, 800);
 
-  const youtubeConClave = await enriquecerYouTube(menciones).catch(() => false);
+  const youtubeConClave = ctx.vivo ? await enriquecerYouTube(menciones).catch(() => false) : false;
   const enriquecidas = menciones.map(aplicarYouTube);
-  const plataformas = PLATAFORMAS.map((p) => ({ id: p.id, nombre: p.nombre, total: menciones.filter((m) => m.plataforma === p.id).length, consultada: consultada.has(p.id) }));
-  const respuesta = { generadoEn: new Date().toISOString(), guardado, plataformas, menciones: enriquecidas, youtubeConClave, consultados: { portales: [...consultados.portales], paginas: [...consultados.paginas] } };
-  memoria = { en: Date.now(), datos: respuesta };
-  return respuesta;
+  const plataformas = PLATAFORMAS.map((p) => ({ id: p.id, nombre: p.nombre, total: menciones.filter((m) => m.plataforma === p.id).length, consultada: ctx.consultada.has(p.id) }));
+  return { generadoEn: new Date().toISOString(), guardado: ctx.guardado, plataformas, menciones: enriquecidas, youtubeConClave, consultados: ctx.consultados };
+}
+
+/** Sin salir a buscar: solo lo que ya está en el archivo de Supabase (rápido y sin gastar consultas). null si el archivo está vacío. */
+export async function mencionesDelArchivo(): Promise<RespuestaMenciones | null> {
+  const previas = await desdeHistorial();
+  if (!previas || previas.length === 0) return null;
+  const consultada = new Set(PLATAFORMAS.map((p) => p.id));
+  const consultados = { portales: MEDIOS_REGIONALES.filter((m) => m.dominio).map((m) => m.id), paginas: MEDIOS_REGIONALES.filter((m) => m.fb).map((m) => m.id) };
+  return armar(previas, { guardado: true, consultada, consultados, vivo: false });
 }
 
 /* ------------------------------------------------------------------ Búsqueda a fondo ---- */

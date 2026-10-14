@@ -22,3 +22,10 @@ create index if not exists monitoreo_items_personaje_idx on monitoreo_items (per
 
 alter table monitoreo_items enable row level security;
 revoke all on monitoreo_items from anon, authenticated;
+
+-- Archivo de menciones: las cifras, la miniatura, el canal y sus seguidores y el tono (medido por la IA o estimado) de cada mención
+-- se guardan una sola vez, así no hay que volver a analizarlas (ni gastar la IA) cada vez que se abre el panel.
+alter table monitoreo_items add column if not exists datos jsonb;
+alter table monitoreo_items add column if not exists tono text check (tono in ('positivo', 'neutral', 'negativo'));
+alter table monitoreo_items add column if not exists tono_ia boolean not null default false;
+create index if not exists monitoreo_items_tono_idx on monitoreo_items (personaje, tipo, tono_ia);
