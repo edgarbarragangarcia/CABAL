@@ -110,7 +110,7 @@ export async function enriquecerFichas(max = 12): Promise<{ hechos: number; pend
   const filas = lote.flatMap((i) => {
     const f = fichas[idYouTube(i.enlace)!];
     if (!f) return [];
-    return [{ personaje: i.personaje, tipo: i.tipo, enlace: i.enlace, titulo: i.titulo, fecha: i.fecha, vistas: f.vistas, datos: { ...(i.datos ?? {}), ficha: { ...f, leidaEn: new Date().toISOString() } } }];
+    return [{ personaje: i.personaje, tipo: i.tipo, enlace: i.enlace, titulo: i.titulo, fecha: f.publicado ?? i.fecha, vistas: f.vistas, datos: { ...(i.datos ?? {}), ficha: { ...f, leidaEn: new Date().toISOString() } } }];
   });
   const ok = await actualizarDatos(filas);
   return { hechos: ok ? filas.length : 0, pendientes: Math.max(0, pend.length - (ok ? filas.length : 0)) };

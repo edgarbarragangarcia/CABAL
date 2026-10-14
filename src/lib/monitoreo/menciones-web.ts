@@ -58,8 +58,29 @@ const texto = (s: string) => entidadesNumericas(entidades(entidadesNumericas(ent
  * «hace 11 min», «hace 3 h», «hace 2 días», «hace 2 sem.», «hace 2 m» (¡meses!), «hace 1 a» (año)… → fecha aproximada y el mismo
  * texto en palabras. En el español abreviado de YouTube, «m» son MESES y los minutos son «min».
  */
+const MESES: Record<string, number> = { ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5, jul: 6, ago: 7, sep: 8, set: 8, oct: 9, nov: 10, dic: 11, jan: 0, apr: 3, aug: 7, dec: 11 };
+const LARGO = (d: Date) => d.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+
 function fechaDeYouTube(t: string, ahora: Date): { iso: string; texto: string } | null {
-  const m = t.toLowerCase().match(/hace\s+(\d+)\s*([a-zñáéíóú]+)\.?/);
+  const bajo = t.toLowerCase();
+  // En directo ahora mismo: es de este instante.
+  if (/en directo|transmitiendo|viendo ahora|watching now|live now/.test(bajo) && !/transmitido|streamed/.test(bajo)) return { iso: ahora.toISOString(), texto: "en directo ahora" };
+  // «3 days ago» (cuando YouTube responde en inglés).
+  const en = bajo.match(/(\d+)\s*(second|minute|hour|day|week|month|year)s?\s+ago/);
+  if (en) {
+    const ms = { second: 1_000, minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000, year: 365 * 86_400_000 }[en[2] as "day"];
+    const d = new Date(ahora.getTime() - Number(en[1]) * ms);
+    return { iso: d.toISOString(), texto: `hace ${en[1]} ${({ second: "segundos", minute: "minutos", hour: "horas", day: "días", week: "semanas", month: "meses", year: "años" } as Record<string, string>)[en[2]]}` };
+  }
+  // Fecha completa: «14 oct 2025», «14 de octubre de 2025», «oct 14, 2025».
+  const abs = bajo.match(/(\d{1,2})\s+(?:de\s+)?([a-záéíóú]{3,})\.?,?\s+(?:de\s+)?(\d{4})/) ?? null;
+  const absEn = bajo.match(/([a-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  const parte = abs ? { d: Number(abs[1]), mes: MESES[abs[2].slice(0, 3)], a: Number(abs[3]) } : absEn ? { d: Number(absEn[2]), mes: MESES[absEn[1].slice(0, 3)], a: Number(absEn[3]) } : null;
+  if (parte && parte.mes !== undefined) {
+    const d = new Date(Date.UTC(parte.a, parte.mes, parte.d, 12));
+    if (!Number.isNaN(d.getTime())) return { iso: d.toISOString(), texto: LARGO(d) };
+  }
+  const m = bajo.match(/hace\s+(\d+)\s*([a-zñáéíóú]+)\.?/);
   if (!m) return null;
   const n = Number(m[1]);
   const u = m[2];
@@ -103,7 +124,8 @@ async function googleNoticias(q: string, plataforma: PlataformaId, limite: numbe
     const clave = titulo.toLowerCase().replace(/\W+/g, " ").slice(0, 120);
     if (!titulo || !fecha || vistos.has(clave)) continue;
     vistos.add(clave);
-    lista.push({ plataforma, fuente, titulo, fecha: new Date(fecha).toISOString(), enlace: texto(etiqueta(it, "link")), extracto: null, dominio });
+    // Las publicaciones de redes llegan con la fecha en que Google las indexó, no la de la publicación: se marca como aproximada.
+    lista.push({ plataforma, fuente, titulo, fecha: new Date(fecha).toISOString(), enlace: texto(etiqueta(it, "link")), extracto: null, dominio, ...(plataforma !== "prensa" && plataforma !== "web" ? { fechaAprox: true } : {}) });
   }
   return lista;
 }
@@ -148,15 +170,17 @@ async function youtubeBusqueda(consulta = '"María Fernanda Cabal"'): Promise<Me
       const cuando = String(nodo(v.publishedTimeText).simpleText ?? "");
       const vistas = String(nodo(v.viewCountText).simpleText ?? "");
       const rel = fechaDeYouTube(cuando, ahora);
+      // Sin una fecha que se pueda leer no se inventa «hoy»: ese video no entra (la fecha tiene que ser precisa).
+      if (!rel) return void Object.values(x as Nodo).forEach(ver);
       const duracion = String(nodo(v.lengthText).simpleText ?? "");
       const verificado = JSON.stringify(v.ownerBadges ?? "").includes("VERIFIED");
       const snippet = ((nodo((v.detailedMetadataSnippets as unknown[] | undefined)?.[0]).snippetText as { runs?: { text?: string }[] } | undefined)?.runs ?? []).map((r) => r.text ?? "").join("");
       if (titulo) {
         lista.push({
-          plataforma: "youtube", fuente: canal || "YouTube", titulo, fecha: rel?.iso ?? ahora.toISOString(), enlace: `https://www.youtube.com/watch?v=${v.videoId}`, extracto: vistas || null,
+          plataforma: "youtube", fuente: canal || "YouTube", titulo, fecha: rel.iso, enlace: `https://www.youtube.com/watch?v=${v.videoId}`, extracto: vistas || null,
           imagen: `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`,
           ...(duracion ? { duracion } : {}), ...(verificado ? { verificado: true } : {}), ...(snippet ? { descripcion: texto(snippet).slice(0, 240) } : {}),
-          ...(rel ? { cuando: rel.texto, fechaAprox: true } : {}),
+          cuando: rel.texto, fechaAprox: true,
         });
       }
     }
@@ -444,7 +468,7 @@ async function desdeHistorial(): Promise<MencionWeb[] | null> {
       const [plataforma, fuente, dominio] = (p.medio ?? "web||").split("|");
       const ficha = (p.datos as { ficha?: FichaVideo } | null | undefined)?.ficha;
       return {
-        plataforma: (plataforma as PlataformaId) || "web", fuente: fuente || "Web", titulo: p.titulo, fecha: p.fecha, enlace: p.enlace, extracto: p.contexto, dominio: dominio || undefined,
+        plataforma: (plataforma as PlataformaId) || "web", fuente: fuente || "Web", titulo: p.titulo, fecha: ficha?.publicado ?? p.fecha, enlace: p.enlace, extracto: p.contexto, dominio: dominio || undefined,
         // Lo ya analizado queda guardado: la ficha del video y el tono medido por la IA no se piden otra vez.
         ...(plataforma === "youtube" && idDeVideo(p.enlace) ? { imagen: `https://i.ytimg.com/vi/${idDeVideo(p.enlace)}/mqdefault.jpg` } : {}),
         ...(ficha?.comentarios?.length ? { comentariosMuestra: ficha.comentarios.map((c) => ({ texto: c.texto, autor: c.autor, likes: c.likes, fecha: ficha.publicado ?? p.fecha, tono: c.tono })) } : {}),

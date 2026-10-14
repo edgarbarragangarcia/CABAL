@@ -2,24 +2,22 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Eye, LayoutDashboard, MapPinned, Network, ShieldCheck, Vote } from "lucide-react";
+import { Eye, LayoutDashboard, Network, ShieldCheck, Vote } from "lucide-react";
 
 import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
 import { MonitoreoSecciones } from "@/components/admin/monitoreo-secciones";
 
 import { AvalesTab } from "./avales-tab";
 import { ExploradorElectoral } from "./explorador-electoral";
-import { MunicipiosGrupos } from "./municipios-grupos";
 import { PrediccionesTab } from "./predicciones-tab";
 
-type TabId = "centro" | "votaciones" | "predicciones" | "avales" | "municipios";
+type TabId = "centro" | "votaciones" | "predicciones" | "avales";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "centro", label: "Monitoreo", icon: LayoutDashboard },
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Red Cabal", icon: Network },
   { id: "avales", label: "Avales", icon: ShieldCheck },
-  { id: "municipios", label: "Municipios", icon: MapPinned },
 ];
 
 export function AnalisisTabs({ header }: { header: React.ReactNode }) {
@@ -73,12 +71,6 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
           <Lienzo>
             <Portada icono={Network} etiqueta="Territorio y comunidad" titulo="Red Cabal" descripcion="Elige un lugar, de lo general a lo particular, y mira cómo le fue a María Fernanda Cabal, qué problemas tiene y quiénes la siguen allí." />
             <PrediccionesTab />
-          </Lienzo>
-        )}
-        {tab === "municipios" && (
-          <Lienzo>
-            <Portada icono={MapPinned} etiqueta="Estructura territorial" titulo="Municipios en cuatro grupos" descripcion="Todos los municipios del país clasificados según la estructura organizada que ya existe y sus condiciones locales: dónde sostener, dónde fortalecer, dónde priorizar y dónde construir." />
-            <MunicipiosGrupos />
           </Lienzo>
         )}
         {tab === "avales" && (
