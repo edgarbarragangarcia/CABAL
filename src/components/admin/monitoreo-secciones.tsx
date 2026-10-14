@@ -557,6 +557,10 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const [v, setV] = React.useState(0);
   const [pestana, setPestana] = React.useState<Pestana>("mapa");
   const [soloTitular, setSoloTitular] = React.useState(false);
+  // Rango de días (AAAA-MM-DD); vacío = sin límite. Se compara por día calendario local.
+  const [desdeDia, setDesdeDia] = React.useState("");
+  const [hastaDia, setHastaDia] = React.useState("");
+  const [ahoraMs] = React.useState(() => Date.now());
   const [plat, setPlat] = React.useState<PlataformaId | "todas">("todas");
   const [lugar, setLugar] = React.useState<Lugar | null>(null);
   const [mostrar, setMostrar] = React.useState(40);
@@ -622,7 +626,13 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
       })
       .sort((a, b) => b.fecha.localeCompare(a.fecha));
   }, [datos, extra]);
-  const base = React.useMemo(() => todas.filter((m) => !soloTitular || m.enTitular), [todas, soloTitular]);
+  const base = React.useMemo(() => {
+    const dia = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    return todas.filter((m) => (!soloTitular || m.enTitular) && (!desdeDia || dia(m.fecha) >= desdeDia) && (!hastaDia || dia(m.fecha) <= hastaDia));
+  }, [todas, soloTitular, desdeDia, hastaDia]);
 
   async function medirTono() {
     const pendientes = base.filter((m) => !ia[claveTitulo(m.titulo)]).slice(0, 400);
@@ -800,6 +810,19 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
               {barrido.estado === "corriendo" ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <Search className="size-3" aria-hidden="true" />}
               {barrido.estado === "corriendo" ? `Recorriendo lugares… ${barrido.hecha}/${barrido.tandas}` : barrido.estado === "listo" ? "Volver a buscar a fondo" : barrido.estado === "pausa" || barrido.estado === "error" ? `Continuar desde la tanda ${barrido.hecha + 1}` : "Buscar a fondo por todo el país"}
             </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-semibold">Rango de días</span>
+            {[["Hoy", 0], ["7 días", 6], ["15 días", 14], ["30 días", 29]].map(([t, n]) => {
+              const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              const ini = fmt(new Date(ahoraMs - Number(n) * 86_400_000));
+              const activo = desdeDia === ini && hastaDia === "";
+              return <button key={String(t)} type="button" onClick={() => { setDesdeDia(ini); setHastaDia(""); setMostrar(40); }} className={`rounded-full px-3 py-1 font-semibold ${activo ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}>{t}</button>;
+            })}
+            <label className="inline-flex items-center gap-1">Desde<input type="date" value={desdeDia} max={hastaDia || undefined} onChange={(e) => { setDesdeDia(e.target.value); setMostrar(40); }} className="rounded-lg border border-border bg-surface px-2 py-1" /></label>
+            <label className="inline-flex items-center gap-1">Hasta<input type="date" value={hastaDia} min={desdeDia || undefined} onChange={(e) => { setHastaDia(e.target.value); setMostrar(40); }} className="rounded-lg border border-border bg-surface px-2 py-1" /></label>
+            {(desdeDia || hastaDia) && <button type="button" onClick={() => { setDesdeDia(""); setHastaDia(""); setMostrar(40); }} className="rounded-full px-3 py-1 font-semibold ring-1 ring-border hover:bg-surface-muted">Todo el mes</button>}
+            {(desdeDia || hastaDia) && <span className="text-muted-foreground">{base.length} de {todas.length} menciones</span>}
           </div>
           {midiendo.estado === "error" && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{midiendo.error}</p>}
           {barrido.estado === "pausa" && <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">Google pidió bajar el ritmo después de {barrido.hecha + 1} de {barrido.tandas} tandas. Espera unos minutos y pulsa «Continuar»: sigue desde donde quedó y lo ya encontrado se conserva.</p>}
