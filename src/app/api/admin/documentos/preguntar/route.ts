@@ -8,10 +8,10 @@ export const maxDuration = 60;
 
 /** POST { pregunta, documento? }: responde solo con lo que dicen los documentos y cita cada fuente con su número. */
 export async function POST(req: Request) {
-  const p = z.object({ pregunta: z.string().trim().min(3).max(1000), documento: z.string().uuid().optional() }).safeParse(await req.json().catch(() => null));
+  const p = z.object({ pregunta: z.string().trim().min(3).max(1000), documento: z.string().uuid().optional(), ambito: z.enum(["alianza", "partidos", "gremio"]).optional() }).safeParse(await req.json().catch(() => null));
   if (!p.success) return NextResponse.json({ error: "Escribe una pregunta de al menos tres letras." }, { status: 422 });
   try {
-    return NextResponse.json(await preguntar(p.data.pregunta, p.data.documento));
+    return NextResponse.json(await preguntar(p.data.pregunta, p.data.documento, p.data.ambito));
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "No fue posible responder." }, { status: 502 });
   }

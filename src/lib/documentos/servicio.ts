@@ -120,8 +120,10 @@ export type ResultadoBusqueda = { resultados: Hallazgo[]; avisos: string[] };
  * Busca por significado: vectoriza la consulta con el mismo modelo de cada documento (si hubo más de uno) y junta los fragmentos
  * más parecidos. Si de algún modelo no hay clave, se dice en vez de callarlo.
  */
-export async function buscarEnDocumentos(consulta: string, cantidad: number, documento?: string): Promise<ResultadoBusqueda> {
-  const docs = (await listarDocumentos()).filter((d) => d.modelo && d.vectorizados > 0 && (!documento || d.id === documento));
+export async function buscarEnDocumentos(consulta: string, cantidad: number, documento?: string, ambito?: string): Promise<ResultadoBusqueda> {
+  // Con un ámbito (alianza, partidos o gremio) solo se busca en lo que le pertenece: los demás documentos ni se consultan.
+  const docs = (await listarDocumentos()).filter((d) => d.modelo && d.vectorizados > 0 && (!documento || d.id === documento) && (!ambito || d.ambito === ambito));
+  const permitidos = new Set(docs.map((d) => d.id));
   const modelos = [...new Set(docs.map((d) => d.modelo!))];
   if (modelos.length === 0) return { resultados: [], avisos: ["Todavía no hay documentos vectorizados donde buscar."] };
   const avisos: string[] = [];
@@ -133,7 +135,8 @@ export async function buscarEnDocumentos(consulta: string, cantidad: number, doc
       continue;
     }
     const [vector] = await vectorizar([consulta], "consulta", proveedor);
-    todos.push(...(await buscarFragmentos(vector, modelo, cantidad, documento)));
+    const hallados = await buscarFragmentos(vector, modelo, ambito ? cantidad * 4 : cantidad, documento);
+    todos.push(...(ambito ? hallados.filter((h) => permitidos.has(h.documentoId)) : hallados));
   }
   return { resultados: todos.sort((a, b) => b.similitud - a.similitud).slice(0, cantidad), avisos };
 }

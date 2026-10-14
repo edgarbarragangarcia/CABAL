@@ -17,7 +17,7 @@ type Documento = {
   id: string; titulo: string; archivo: string | null; tipo: string | null; bytes: number | null; paginas: number | null; caracteres: number | null;
   fragmentos: number; vectorizados: number; estado: Estado; error: string | null; modelo: string | null; etiquetas: string[]; creadoEn: string;
   carpetaId: string | null; descripcion: string | null; categoria: string | null; autor: string | null; fuente: string | null; fechaDocumento: string | null;
-  confidencial: boolean; hash: string | null; version: number; grupoVersion: string | null; vigente: boolean; eliminadoEn: string | null;
+  confidencial: boolean; ambito?: string; hash: string | null; version: number; grupoVersion: string | null; vigente: boolean; eliminadoEn: string | null;
 };
 type Carpeta = { id: string; nombre: string; padreId: string | null };
 type Datos = {
@@ -94,6 +94,9 @@ export type FuenteDatos = {
   contenido: React.ReactNode;
 };
 
+/** A quién pertenece la información de un documento: la búsqueda y las preguntas pueden limitarse a un ámbito. */
+const AMBITOS: Record<string, string> = { alianza: "Alianza", partidos: "Partidos", gremio: "Gremio ganadero" };
+
 const TONO_FUENTE: Record<FuenteDatos["tono"], string> = {
   ok: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
   curso: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
@@ -113,6 +116,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
   const [tipo, setTipo] = React.useState("");
   const [estadoF, setEstadoF] = React.useState("");
   const [categoriaF, setCategoriaF] = React.useState("");
+  const [ambitoF, setAmbitoF] = React.useState("");
   const [orden, setOrden] = React.useState<"reciente" | "titulo" | "tamano">("reciente");
   const [conVersiones, setConVersiones] = React.useState(false);
   const [sel, setSel] = React.useState<Set<string>>(new Set());
@@ -366,10 +370,11 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
     if (tipo) base = base.filter((d) => d.tipo === tipo);
     if (estadoF) base = base.filter((d) => d.estado === estadoF);
     if (categoriaF) base = base.filter((d) => d.categoria?.trim() === categoriaF);
+    if (ambitoF) base = base.filter((d) => (d.ambito ?? "alianza") === ambitoF);
     return [...base].sort((a, b) => (orden === "titulo" ? a.titulo.localeCompare(b.titulo, "es") : orden === "tamano" ? (b.bytes ?? 0) - (a.bytes ?? 0) : b.creadoEn.localeCompare(a.creadoEn)));
-  }, [vista, todos, papelera, conVersiones, texto, tipo, estadoF, categoriaF, orden, descendientes]);
+  }, [vista, todos, papelera, conVersiones, texto, tipo, estadoF, categoriaF, ambitoF, orden, descendientes]);
   /** Las fuentes de datos se ven en la lista general, como un documento más (sin filtros de texto activos). */
-  const filasFuente = vista.tipo === "todos" && !texto && !tipo && !estadoF && !categoriaF ? fuentes : [];
+  const filasFuente = vista.tipo === "todos" && !texto && !tipo && !estadoF && !categoriaF && !ambitoF ? fuentes : [];
 
   const categorias = React.useMemo(() => [...new Set([...todos, ...papelera].map((d) => d.categoria?.trim()).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "es")), [todos, papelera]);
   const tipos = React.useMemo(() => [...new Set(todos.map((d) => d.tipo).filter((t): t is string => !!t))].sort(), [todos]);
@@ -533,6 +538,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
               <div className="flex flex-wrap items-center gap-2">
                 <label className="flex min-w-[12rem] flex-1 items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 focus-within:border-brand"><Search className="size-4 text-muted-foreground" /><input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Filtrar por título, autor, etiqueta…" aria-label="Filtrar documentos" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
                 <select aria-label="Tipo de archivo" value={tipo} onChange={(e) => setTipo(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="">Todos los tipos</option>{tipos.map((t) => <option key={t} value={t}>{t.toUpperCase()}</option>)}</select>
+                <select aria-label="Ámbito" value={ambitoF} onChange={(e) => setAmbitoF(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="">Todos los ámbitos</option>{Object.entries(AMBITOS).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
                 {categorias.length > 0 && <select aria-label="Categoría" value={categoriaF} onChange={(e) => setCategoriaF(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="">Todas las categorías</option>{categorias.map((c) => <option key={c} value={c}>{c}</option>)}</select>}
                 <select aria-label="Estado" value={estadoF} onChange={(e) => setEstadoF(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="">Cualquier estado</option><option value="listo">Listos</option><option value="procesando">Procesando</option><option value="error">Con error</option></select>
                 <select aria-label="Ordenar" value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold"><option value="reciente">Más recientes</option><option value="titulo">Por título</option><option value="tamano">Por tamaño</option></select>
@@ -596,7 +602,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                         <tr key={d.id} onClick={() => setAbierto(d.id)} className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-muted/60 ${abierto === d.id ? "bg-brand-soft/60" : ""}`}>
                           <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${d.titulo}`} checked={sel.has(d.id)} onChange={() => alternar(d.id)} /></td>
                           <td className="max-w-[22rem] px-3 py-2.5">
-                            <p className="truncate font-semibold">{d.titulo}{d.version > 1 && <span className="ml-1.5 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">v{d.version}</span>}{d.confidencial && <span className="ml-1.5 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300">CONFIDENCIAL</span>}{!d.vigente && <span className="ml-1.5 rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">anterior</span>}</p>
+                            <p className="truncate font-semibold">{d.titulo}{d.version > 1 && <span className="ml-1.5 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">v{d.version}</span>}{(d.ambito ?? "alianza") !== "alianza" && <span className="ml-1.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:text-sky-300">{AMBITOS[d.ambito ?? ""] ?? d.ambito}</span>}{d.confidencial && <span className="ml-1.5 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300">CONFIDENCIAL</span>}{!d.vigente && <span className="ml-1.5 rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">anterior</span>}</p>
                             <p className="truncate text-xs text-muted-foreground">{[d.categoria, d.autor, ...d.etiquetas.slice(0, 3).map((t) => `#${t}`)].filter(Boolean).join(" · ") || d.archivo}</p>
                           </td>
                           {gestor && <td className="px-3 py-2.5 text-xs text-muted-foreground">{nombreCarpetaDe(d.carpetaId) ?? "—"}</td>}
@@ -635,6 +641,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
 function BuscarYPreguntar() {
   const [q, setQ] = React.useState("");
   const [modo, setModo] = React.useState<"preguntar" | "buscar">("preguntar");
+  const [ambitoQ, setAmbitoQ] = React.useState("");
   const [cargando, setCargando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [respuesta, setRespuesta] = React.useState<Respuesta | null>(null);
@@ -648,8 +655,8 @@ function BuscarYPreguntar() {
     setRespuesta(null);
     setHallazgos(null);
     try {
-      if (modo === "preguntar") setRespuesta(await pedir<Respuesta>("/api/admin/documentos/preguntar", "POST", { pregunta: q.trim() }));
-      else setHallazgos(await pedir<{ resultados: Hallazgo[]; avisos: string[] }>("/api/admin/documentos/buscar", "POST", { consulta: q.trim(), cantidad: 8 }));
+      if (modo === "preguntar") setRespuesta(await pedir<Respuesta>("/api/admin/documentos/preguntar", "POST", { pregunta: q.trim(), ...(ambitoQ ? { ambito: ambitoQ } : {}) }));
+      else setHallazgos(await pedir<{ resultados: Hallazgo[]; avisos: string[] }>("/api/admin/documentos/buscar", "POST", { consulta: q.trim(), cantidad: 8, ...(ambitoQ ? { ambito: ambitoQ } : {}) }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "No fue posible completar la consulta.");
     } finally {
@@ -662,6 +669,7 @@ function BuscarYPreguntar() {
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="size-4 text-brand" /> Preguntarle a los documentos</h3>
         <div className="ml-auto flex gap-1">
+          <select aria-label="Buscar en" value={ambitoQ} onChange={(e) => setAmbitoQ(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold"><option value="">En todos los ámbitos</option>{Object.entries(AMBITOS).map(([id, n]) => <option key={id} value={id}>Solo {n}</option>)}</select>
           {(["preguntar", "buscar"] as const).map((m) => <button key={m} type="button" onClick={() => setModo(m)} className={`rounded-full px-3 py-1 text-xs font-semibold ${modo === m ? "bg-brand text-brand-foreground" : "ring-1 ring-border text-muted-foreground"}`}>{m === "preguntar" ? "Responder con citas" : "Solo buscar fragmentos"}</button>)}
         </div>
       </div>
@@ -706,7 +714,7 @@ function PanelDocumento({ doc, gestor, carpetas, categorias, onNuevaCarpeta, vec
 }) {
   const [f, setF] = React.useState({
     titulo: doc.titulo, descripcion: doc.descripcion ?? "", categoria: doc.categoria ?? "", autor: doc.autor ?? "", fuente: doc.fuente ?? "",
-    fechaDocumento: doc.fechaDocumento ?? "", etiquetas: doc.etiquetas.join(", "), carpetaId: doc.carpetaId ?? "", confidencial: doc.confidencial,
+    fechaDocumento: doc.fechaDocumento ?? "", etiquetas: doc.etiquetas.join(", "), carpetaId: doc.carpetaId ?? "", confidencial: doc.confidencial, ambito: doc.ambito ?? "alianza",
   });
   const [detalle, setDetalle] = React.useState<Detalle | null>(null);
   const [guardando, setGuardando] = React.useState(false);
@@ -734,6 +742,7 @@ function PanelDocumento({ doc, gestor, carpetas, categorias, onNuevaCarpeta, vec
       etiquetas: f.etiquetas.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 20),
       carpetaId: f.carpetaId || null,
       confidencial: f.confidencial,
+      ambito: f.ambito,
     });
     setGuardando(false);
   }
@@ -776,6 +785,7 @@ function PanelDocumento({ doc, gestor, carpetas, categorias, onNuevaCarpeta, vec
               if (nombre) void onNuevaCarpeta(nombre).then((id) => id && setF((x) => ({ ...x, carpetaId: id })));
             }}><option value="">Sin carpeta</option>{opciones.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}<option value="__nueva">+ Crear carpeta nueva…</option></select></label>
             <label className="block text-xs font-semibold">Etiquetas (separadas por coma)<input className={`${campo} mt-1 font-normal`} value={f.etiquetas} onChange={(e) => setF({ ...f, etiquetas: e.target.value })} /></label>
+            <label className="block text-xs font-semibold">Ámbito (a quién pertenece)<select className={`${campo} mt-1 font-normal`} value={f.ambito} onChange={(e) => setF({ ...f, ambito: e.target.value })}>{Object.entries(AMBITOS).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></label>
             <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={f.confidencial} onChange={(e) => setF({ ...f, confidencial: e.target.checked })} /> Confidencial (se marca en la lista; no sale en el sitio público)</label>
             <button type="submit" disabled={guardando} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground disabled:opacity-60">{guardando ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Guardar cambios</button>
           </form>

@@ -61,6 +61,7 @@ export type Cambios = Partial<{
   fuente: string | null;
   fechaDocumento: string | null;
   confidencial: boolean;
+  ambito: string;
   etiquetas: string[];
   carpetaId: string | null;
 }>;
@@ -73,6 +74,7 @@ const COLUMNAS: Record<keyof Cambios, string> = {
   fuente: "fuente",
   fechaDocumento: "fecha_documento",
   confidencial: "confidencial",
+  ambito: "ambito",
   etiquetas: "etiquetas",
   carpetaId: "carpeta_id",
 };
@@ -162,8 +164,8 @@ export type Respuesta = { respuesta: string; fuentes: { n: number; documentoId: 
  * Responde una pregunta SOLO con lo que dicen los documentos y cita cada afirmación con [n]. Si los fragmentos no alcanzan,
  * lo dice: no completa con conocimiento propio.
  */
-export async function preguntar(pregunta: string, documento?: string): Promise<Respuesta> {
-  const { resultados, avisos } = await buscarEnDocumentos(pregunta, 8, documento);
+export async function preguntar(pregunta: string, documento?: string, ambito?: string): Promise<Respuesta> {
+  const { resultados, avisos } = await buscarEnDocumentos(pregunta, 8, documento, ambito);
   const utiles = resultados.filter((r) => r.similitud > 0.35);
   if (utiles.length === 0) return { respuesta: "No encontré en los documentos nada que responda a esa pregunta.", fuentes: [], avisos };
   const fuentes = utiles.map((r, i) => ({ n: i + 1, documentoId: r.documentoId, titulo: r.titulo, pagina: r.pagina, contenido: r.contenido }));

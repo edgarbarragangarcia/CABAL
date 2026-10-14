@@ -67,6 +67,7 @@ const crear = z.object({
   fuente: z.string().trim().max(200).nullable().optional(),
   fechaDocumento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   confidencial: z.boolean().optional(),
+  ambito: z.enum(["alianza", "partidos", "gremio"]).optional(),
   hash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   /** Sube el archivo como una versión nueva de este documento. */
   versionDe: z.string().uuid().optional(),
@@ -101,6 +102,7 @@ export async function POST(req: Request) {
         fuente: meta.fuente ?? null,
         fecha_documento: meta.fechaDocumento ?? null,
         confidencial: meta.confidencial ?? false,
+        ambito: meta.ambito ?? "alianza",
         hash: hash ?? null,
         creado_por: usuario,
       };
@@ -112,7 +114,7 @@ export async function POST(req: Request) {
         const todas = await versionesDe(base);
         const grupo = base.grupoVersion ?? base.id;
         if (!base.grupoVersion) await editarGrupo(base.id, grupo);
-        extras = { ...extras, carpeta_id: base.carpetaId, descripcion: base.descripcion, categoria: base.categoria, autor: base.autor, fuente: base.fuente, confidencial: base.confidencial, grupo_version: grupo, version: Math.max(...todas.map((d) => d.version), base.version) + 1, es_vigente: false };
+        extras = { ...extras, carpeta_id: base.carpetaId, descripcion: base.descripcion, categoria: base.categoria, autor: base.autor, fuente: base.fuente, confidencial: base.confidencial, ambito: base.ambito, grupo_version: grupo, version: Math.max(...todas.map((d) => d.version), base.version) + 1, es_vigente: false };
       }
     }
     const doc = await crearDocumento({ titulo, archivo, tipo: ext, bytes, etiquetas, extras });
@@ -138,6 +140,7 @@ const editar = z.object({
   fuente: z.string().trim().max(200).nullable().optional(),
   fechaDocumento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   confidencial: z.boolean().optional(),
+  ambito: z.enum(["alianza", "partidos", "gremio"]).optional(),
   etiquetas: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   agregarEtiquetas: z.array(z.string().trim().min(1).max(40)).max(10).optional(),
   carpetaId: z.string().uuid().nullable().optional(),

@@ -34,6 +34,7 @@ const CATEGORIAS: Record<string, string> = {
   "Autos & Vehicles": "Autos", "Pets & Animals": "Mascotas",
 };
 
+import { claveRed } from "@/lib/ia-config";
 import { tonoDeTexto } from "./tono";
 
 type Nodo = Record<string, unknown>;
@@ -159,6 +160,40 @@ async function leerComentarios(html: string, datosPagina: string | null): Promis
   }
 }
 
+/** Respaldo cuando YouTube bloquea la lectura de su página (pasa desde servidores en la nube): la API oficial con la clave de Configuración. */
+async function leerFichaPorApi(id: string, clave: string): Promise<FichaVideo | null> {
+  const api = async (ruta: string, q: Record<string, string>) => {
+    const r = await fetch(`https://www.googleapis.com/youtube/v3/${ruta}?${new URLSearchParams({ ...q, key: clave })}`, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+    return r.ok ? ((await r.json()) as Nodo) : null;
+  };
+  const v = await api("videos", { part: "snippet,statistics,contentDetails", id });
+  const it = nodo((v?.items as unknown[] | undefined)?.[0]);
+  const sn = nodo(it.snippet);
+  if (typeof sn.title !== "string") return null;
+  const st = nodo(it.statistics);
+  const dur = String(nodo(it.contentDetails).duration ?? "").match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  const segundos = dur ? Number(dur[1] ?? 0) * 3600 + Number(dur[2] ?? 0) * 60 + Number(dur[3] ?? 0) : null;
+  let suscriptores: number | null = null;
+  const canalId = typeof sn.channelId === "string" ? sn.channelId : null;
+  if (canalId) {
+    const c = await api("channels", { part: "statistics", id: canalId }).catch(() => null);
+    suscriptores = num(nodo(nodo((c?.items as unknown[] | undefined)?.[0]).statistics).subscriberCount);
+  }
+  const comentarios: ComentarioFicha[] = [];
+  const t = await api("commentThreads", { part: "snippet", videoId: id, order: "relevance", maxResults: "25", textFormat: "plainText" }).catch(() => null);
+  for (const th of (t?.items as unknown[] | undefined) ?? []) {
+    const c = nodo(nodo(nodo(nodo(th).snippet).topLevelComment).snippet);
+    const texto = String(c.textDisplay ?? "").replace(/\s+/g, " ").trim();
+    if (texto) comentarios.push({ texto: texto.slice(0, 300), autor: String(c.authorDisplayName ?? ""), likes: Number(c.likeCount) || 0, tono: tonoDeTexto(texto).tono });
+  }
+  return {
+    id, titulo: sn.title, canal: String(sn.channelTitle ?? ""), canalId, suscriptores, segundos,
+    vistas: num(st.viewCount), likes: num(st.likeCount), descripcion: String(sn.description ?? "").slice(0, 600),
+    categoria: null, publicado: typeof sn.publishedAt === "string" ? new Date(sn.publishedAt).toISOString() : null,
+    enVivo: sn.liveBroadcastContent === "live", comentarios, comentariosLeidos: true,
+  };
+}
+
 /** Las fichas de varios videos (con memoria de seis horas y pocas peticiones a la vez). Los que no se pueden leer no aparecen. */
 export async function fichasDeVideos(ids: string[]): Promise<Record<string, FichaVideo>> {
   const ahora = Date.now();
@@ -175,7 +210,16 @@ export async function fichasDeVideos(ids: string[]): Promise<Record<string, Fich
       while (pendientes.length) {
         const id = pendientes.shift()!;
         try {
-          const ficha = await leerFicha(id);
+          let ficha: FichaVideo | null = null;
+          try {
+            ficha = await leerFicha(id);
+          } catch {
+            ficha = null;
+          }
+          if (!ficha) {
+            const clave = await claveRed("youtube").catch(() => undefined);
+            if (clave) ficha = await leerFichaPorApi(id, clave).catch(() => null);
+          }
           memoria.set(id, { en: Date.now(), ficha });
           if (ficha) salida[id] = ficha;
         } catch {

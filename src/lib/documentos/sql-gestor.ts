@@ -23,6 +23,8 @@ alter table documentos add column if not exists grupo_version uuid;   -- todas l
 alter table documentos add column if not exists es_vigente boolean not null default true;
 alter table documentos add column if not exists eliminado_en timestamptz; -- papelera: no se muestra ni se busca
 alter table documentos add column if not exists creado_por text;
+-- A quién pertenece la información: la alianza, los partidos o el gremio ganadero. La búsqueda y las preguntas pueden limitarse a uno.
+alter table documentos add column if not exists ambito text not null default 'alianza' check (ambito in ('alianza', 'partidos', 'gremio'));
 
 create index if not exists documentos_carpeta_idx on documentos (carpeta_id) where eliminado_en is null;
 create index if not exists documentos_hash_idx on documentos (hash) where hash is not null;

@@ -37,6 +37,8 @@ export type Documento = {
   fuente: string | null;
   fechaDocumento: string | null;
   confidencial: boolean;
+  /** alianza | partidos | gremio */
+  ambito: string;
   hash: string | null;
   version: number;
   grupoVersion: string | null;
@@ -68,6 +70,7 @@ export const aDocumento = (f: Fila): Documento => ({
   fuente: f.fuente ?? null,
   fechaDocumento: f.fecha_documento ?? null,
   confidencial: f.confidencial ?? false,
+  ambito: f.ambito ?? "alianza",
   hash: f.hash ?? null,
   version: f.version ?? 1,
   grupoVersion: f.grupo_version ?? null,
