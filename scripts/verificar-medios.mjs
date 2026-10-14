@@ -34,6 +34,7 @@ async function noticias(q) {
 }
 
 let i = 0;
+filas.splice(0, filas.length, ...filas.filter((f) => f.dominio)); // las páginas de Facebook sin sitio propio no tienen qué revisar aquí
 const problemas = [];
 await Promise.all(
   Array.from({ length: 5 }, async () => {

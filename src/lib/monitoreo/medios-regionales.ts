@@ -168,6 +168,12 @@ export const MEDIOS_REGIONALES: MedioRegional[] = [
   { id: "amprensa", nombre: "AM Prensa", dominio: "amprensa.com", tipo: "digital", ciudad: "Cartago", dane: "76147", departamento: "Valle del Cauca", lat: 4.707, lon: -75.923, web: true, fb: "amprensa", fbIndexado: true },
   { id: "elnortehoy", nombre: "El Norte Hoy", dominio: "elnortehoy.com", tipo: "digital", ciudad: "Cartago", dane: "76147", departamento: "Valle del Cauca", lat: 4.707, lon: -75.923, web: true, fb: "periodicoelnortehoy", fbIndexado: true },
   { id: "eltabloide", nombre: "El Tabloide", dominio: "eltabloide.com.co", tipo: "prensa", ciudad: "Tuluá", dane: "76834", departamento: "Valle del Cauca", lat: 4.028, lon: -76.033, web: true, fb: "eltabloidedigital", fbIndexado: true },
+  { id: "df-casanare", nombre: "DF Casanare", dominio: "", tipo: "digital", ciudad: "Yopal", dane: "85001", departamento: "Casanare", lat: 5.245, lon: -72.259, web: false, fb: null, fbIndexado: false },
+  { id: "dinamica-regional", nombre: "Dinámica Regional", dominio: "", tipo: "digital", ciudad: "Yopal", dane: "85001", departamento: "Casanare", lat: 5.245, lon: -72.259, web: false, fb: null, fbIndexado: false },
+  { id: "el-nuevo-oriente", nombre: "El Nuevo Oriente", dominio: "", tipo: "digital", ciudad: "Yopal", dane: "85001", departamento: "Casanare", lat: 5.245, lon: -72.259, web: false, fb: null, fbIndexado: false },
+  { id: "guaviare-estereo", nombre: "Guaviare Estéreo", dominio: "", tipo: "digital", ciudad: "San José del Guaviare", dane: "95001", departamento: "Guaviare", lat: 2.485, lon: -71.922, web: false, fb: null, fbIndexado: false },
+  { id: "tv-caqueta", nombre: "Tv Caquetá", dominio: "", tipo: "digital", ciudad: "Florencia", dane: "18001", departamento: "Caquetá", lat: 1.748, lon: -75.557, web: false, fb: null, fbIndexado: false },
+  { id: "red-digital-noticias", nombre: "Red Digital Noticias", dominio: "", tipo: "digital", ciudad: "Florencia", dane: "18001", departamento: "Caquetá", lat: 1.748, lon: -75.557, web: false, fb: null, fbIndexado: false },
 ];
 
 const quitarWww = (d: string) => d.toLowerCase().replace(/^www\./, "");

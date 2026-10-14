@@ -163,3 +163,15 @@ export const CIUDADES_BARRIDO: string[] = (() => {
   const nombre = (m: Municipio) => m.nombre.replace(/, D\.C\./, "").replace(/^San José de (Cúcuta)$/, "$1").replace(/ de Indias$/, "");
   return MUNICIPIOS.filter((m) => m.poblacion >= 40_000 || capital.has(m.dane)).sort((a, b) => b.poblacion - a.poblacion).map(nombre).filter((n, i, a) => a.indexOf(n) === i);
 })();
+
+/** Todos los municipios (y el propio departamento) de los departamentos dados, listos para una búsqueda: «"Mapiripán" "Meta"». */
+export function lugaresDeDepartamentos(codigos: Set<string>): string[] {
+  const salida: string[] = [];
+  for (const d of DEPARTAMENTOS) {
+    if (!codigos.has(d.dep)) continue;
+    const nombre = d.nombre.replace(/^Archipiélago de /, "").replace(/ y Providencia.*$/, "");
+    salida.push(`"${nombre}"`);
+    for (const m of MUNICIPIOS.filter((x) => x.dep === d.dep)) salida.push(`"${m.nombre.replace(/, D\.C\./, "")}" "${nombre}"`);
+  }
+  return salida;
+}

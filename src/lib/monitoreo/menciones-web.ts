@@ -3,7 +3,7 @@ import "server-only";
 import { entidades } from "@/lib/informe/fuentes";
 import { guardarItems, leerItems, type ItemMonitoreo } from "./historial";
 import { nombraAMariaFernanda } from "./menciones";
-import { CIUDADES_BARRIDO, lugarDelTexto, lugarPredominante } from "./lugares";
+import { CIUDADES_BARRIDO, lugarDelTexto, lugarPredominante, lugaresDeDepartamentos } from "./lugares";
 import { tonoDeTexto, type Tono } from "./tono";
 import { claveRed } from "@/lib/ia-config";
 import { MEDIOS_REGIONALES, medioPorDominio, medioPorFb, medioPorInicio, type MedioRegional } from "./medios-regionales";
@@ -191,6 +191,14 @@ function tareasRegionales(): Tarea[] {
       plataforma: "prensa",
       cubre: { portales: grupo.map((m) => m.id) },
       ejecutar: async () => (await googleNoticias(`${NOMBRE} (${grupo.map((m) => `site:${m.dominio}`).join(" OR ")}) when:30d`, "prensa", 100)).filter((m) => !!m.dominio && !!medioPorDominio(m.dominio)),
+    });
+  }
+  // Páginas de Facebook sin sitio web propio (se conocen por el nombre con que empiezan sus publicaciones).
+  for (const m of MEDIOS_REGIONALES.filter((x) => !x.dominio && !x.fb)) {
+    tareas.push({
+      plataforma: "facebook",
+      cubre: { paginas: [m.id] },
+      ejecutar: async () => (await googleNoticias(`${NOMBRE} "${m.nombre}" site:facebook.com when:30d`, "facebook", 60)).filter((x) => nombraAMariaFernanda(x.titulo) && medioPorInicio(x.titulo)?.id === m.id).map((x) => ({ ...x, fuente: m.nombre })),
     });
   }
   for (const m of MEDIOS_REGIONALES.filter((x) => x.fb && x.fbIndexado)) {
@@ -408,25 +416,35 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
 
 /* ------------------------------------------------------------------ Búsqueda a fondo ---- */
 
-/** Ciudades por tanda: cada una son dos consultas (prensa y Facebook) y una función de 60 s las despacha con holgura. */
-const CIUDADES_POR_TANDA = 28;
-export const TANDAS_BARRIDO = Math.ceil(CIUDADES_BARRIDO.length / CIUDADES_POR_TANDA);
+/** Lugares por tanda: cada uno son tres consultas (prensa y dos de Facebook) y una función de 60 s las despacha con holgura. */
+const CIUDADES_POR_TANDA = 24;
+/** Departamentos con menos de cuatro portales en el directorio: ahí se buscan todos los municipios, no solo las ciudades grandes. */
+const POCO_CUBIERTOS = (() => {
+  const por = new Map<string, number>();
+  for (const m of MEDIOS_REGIONALES) por.set(m.dane.slice(0, 2), (por.get(m.dane.slice(0, 2)) ?? 0) + (m.dominio ? 1 : 0));
+  return new Set(["05", "08", "13", "15", "17", "18", "19", "20", "23", "25", "27", "41", "44", "47", "50", "52", "54", "63", "66", "68", "70", "73", "76", "81", "85", "86", "88", "91", "94", "95", "97", "99"].filter((d) => (por.get(d) ?? 0) < 4));
+})();
+export const LUGARES_BARRIDO: string[] = [...new Set([...CIUDADES_BARRIDO.map((c) => `"${c}"`), ...lugaresDeDepartamentos(POCO_CUBIERTOS)])];
+export const TANDAS_BARRIDO = Math.ceil(LUGARES_BARRIDO.length / CIUDADES_POR_TANDA);
 
 /**
- * Recorre las ciudades principales del país buscando «María Fernanda Cabal» + la ciudad en prensa y en Facebook: así salen los medios
- * y las páginas que no están en el directorio (el micrositio, la emisora más pequeña). Se llama por tandas desde el panel.
+ * Recorre las ciudades principales del país y todos los municipios de los departamentos con pocos portales buscando «María Fernanda
+ * Cabal» + el lugar en prensa y en Facebook: así salen los medios y las páginas que no están en el directorio (el micrositio, la
+ * emisora más pequeña). Se llama por tandas desde el panel.
  */
 export async function barridoCiudades(tanda: number): Promise<{ menciones: MencionWeb[]; tanda: number; tandas: number; ciudades: string[]; total: number }> {
-  const ciudades = CIUDADES_BARRIDO.slice(tanda * CIUDADES_POR_TANDA, (tanda + 1) * CIUDADES_POR_TANDA);
+  const ciudades = LUGARES_BARRIDO.slice(tanda * CIUDADES_POR_TANDA, (tanda + 1) * CIUDADES_POR_TANDA);
   const hasta = Date.now() + PRESUPUESTO_MS;
   const tareas = ciudades.flatMap((c) => [
-    () => googleNoticias(`${NOMBRE} "${c}" when:30d`, "prensa", 40),
-    async () => (await googleNoticias(`${NOMBRE} "${c}" site:facebook.com when:30d`, "facebook", 40)).filter((m) => nombraAMariaFernanda(m.titulo)),
+    () => googleNoticias(`${NOMBRE} ${c} when:30d`, "prensa", 40),
+    async () => (await googleNoticias(`${NOMBRE} ${c} site:facebook.com when:30d`, "facebook", 40)).filter((m) => nombraAMariaFernanda(m.titulo)),
+    // «Cabal» o «MaFe» a secas: así hablan muchas páginas locales de Facebook.
+    async () => (await googleNoticias(`(Cabal OR MaFe) ${c} site:facebook.com when:60d`, "facebook", 40)).filter((m) => nombraAMariaFernanda(m.titulo)),
   ]);
   const resultados = await conLimite(tareas, 5, hasta);
   const nuevas = resultados.flatMap((r) => (r?.status === "fulfilled" ? r.value : []));
   for (const m of nuevas) extras.set(`${m.plataforma}|${m.enlace}`, m);
   await guardarItems(nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}|${m.dominio ?? ""}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto })));
   await resolverDesconocidos(nuevas);
-  return { menciones: nuevas.map(ubicar).map(aplicarYouTube), tanda, tandas: TANDAS_BARRIDO, ciudades, total: CIUDADES_BARRIDO.length };
+  return { menciones: nuevas.map(ubicar).map(aplicarYouTube), tanda, tandas: TANDAS_BARRIDO, ciudades, total: LUGARES_BARRIDO.length };
 }

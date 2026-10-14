@@ -397,7 +397,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const [lugar, setLugar] = React.useState<Lugar | null>(null);
   const [mostrar, setMostrar] = React.useState(40);
   const [extra, setExtra] = React.useState<MencionWeb[]>([]);
-  const [barrido, setBarrido] = React.useState<{ estado: "libre" | "corriendo" | "listo" | "error"; hecha: number; tandas: number; error?: string }>({ estado: "libre", hecha: 0, tandas: 7 });
+  const [barrido, setBarrido] = React.useState<{ estado: "libre" | "corriendo" | "listo" | "error"; hecha: number; tandas: number; total?: number; error?: string }>({ estado: "libre", hecha: 0, tandas: 12 });
   const [ia, setIa] = React.useState<Ia>(() => {
     try {
       return typeof window === "undefined" ? {} : (JSON.parse(localStorage.getItem(CLAVE_IA) ?? "{}") as Ia);
@@ -413,22 +413,24 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const tonoDe = React.useCallback((m: MencionWeb): Tono => ia[claveTitulo(m.titulo)] ?? m.tono ?? "neutral", [ia]);
 
   async function buscarAFondo() {
-    setBarrido({ estado: "corriendo", hecha: 0, tandas: 7 });
-    let tandas = 7;
+    setBarrido({ estado: "corriendo", hecha: 0, tandas: 12 });
+    let tandas = 12;
+    let total: number | undefined;
     for (let k = 0; k < tandas; k++) {
       try {
         const res = await fetch(`/api/admin/monitoreo/barrido?tanda=${k}`, { cache: "no-store" });
-        const j = (await res.json()) as { menciones?: MencionWeb[]; tandas?: number; error?: string };
+        const j = (await res.json()) as { menciones?: MencionWeb[]; tandas?: number; total?: number; error?: string };
         if (!res.ok || !j.menciones) throw new Error(j.error ?? "No fue posible consultar las fuentes.");
         tandas = j.tandas ?? tandas;
+        total = j.total ?? total;
         setExtra((prev) => [...prev, ...j.menciones!]);
-        setBarrido({ estado: "corriendo", hecha: k + 1, tandas });
+        setBarrido({ estado: "corriendo", hecha: k + 1, tandas, total });
       } catch (e) {
         setBarrido({ estado: "error", hecha: k, tandas, error: e instanceof Error ? e.message : "Error de red." });
         return;
       }
     }
-    setBarrido({ estado: "listo", hecha: tandas, tandas });
+    setBarrido({ estado: "listo", hecha: tandas, tandas, total });
   }
 
   const todas = React.useMemo(() => {
@@ -575,7 +577,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
           </div>
           {midiendo.estado === "error" && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{midiendo.error}</p>}
           {barrido.estado === "error" && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">La búsqueda a fondo se detuvo en la tanda {barrido.hecha + 1}: {barrido.error} Lo encontrado hasta ahí se conserva.</p>}
-          {barrido.estado === "listo" && <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">Búsqueda a fondo terminada: {barrido.tandas * 28} ciudades revisadas en prensa y Facebook. Aportó {Math.max(0, todas.length - (datos?.menciones.length ?? 0))} menciones nuevas, {Math.max(0, todas.filter((m) => m.geo?.medio).length - (datos?.menciones.filter((m) => m.geo?.medio).length ?? 0))} de ellas de portales o páginas regionales.</p>}
+          {barrido.estado === "listo" && <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">Búsqueda a fondo terminada: {barrido.total ?? barrido.tandas * 24} lugares revisados en prensa y Facebook (las ciudades principales y todos los municipios de los departamentos con pocos portales). Aportó {Math.max(0, todas.length - (datos?.menciones.length ?? 0))} menciones nuevas, {Math.max(0, todas.filter((m) => m.geo?.medio).length - (datos?.menciones.filter((m) => m.geo?.medio).length ?? 0))} de ellas de portales o páginas regionales.</p>}
 
           <div role="tablist" aria-label="Qué mostrar" className="flex flex-wrap gap-1.5">
             {([["publicadas", "Dónde se publica", "La ciudad del portal que publica la nota"], ["mencionadas", "De qué lugar hablan", "El lugar que nombra el titular"]] as const).map(([id, texto, ayuda]) => (
@@ -604,6 +606,18 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
               )}
             </div>
           </div>
+
+          {(() => {
+            const vacios = DEPARTAMENTOS_CO.filter(([d]) => !(depTotales[d] > 0)).map(([, n]) => n);
+            if (vacios.length === 0) return null;
+            return (
+              <p className="rounded-xl bg-surface-muted/70 px-3 py-2 text-xs">
+                <span className="font-semibold">Sin menciones {modo === "publicadas" ? "publicadas desde" : "que hablen de"}: </span>
+                <span className="text-muted-foreground">{vacios.join(", ")}.</span>{" "}
+                <span className="text-muted-foreground">{barrido.estado === "listo" ? "Ya se buscó en todos sus municipios." : "Pulsa «Buscar a fondo por todo el país» para revisar uno por uno sus municipios (Llanos, Amazonía y Pacífico incluidos)."}</span>
+              </p>
+            );
+          })()}
 
           <div>
             <p className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Cuándo publican{lugar ? ` · ${nombreLugar ?? ""}` : " · todo el país"} (30 días)</p>
