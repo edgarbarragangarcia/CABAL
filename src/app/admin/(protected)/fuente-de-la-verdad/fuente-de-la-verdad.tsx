@@ -9,6 +9,7 @@ import { DatosTab } from "../analisis-publicaciones/datos-tab";
 import { DocumentosTab, type FuenteDatos } from "../analisis-publicaciones/documentos-tab";
 import { usePeticion } from "../analisis-publicaciones/peticion";
 import { MapaDatos } from "./mapa-datos";
+import { MonitoreoFuente } from "./monitoreo-fuente";
 
 const OPCIONES = [
   { id: "biblioteca", label: "Documentos y datos", icon: Library },
@@ -36,6 +37,8 @@ export function FuenteDeLaVerdad() {
   const filas = total.estado === "listo" ? total.data.filas : null;
   const c = carga.estado === "listo" ? carga.data.carga?.carga : null;
   const enMarcha = !!c?.enMarcha;
+  const mon = usePeticion<{ disponible: boolean; total: number; ultimaActualizacion: string | null }>("/api/admin/monitoreo/archivo");
+  const m = mon.estado === "listo" ? mon.data : null;
   const fuentes: FuenteDatos[] = [
     {
       id: "electoral",
@@ -46,6 +49,16 @@ export function FuenteDeLaVerdad() {
       tono: enMarcha ? "curso" : filas === 0 || c?.fin === "error" || c?.fin === "pausa" ? "pendiente" : "ok",
       fecha: c?.ultimoLoteEn ?? null,
       contenido: <DatosTab />,
+    },
+    {
+      id: "monitoreo",
+      nombre: "Monitoreo",
+      detalle: "Menciones de María Fernanda en prensa, redes y YouTube del último mes, con su tono y sus cifras",
+      resumen: m ? `${m.total.toLocaleString("es-CO")} menciones` : "—",
+      estado: !m ? "Leyendo" : !m.disponible ? "Falta SQL" : m.total === 0 ? "Sin cargar" : "Listo",
+      tono: m && m.disponible && m.total > 0 ? "ok" : "pendiente",
+      fecha: m?.ultimaActualizacion ?? null,
+      contenido: <MonitoreoFuente />,
     },
   ];
 
@@ -66,8 +79,8 @@ export function FuenteDeLaVerdad() {
       </div>
       <Lienzo className="mt-6">
         {tab === "biblioteca" ? (
-          <Portada icono={Library} etiqueta="Gestor documental" titulo="Documentos y fuentes de datos" descripcion="Los documentos de la Fundación y los datos electorales en un solo lugar: carpetas, versiones, papelera e historial, búsqueda por significado y preguntas con citas.">
-            <ChipPortada icono={Library}>Los datos electorales son una fuente más: ábrela desde la lista o el menú</ChipPortada>
+          <Portada icono={Library} etiqueta="Gestor documental" titulo="Documentos y fuentes de datos" descripcion="Los documentos de la Fundación y los datos electorales y el monitoreo en un solo lugar: carpetas, versiones, papelera e historial, búsqueda por significado y preguntas con citas.">
+            <ChipPortada icono={Library}>Los datos electorales y el monitoreo son fuentes más: ábrela desde la lista o el menú</ChipPortada>
           </Portada>
         ) : (
           <Portada icono={Network} etiqueta="Mapa de datos" titulo="Lo que hay en Supabase" descripcion="Cada módulo del panel y lo que tiene dentro: documentos, portales, elecciones, comunidad… y qué falta por crear.">
