@@ -446,6 +446,8 @@ async function desdeHistorial(): Promise<MencionWeb[] | null> {
       return {
         plataforma: (plataforma as PlataformaId) || "web", fuente: fuente || "Web", titulo: p.titulo, fecha: p.fecha, enlace: p.enlace, extracto: p.contexto, dominio: dominio || undefined,
         // Lo ya analizado queda guardado: la ficha del video y el tono medido por la IA no se piden otra vez.
+        ...(plataforma === "youtube" && idDeVideo(p.enlace) ? { imagen: `https://i.ytimg.com/vi/${idDeVideo(p.enlace)}/mqdefault.jpg` } : {}),
+        ...(ficha?.comentarios?.length ? { comentariosMuestra: ficha.comentarios.map((c) => ({ texto: c.texto, autor: c.autor, likes: c.likes, fecha: ficha.publicado ?? p.fecha, tono: c.tono })) } : {}),
         ...(ficha ? { ficha, metricas: { vistas: ficha.vistas ?? p.vistas ?? undefined, likes: ficha.likes ?? undefined } } : p.vistas ? { metricas: { vistas: p.vistas } } : {}),
         ...(p.tono_ia && p.tono ? { tono: p.tono, tonoIa: true } : {}),
       };

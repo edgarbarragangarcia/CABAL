@@ -74,7 +74,7 @@ export async function estadoArchivo(): Promise<EstadoArchivo> {
     r[tono]++;
     if (i.tono_ia) r.conTonoIa++;
     else tonoPend++;
-    if (p === "youtube" && idYouTube(i.enlace) && (!ficha || ahora - Date.parse(ficha.leidaEn ?? "") > FRESCURA_FICHA_MS)) fichasPend++;
+    if (p === "youtube" && idYouTube(i.enlace) && (!ficha || !ficha.comentariosLeidos || ahora - Date.parse(ficha.leidaEn ?? "") > FRESCURA_FICHA_MS)) fichasPend++;
     if (i.actualizado_en && (!ultima || i.actualizado_en > ultima)) ultima = i.actualizado_en;
     por.set(p, r);
   }
@@ -88,10 +88,25 @@ export async function enriquecerFichas(max = 12): Promise<{ hechos: number; pend
   const ahora = Date.now();
   const pend = items.filter((i) => i.tipo === "web" && plataformaDe(i) === "youtube" && idYouTube(i.enlace)).filter((i) => {
     const f = fichaDe(i);
-    return !f || ahora - Date.parse(f.leidaEn ?? "") > FRESCURA_FICHA_MS;
+    return !f || !f.comentariosLeidos || ahora - Date.parse(f.leidaEn ?? "") > FRESCURA_FICHA_MS;
   });
   const lote = pend.slice(0, max);
   const fichas = await fichasDeVideos(lote.map((i) => idYouTube(i.enlace)!));
+  // El análisis fuerte: el tono de cada comentario lo mide la IA (si no hay clave, queda el estimado por palabras).
+  const comentarios = Object.values(fichas).flatMap((f) => f.comentarios ?? []);
+  if (comentarios.length > 0) {
+    try {
+      const tonos = await clasificarTonos(comentarios.map((c) => c.texto), true);
+      comentarios.forEach((c, k) => {
+        if (tonos[k]) {
+          c.tono = tonos[k]!;
+          c.ia = true;
+        }
+      });
+    } catch {
+      /* sin IA: se queda el tono por palabras */
+    }
+  }
   const filas = lote.flatMap((i) => {
     const f = fichas[idYouTube(i.enlace)!];
     if (!f) return [];

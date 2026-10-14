@@ -18,7 +18,13 @@ export type FichaVideo = {
   /** Fecha y hora exactas de publicación (ISO). */
   publicado: string | null;
   enVivo: boolean;
+  /** Lo que escribe la gente: los comentarios más relevantes con su tono. */
+  comentarios?: ComentarioFicha[];
+  /** Ya se intentó leer los comentarios (aunque estén desactivados). */
+  comentariosLeidos?: boolean;
 };
+
+export type ComentarioFicha = { texto: string; autor: string; likes: number; tono: "positivo" | "neutral" | "negativo"; ia?: boolean };
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 const CATEGORIAS: Record<string, string> = {
@@ -27,6 +33,8 @@ const CATEGORIAS: Record<string, string> = {
   "Nonprofits & Activism": "Activismo", Music: "Música", Sports: "Deportes", Gaming: "Videojuegos", "Travel & Events": "Viajes y eventos",
   "Autos & Vehicles": "Autos", "Pets & Animals": "Mascotas",
 };
+
+import { tonoDeTexto } from "./tono";
 
 type Nodo = Record<string, unknown>;
 const nodo = (x: unknown): Nodo => (x && typeof x === "object" ? (x as Nodo) : {});
@@ -89,6 +97,7 @@ async function leerFicha(id: string): Promise<FichaVideo | null> {
       /* sin suscriptores */
     }
   }
+  const comentarios = await leerComentarios(html, d ? d[1] : null);
   const cat = typeof mf.category === "string" ? mf.category : null;
   return {
     id,
@@ -103,7 +112,51 @@ async function leerFicha(id: string): Promise<FichaVideo | null> {
     categoria: cat ? (CATEGORIAS[cat] ?? cat) : null,
     publicado: typeof mf.publishDate === "string" && !Number.isNaN(Date.parse(mf.publishDate)) ? new Date(mf.publishDate).toISOString() : null,
     enVivo: v.isLiveContent === true,
+    comentarios,
+    comentariosLeidos: true,
   };
+}
+
+/** Los comentarios más relevantes (hasta 25) por la misma ruta que usa la página: sin clave. Vacío si están desactivados. */
+async function leerComentarios(html: string, datosPagina: string | null): Promise<ComentarioFicha[]> {
+  try {
+    if (!datosPagina) return [];
+    let token: string | null = null;
+    const buscar = (x: unknown): void => {
+      if (token || !x || typeof x !== "object") return;
+      if (Array.isArray(x)) return x.forEach(buscar);
+      const o = x as Nodo;
+      if (nodo(o.itemSectionRenderer).sectionIdentifier === "comment-item-section") {
+        token = JSON.stringify(o).match(/"token":"([^"]+)"/)?.[1] ?? null;
+        return;
+      }
+      Object.values(o).forEach(buscar);
+    };
+    buscar(JSON.parse(datosPagina));
+    if (!token) return [];
+    const clave = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)?.[1];
+    const res = await fetch(`https://www.youtube.com/youtubei/v1/next?prettyPrint=false${clave ? `&key=${clave}` : ""}`, {
+      method: "POST",
+      headers: { "User-Agent": UA, "Content-Type": "application/json", "Accept-Language": "es-CO,es;q=0.9" },
+      body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion: "2.20240801.00.00", hl: "es", gl: "CO" } }, continuation: token }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return [];
+    const j = (await res.json()) as Nodo;
+    const muts = (nodo(nodo(j.frameworkUpdates).entityBatchUpdate).mutations as unknown[]) ?? [];
+    const lista: ComentarioFicha[] = [];
+    for (const m of muts) {
+      const c = nodo(nodo(nodo(m).payload).commentEntityPayload);
+      const texto = String(nodo(nodo(c.properties).content).content ?? "").replace(/\s+/g, " ").trim();
+      if (!texto) continue;
+      const likes = Number(String(nodo(c.toolbar).likeCountNotliked ?? "0").replace(/\D/g, "")) || 0;
+      lista.push({ texto: texto.slice(0, 300), autor: String(nodo(c.author).displayName ?? ""), likes, tono: tonoDeTexto(texto).tono });
+    }
+    return lista.slice(0, 25);
+  } catch {
+    return [];
+  }
 }
 
 /** Las fichas de varios videos (con memoria de seis horas y pocas peticiones a la vez). Los que no se pueden leer no aparecen. */

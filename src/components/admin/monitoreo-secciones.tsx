@@ -383,7 +383,7 @@ function FilaMencion({ m, tono, plataformas, alLugar, ficha }: { m: MencionWeb; 
         {descripcion && <p className="mt-1.5 line-clamp-2 pl-4 text-xs text-muted-foreground">{descripcion}</p>}
         {m.comentariosMuestra && m.comentariosMuestra.length > 0 && (
           <details className="mt-1.5 pl-4">
-            <summary className="cursor-pointer text-[11px] font-semibold text-brand">Qué dicen en los comentarios ({m.comentariosMuestra.length} de los más relevantes)</summary>
+            <summary className="cursor-pointer text-[11px] font-semibold text-brand">Qué dicen en los comentarios ({m.comentariosMuestra.length} de los más relevantes · {m.comentariosMuestra.filter((c) => c.tono === "positivo").length} a favor, {m.comentariosMuestra.filter((c) => c.tono === "negativo").length} en contra)</summary>
             <ul className="mt-1.5 space-y-1.5">
               {m.comentariosMuestra.map((c, i) => (
                 <li key={i} className="flex items-start gap-2 text-[11px]">
@@ -430,7 +430,7 @@ function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
     const lista: PasoArchivo[] = [
       { id: "buscar", texto: "Buscar en prensa, redes y YouTube", estado: "espera" },
       ...(modo === "mes" ? [{ id: "ciudades", texto: "Recorrer las ciudades y municipios", estado: "espera" as const }, { id: "deptos", texto: "Investigar los 33 departamentos", estado: "espera" as const }] : []),
-      { id: "fichas", texto: "Completar la ficha de cada video (vistas, me gusta, suscriptores, fecha exacta)", estado: "espera" },
+      { id: "fichas", texto: "Completar la ficha de cada video (vistas, me gusta, suscriptores, fecha exacta) y leer sus comentarios con IA", estado: "espera" },
       { id: "tono", texto: "Medir el tono con IA (solo lo que falta)", estado: "espera" },
     ];
     setPasos(lista);
