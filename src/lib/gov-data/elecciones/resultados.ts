@@ -378,11 +378,21 @@ export function territorioDe(geo: Geografia, codigo: string): Territorio {
 }
 
 /**
- * Votaciones lee SOLO de Supabase: la fuente (Registraduría o datos.gov.co) únicamente alimenta la copia, ya sea con la carga de
- * Análisis > Datos o con «Guardar en Supabase». Con la variable ELECCIONES_FUENTE_EN_VIVO=1 se vuelve al comportamiento anterior
- * (si no está guardado, pedirlo a la fuente y guardarlo de paso): válvula de escape por si hiciera falta.
+ * Votaciones lee primero la copia de Supabase y, si un territorio no está, lo pide a la fuente oficial (Registraduría o datos.gov.co)
+ * y lo guarda de paso: es el comportamiento de siempre. Con ELECCIONES_SOLO_SUPABASE=1 se vuelve al modo estricto (solo lo guardado),
+ * útil si la fuente se cae o si se quiere garantizar que la pantalla no salga a buscar nada.
  */
-const fuenteEnVivoPermitida = () => process.env.ELECCIONES_FUENTE_EN_VIVO === "1";
+const fuenteEnVivoPermitida = () => process.env.ELECCIONES_SOLO_SUPABASE !== "1";
+
+/**
+ * Hasta qué nivel se guarda de paso lo que se pide en vivo: 1 país, 2 departamentos, 3 municipios (por defecto), 4 zonas, 5 comunas,
+ * 6 puestos. Los puestos de votación pesan muchísimo (llenaron los 500 MB del plan gratuito de Supabase): se muestran en vivo pero
+ * no se guardan sin que alguien lo pida con la carga de Análisis > Datos.
+ */
+const nivelMaxGuardadoDePaso = () => {
+  const n = Number(process.env.ELECCIONES_NIVEL_MAX_GUARDADO);
+  return Number.isInteger(n) && n >= 1 && n <= 7 ? n : 3;
+};
 
 /** Lo pedido no está guardado en Supabase (y no se va a pedir a la fuente). */
 export class NoGuardadoError extends Error {
@@ -406,7 +416,11 @@ async function pedirYGuardar(
   // El archivo de la Registraduría siempre trae el mapa de ganadores; el de datos.gov.co, solo si se pidió.
   // Un territorio que la fuente «no publica» (null) no se guarda de paso: podría ser una página de error disfrazada de respuesta,
   // y guardarla como definitiva taparía datos reales. Eso solo lo decide la sincronización, que sí puede comprobarlo.
-  if (corporacion && r) guardarEnSegundoPlano(filaDe(eleccion, corporacion, territorioDe(geo, codigo), r, eleccion.fuente !== "socrata" || conMapa));
+  if (corporacion && r) {
+    const territorio = territorioDe(geo, codigo);
+    // Lo muy detallado (puestos, mesas) se muestra pero no se guarda de paso: no cabe en el disco del plan gratuito.
+    if ((territorio.nivel ?? 1) <= nivelMaxGuardadoDePaso()) guardarEnSegundoPlano(filaDe(eleccion, corporacion, territorio, r, eleccion.fuente !== "socrata" || conMapa));
+  }
   return r;
 }
 
