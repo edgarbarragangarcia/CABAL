@@ -397,7 +397,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const [lugar, setLugar] = React.useState<Lugar | null>(null);
   const [mostrar, setMostrar] = React.useState(40);
   const [extra, setExtra] = React.useState<MencionWeb[]>([]);
-  const [barrido, setBarrido] = React.useState<{ estado: "libre" | "corriendo" | "listo" | "error"; hecha: number; tandas: number; total?: number; error?: string }>({ estado: "libre", hecha: 0, tandas: 12 });
+  const [barrido, setBarrido] = React.useState<{ estado: "libre" | "corriendo" | "listo" | "error" | "pausa"; hecha: number; tandas: number; total?: number; error?: string }>({ estado: "libre", hecha: 0, tandas: 27 });
   const [ia, setIa] = React.useState<Ia>(() => {
     try {
       return typeof window === "undefined" ? {} : (JSON.parse(localStorage.getItem(CLAVE_IA) ?? "{}") as Ia);
@@ -413,20 +413,25 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const tonoDe = React.useCallback((m: MencionWeb): Tono => ia[claveTitulo(m.titulo)] ?? m.tono ?? "neutral", [ia]);
 
   async function buscarAFondo() {
-    setBarrido({ estado: "corriendo", hecha: 0, tandas: 12 });
-    let tandas = 12;
-    let total: number | undefined;
-    for (let k = 0; k < tandas; k++) {
+    const desde = barrido.estado === "pausa" || barrido.estado === "error" ? barrido.hecha : 0;
+    let tandas = barrido.tandas;
+    let total = barrido.total;
+    setBarrido({ estado: "corriendo", hecha: desde, tandas, total });
+    for (let k = desde; k < tandas; k++) {
       try {
         const res = await fetch(`/api/admin/monitoreo/barrido?tanda=${k}`, { cache: "no-store" });
-        const j = (await res.json()) as { menciones?: MencionWeb[]; tandas?: number; total?: number; error?: string };
+        const j = (await res.json()) as { menciones?: MencionWeb[]; tandas?: number; total?: number; limitado?: boolean; error?: string };
         if (!res.ok || !j.menciones) throw new Error(j.error ?? "No fue posible consultar las fuentes.");
         tandas = j.tandas ?? tandas;
         total = j.total ?? total;
         setExtra((prev) => [...prev, ...j.menciones!]);
+        if (j.limitado) {
+          setBarrido({ estado: "pausa", hecha: k, tandas, total });
+          return;
+        }
         setBarrido({ estado: "corriendo", hecha: k + 1, tandas, total });
       } catch (e) {
-        setBarrido({ estado: "error", hecha: k, tandas, error: e instanceof Error ? e.message : "Error de red." });
+        setBarrido({ estado: "error", hecha: k, tandas, total, error: e instanceof Error ? e.message : "Error de red." });
         return;
       }
     }
@@ -572,11 +577,12 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
             </button>
             <button type="button" onClick={buscarAFondo} disabled={barrido.estado === "corriendo"} className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3 py-1 font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-60" title="Busca «María Fernanda Cabal» + cada una de las principales ciudades del país, en prensa y en Facebook, para encontrar medios que no están en el directorio">
               {barrido.estado === "corriendo" ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <Search className="size-3" aria-hidden="true" />}
-              {barrido.estado === "corriendo" ? `Recorriendo ciudades… ${barrido.hecha}/${barrido.tandas}` : barrido.estado === "listo" ? "Volver a buscar a fondo" : "Buscar a fondo por todo el país"}
+              {barrido.estado === "corriendo" ? `Recorriendo lugares… ${barrido.hecha}/${barrido.tandas}` : barrido.estado === "listo" ? "Volver a buscar a fondo" : barrido.estado === "pausa" || barrido.estado === "error" ? `Continuar desde la tanda ${barrido.hecha + 1}` : "Buscar a fondo por todo el país"}
             </button>
           </div>
           {midiendo.estado === "error" && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{midiendo.error}</p>}
-          {barrido.estado === "error" && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">La búsqueda a fondo se detuvo en la tanda {barrido.hecha + 1}: {barrido.error} Lo encontrado hasta ahí se conserva.</p>}
+          {barrido.estado === "pausa" && <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">Google pidió bajar el ritmo después de {barrido.hecha + 1} de {barrido.tandas} tandas. Espera unos minutos y pulsa «Continuar»: sigue desde donde quedó y lo ya encontrado se conserva.</p>}
+          {barrido.estado === "error" && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">La búsqueda a fondo se detuvo en la tanda {barrido.hecha + 1}: {barrido.error} Lo encontrado hasta ahí se conserva; «Continuar» sigue desde ahí.</p>}
           {barrido.estado === "listo" && <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">Búsqueda a fondo terminada: {barrido.total ?? barrido.tandas * 24} lugares revisados en prensa y Facebook (las ciudades principales y todos los municipios de los departamentos con pocos portales). Aportó {Math.max(0, todas.length - (datos?.menciones.length ?? 0))} menciones nuevas, {Math.max(0, todas.filter((m) => m.geo?.medio).length - (datos?.menciones.filter((m) => m.geo?.medio).length ?? 0))} de ellas de portales o páginas regionales.</p>}
 
           <div role="tablist" aria-label="Qué mostrar" className="flex flex-wrap gap-1.5">

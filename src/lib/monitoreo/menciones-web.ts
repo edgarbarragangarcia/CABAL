@@ -416,7 +416,7 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
 
 /* ------------------------------------------------------------------ Búsqueda a fondo ---- */
 
-/** Lugares por tanda: cada uno son tres consultas (prensa y dos de Facebook) y una función de 60 s las despacha con holgura. */
+/** Lugares por tanda: cada uno son dos consultas (prensa y Facebook) a un ritmo que Google tolera. */
 const CIUDADES_POR_TANDA = 24;
 /** Departamentos con menos de cuatro portales en el directorio: ahí se buscan todos los municipios, no solo las ciudades grandes. */
 const POCO_CUBIERTOS = (() => {
@@ -432,19 +432,21 @@ export const TANDAS_BARRIDO = Math.ceil(LUGARES_BARRIDO.length / CIUDADES_POR_TA
  * Cabal» + el lugar en prensa y en Facebook: así salen los medios y las páginas que no están en el directorio (el micrositio, la
  * emisora más pequeña). Se llama por tandas desde el panel.
  */
-export async function barridoCiudades(tanda: number): Promise<{ menciones: MencionWeb[]; tanda: number; tandas: number; ciudades: string[]; total: number }> {
+export async function barridoCiudades(tanda: number): Promise<{ menciones: MencionWeb[]; tanda: number; tandas: number; ciudades: string[]; total: number; /** Google pidió bajar el ritmo: hay que esperar unos minutos y repetir esta tanda. */ limitado: boolean }> {
   const ciudades = LUGARES_BARRIDO.slice(tanda * CIUDADES_POR_TANDA, (tanda + 1) * CIUDADES_POR_TANDA);
   const hasta = Date.now() + PRESUPUESTO_MS;
+  const pausa = () => new Promise((ok) => setTimeout(ok, 350));
   const tareas = ciudades.flatMap((c) => [
-    () => googleNoticias(`${NOMBRE} ${c} when:30d`, "prensa", 40),
-    async () => (await googleNoticias(`${NOMBRE} ${c} site:facebook.com when:30d`, "facebook", 40)).filter((m) => nombraAMariaFernanda(m.titulo)),
+    async () => { const r = await googleNoticias(`${NOMBRE} ${c} when:30d`, "prensa", 40); await pausa(); return r; },
     // «Cabal» o «MaFe» a secas: así hablan muchas páginas locales de Facebook.
-    async () => (await googleNoticias(`(Cabal OR MaFe) ${c} site:facebook.com when:60d`, "facebook", 40)).filter((m) => nombraAMariaFernanda(m.titulo)),
+    async () => { const r = (await googleNoticias(`(Cabal OR MaFe) ${c} site:facebook.com when:60d`, "facebook", 40)).filter((m) => nombraAMariaFernanda(m.titulo)); await pausa(); return r; },
   ]);
-  const resultados = await conLimite(tareas, 5, hasta);
+  const resultados = await conLimite(tareas, 3, hasta);
+  const hechas = resultados.filter(Boolean).length;
+  const bloqueadas = resultados.filter((r) => r?.status === "rejected" && /respondió (429|503)/.test(String((r as PromiseRejectedResult).reason?.message))).length;
   const nuevas = resultados.flatMap((r) => (r?.status === "fulfilled" ? r.value : []));
   for (const m of nuevas) extras.set(`${m.plataforma}|${m.enlace}`, m);
   await guardarItems(nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}|${m.dominio ?? ""}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto })));
   await resolverDesconocidos(nuevas);
-  return { menciones: nuevas.map(ubicar).map(aplicarYouTube), tanda, tandas: TANDAS_BARRIDO, ciudades, total: LUGARES_BARRIDO.length };
+  return { menciones: nuevas.map(ubicar).map(aplicarYouTube), tanda, tandas: TANDAS_BARRIDO, ciudades, total: LUGARES_BARRIDO.length, limitado: hechas > 0 && bloqueadas / hechas > 0.3 };
 }
