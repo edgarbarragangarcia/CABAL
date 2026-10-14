@@ -39,7 +39,8 @@ let extendidas: { ok: boolean; en: number } | null = null;
 
 /** ¿Existen las columnas del archivo (`datos`, `tono`, `tono_ia`)? Se comprueba una vez cada cinco minutos. */
 async function hayExtendidas(c: Cliente): Promise<boolean> {
-  if (extendidas && Date.now() - extendidas.en < 5 * 60_000) return extendidas.ok;
+  // Un «sí» se recuerda cinco minutos; un «no» solo veinte segundos: si acaban de ejecutar el SQL, no debe seguir diciendo que faltan.
+  if (extendidas && Date.now() - extendidas.en < (extendidas.ok ? 5 * 60_000 : 20_000)) return extendidas.ok;
   try {
     const { error } = await c.from(TABLA).select("datos, tono, tono_ia").limit(1);
     extendidas = { ok: !error, en: Date.now() };
@@ -54,29 +55,44 @@ export const archivoDisponible = async (): Promise<boolean> => {
   return c ? hayExtendidas(c) : false;
 };
 
+/**
+ * Sube filas en tandas y, si una tanda falla (una fila rara, un duplicado, un tropiezo), la parte a la mitad hasta aislar la
+ * fila mala: así una sola fila defectuosa no deja sin guardar las otras 800. Devuelve cuántas quedaron guardadas.
+ */
+async function subirTanda(c: Cliente, filas: Record<string, unknown>[], profundidad = 0): Promise<number> {
+  if (filas.length === 0) return 0;
+  const { error } = await c.from(TABLA).upsert(filas, { onConflict: "personaje,tipo,enlace" });
+  if (!error) return filas.length;
+  if (filas.length === 1 || profundidad > 8) return 0;
+  const mitad = Math.ceil(filas.length / 2);
+  return (await subirTanda(c, filas.slice(0, mitad), profundidad + 1)) + (await subirTanda(c, filas.slice(mitad), profundidad + 1));
+}
+
+/** Guarda las menciones (sin repetir el mismo enlace dentro del envío) y dice si quedó guardada al menos una. */
 export async function guardarItems(items: ItemMonitoreo[]): Promise<boolean> {
   const c = getSupabaseServerClient();
   if (!c || items.length === 0) return false;
   try {
     const ahora = new Date().toISOString();
     const con = await hayExtendidas(c);
+    // Un mismo envío no puede traer dos veces la misma mención (Postgres rechaza todo el lote): la última gana.
+    const unicos = new Map<string, ItemMonitoreo>();
+    for (const i of items) unicos.set(`${i.personaje}|${i.tipo}|${i.enlace}`, i);
     // En un mismo envío todas las filas llevan las mismas columnas: las que traen datos van aparte de las que no (no se borra lo ya guardado).
     const conDatos: Record<string, unknown>[] = [];
     const sinDatos: Record<string, unknown>[] = [];
-    for (const i of items) {
+    for (const i of unicos.values()) {
       const { datos, tono, tono_ia, ...base } = i;
       const fila: Record<string, unknown> = { ...base, actualizado_en: ahora };
       if (con && (datos !== undefined || tono !== undefined || tono_ia !== undefined)) {
         conDatos.push({ ...fila, datos: datos ?? null, tono: tono ?? null, tono_ia: tono_ia ?? false });
       } else sinDatos.push(fila);
     }
-    let ok = true;
+    let guardadas = 0;
     for (const grupo of [sinDatos, conDatos]) {
-      if (grupo.length === 0) continue;
-      const { error } = await c.from(TABLA).upsert(grupo, { onConflict: "personaje,tipo,enlace" });
-      if (error) ok = false;
+      for (let i = 0; i < grupo.length; i += 200) guardadas += await subirTanda(c, grupo.slice(i, i + 200));
     }
-    return ok;
+    return guardadas > 0;
   } catch {
     return false;
   }

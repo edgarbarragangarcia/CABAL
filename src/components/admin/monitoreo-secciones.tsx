@@ -527,10 +527,12 @@ function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
         poner(id, { estado: "corriendo" });
         let total = 0;
         let ultimoError = "";
+        let faltan = 0;
         for (let vuelta = 0; vuelta < 40 && !parar.current; vuelta++) {
           try {
             const r = await json<{ hechos: number; pendientes: number }>("/api/admin/monitoreo/archivo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion }) });
             total += r.hechos;
+            faltan = r.pendientes;
             poner(id, { detalle: `${total} hechos · faltan ${r.pendientes}` });
             if (r.pendientes === 0 || r.hechos === 0) break;
           } catch (e) {
@@ -538,7 +540,9 @@ function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
             break;
           }
         }
-        poner(id, ultimoError ? { estado: "aviso", detalle: `${ultimoError}${total ? ` · ${total} hechos` : ""}` } : { estado: "listo", detalle: `${total} hechos` });
+        // Quedó trabajo y no se avanzó: no es «listo». Casi siempre falta la clave de IA (tono) o el SQL del archivo.
+        if (!ultimoError && faltan > 0 && total === 0) ultimoError = accion === "tono" ? "No se pudo medir el tono: revisa la clave de IA en Configuración" : "No se pudieron leer las fichas de video ahora";
+        poner(id, ultimoError ? { estado: "aviso", detalle: `${ultimoError}${total ? ` · ${total} hechos` : ""}${faltan ? ` · faltan ${faltan}` : ""}` } : { estado: "listo", detalle: `${total} hechos` });
       }
     } finally {
       setCorriendo(false);
