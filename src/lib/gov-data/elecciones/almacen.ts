@@ -188,6 +188,10 @@ export async function guardarFilas(filas: FilaResultado[], reemplazar: boolean):
 }
 
 function errorDeTablas(e: ErrorSb) {
+  // El disco del plan Free (500 MB) se llenó: Supabase deja la base en solo lectura y toda escritura falla con este error.
+  if (e.code === "25006" || /read-only transaction|read-only mode/i.test(e.message ?? "")) {
+    return Object.assign(new Error("Supabase está en modo solo lectura porque el disco del plan se llenó (el plan Free tiene 500 MB). Libera espacio o pasa a Pro en Supabase › Settings › Manage disk; mientras tanto no se puede guardar nada."), { falta: false });
+  }
   const falta = faltaTabla(e);
   return Object.assign(new Error(falta ? "Faltan las tablas de resultados: ejecuta supabase/elecciones.sql en Supabase." : (e.message || "Supabase no respondió (error temporal); se vuelve a intentar.")), { falta });
 }
