@@ -698,13 +698,9 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const depTotales = cob?.porDepartamento ?? {};
   const regionales = base.filter((m) => m.geo?.medio).length;
   const conDatos = datos?.plataformas.filter((p) => p.total > 0) ?? [];
-  const ultima = base[0];
   const nombreLugar = lugar && cob ? (lugar.modo === "departamento" ? DEPARTAMENTOS_CO.find(([d]) => d === lugar.dane)?.[1] : cob.lugares.find((p) => p.dane === lugar.dane)?.nombre) : undefined;
   const conIa = base.filter((m) => ia[claveTitulo(m.titulo)]).length;
   const estimados = base.filter((m) => m.geo?.medio?.estimado).length;
-  const masCalidas = cob ? [...cob.lugares].filter((p) => p.total >= 3) : [];
-  const mejor = [...masCalidas].sort((a, b) => b.indice - a.indice)[0];
-  const peor = [...masCalidas].sort((a, b) => a.indice - b.indice)[0];
   const cifras = base.reduce((s, m) => ({ likes: s.likes + (m.metricas?.likes ?? 0), comentarios: s.comentarios + (m.metricas?.comentarios ?? 0), vistas: s.vistas + (m.metricas?.vistas ?? 0) }), { likes: 0, comentarios: 0, vistas: 0 });
 
 
@@ -772,12 +768,6 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
                     </>
                   ) : <p className="mt-1 text-sm text-muted-foreground">Sin cifras: solo YouTube y X las entregan.</p>}
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                {cob.lugares[0] && <span className="rounded-full bg-sky-500/10 px-3 py-1.5">Más menciones: <strong>{cob.lugares[0].nombre}</strong> ({cob.lugares[0].total})</span>}
-                {mejor && <span className="rounded-full bg-emerald-500/10 px-3 py-1.5 text-emerald-900 dark:text-emerald-200">Mejor recibida: <strong>{mejor.nombre}</strong></span>}
-                {peor && mejor && peor.dane !== mejor.dane && <span className="rounded-full bg-red-500/10 px-3 py-1.5 text-red-900 dark:text-red-200">Más rechazo: <strong>{peor.nombre}</strong></span>}
-                {ultima && <span className="rounded-full bg-surface-muted px-3 py-1.5">Última: <strong>{fechaHora(ultima.fecha)}</strong> · {ultima.fuente}</span>}
               </div>
             </>
           )}
