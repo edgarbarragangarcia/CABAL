@@ -9,7 +9,6 @@ import type { DatosPersonaje, NoticiaMarcada, RespuestaPersonajes } from "@/lib/
 import { MapaMedios } from "@/components/admin/mapa-medios";
 import { DEPARTAMENTOS_CO, calcularCobertura, type PuntoCobertura } from "@/lib/monitoreo/cobertura";
 import { colorDeIndice, COLOR_TONO, type Tono } from "@/lib/monitoreo/tono";
-import { MEDIOS_REGIONALES } from "@/lib/monitoreo/medios-regionales";
 import type { EstadoArchivo } from "@/lib/monitoreo/archivo";
 import type { FichaVideo } from "@/lib/monitoreo/ficha-video";
 import type { MencionWeb, PlataformaId, RespuestaMenciones } from "@/lib/monitoreo/menciones-web";
@@ -249,13 +248,11 @@ const NOMBRE_PLAT: Record<string, string> = { prensa: "Prensa", facebook: "Faceb
 type Pestana = "mapa" | "redes";
 /** `departamento`: todo lo de un departamento (lo publicado desde allí y lo que habla de él). */
 type Lugar = { modo: "lugar" | "departamento"; dane: string };
-type Investigacion = { estado: "corriendo" | "listo" | "pausa" | "error"; consultas?: number; fallidas?: number; nuevas?: number; error?: string };
 type Ia = Record<string, Tono>;
 
 const CLAVE_IA = "mafe-tono-ia-v1";
 const claveTitulo = (t: string) => t.toLowerCase().replace(/\W+/g, " ").slice(0, 100);
 const fechaHora = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "America/Bogota" });
-const diaCO = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 const TXT_TONO: Record<Tono, string> = { positivo: "positivo", neutral: "neutral", negativo: "negativo" };
 const fmtN = (n: number) => n.toLocaleString("es-CO");
 const pct = (n: number, total: number) => (total ? `${Math.round((n / total) * 100)} %` : "0 %");
@@ -318,39 +315,6 @@ function Ranking({ puntos, elegido, alElegir, detalle }: { puntos: PuntoCobertur
   );
 }
 
-/** Mención por día de los últimos 30 días, con el tono: cuándo publican. */
-function Cronologia({ lista, tonoDe }: { lista: MencionWeb[]; tonoDe: (m: MencionWeb) => Tono }) {
-  const [ahora] = React.useState(() => Date.now());
-  const dias = React.useMemo(() => {
-    const por = new Map<string, Record<Tono, number>>();
-    for (const m of lista) {
-      const d = diaCO(m.fecha);
-      const c = por.get(d) ?? { positivo: 0, neutral: 0, negativo: 0 };
-      c[tonoDe(m)]++;
-      por.set(d, c);
-    }
-    return Array.from({ length: 30 }, (_, i) => {
-      const f = diaCO(new Date(ahora - (29 - i) * 86_400_000).toISOString());
-      return { f, c: por.get(f) ?? { positivo: 0, neutral: 0, negativo: 0 } };
-    });
-  }, [lista, tonoDe, ahora]);
-  const max = Math.max(1, ...dias.map((d) => d.c.positivo + d.c.neutral + d.c.negativo));
-  return (
-    <div>
-      <div className="flex h-16 items-end gap-0.5" role="img" aria-label="Menciones por día en los últimos 30 días">
-        {dias.map((d) => {
-          const t = d.c.positivo + d.c.neutral + d.c.negativo;
-          return (
-            <div key={d.f} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${d.f}: ${t} (${d.c.positivo} positivas, ${d.c.neutral} neutrales, ${d.c.negativo} negativas)`}>
-              {(["negativo", "neutral", "positivo"] as const).map((k) => (d.c[k] ? <div key={k} style={{ height: `${(d.c[k] / max) * 100}%`, background: COLOR_TONO[k] }} /> : null))}
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground"><span>hace 30 días</span><span>hoy</span></div>
-    </div>
-  );
-}
 
 const idYouTube = (enlace: string) => enlace.match(/[?&]v=([\w-]{6,15})/)?.[1];
 /** 2292 → «38:12»; 3725 → «1:02:05». */
@@ -449,7 +413,6 @@ function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
   const error = lecturaArchivo.estado === "error" ? lecturaArchivo.error : "";
   const [pasos, setPasos] = React.useState<PasoArchivo[]>([]);
   const [corriendo, setCorriendo] = React.useState(false);
-  const [abierto, setAbierto] = React.useState(false);
   const parar = React.useRef(false);
   const leer = () => setLectura((n) => n + 1);
 
@@ -464,7 +427,6 @@ function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
   async function correr(modo: "hoy" | "mes") {
     parar.current = false;
     setCorriendo(true);
-    setAbierto(true);
     const lista: PasoArchivo[] = [
       { id: "buscar", texto: "Buscar en prensa, redes y YouTube", estado: "espera" },
       ...(modo === "mes" ? [{ id: "ciudades", texto: "Recorrer las ciudades y municipios", estado: "espera" as const }, { id: "deptos", texto: "Investigar los 33 departamentos", estado: "espera" as const }] : []),
@@ -551,7 +513,6 @@ function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
     }
   }
 
-  const NOMBRE_RED: Record<string, string> = { prensa: "Prensa y medios", facebook: "Facebook", instagram: "Instagram", tiktok: "TikTok", x: "X", youtube: "YouTube", reddit: "Reddit", threads: "Threads", linkedin: "LinkedIn", telegram: "Telegram", web: "Web" };
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-4">
@@ -587,38 +548,6 @@ function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
         </ol>
       )}
 
-      {estado && estado.porPlataforma.length > 0 && (
-        <details className="mt-3" open={abierto && !corriendo}>
-          <summary className="cursor-pointer text-xs font-semibold text-brand">Análisis por red (último mes)</summary>
-          <div className="mt-2 overflow-x-auto rounded-xl border border-border">
-            <table className="w-full min-w-[40rem] text-left text-xs">
-              <thead className="bg-surface-muted text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                <tr><th className="px-3 py-2">Red</th><th className="px-3 py-2 text-right">Menciones</th><th className="px-3 py-2 text-right">Vistas</th><th className="px-3 py-2 text-right">Me gusta</th><th className="px-3 py-2 text-right">Cuentas</th><th className="px-3 py-2 text-right">Seguidores (máx.)</th><th className="px-3 py-2">Tono</th><th className="px-3 py-2 text-right">Medido con IA</th></tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {estado.porPlataforma.map((r) => (
-                  <tr key={r.plataforma}>
-                    <td className="px-3 py-2 font-semibold">{NOMBRE_RED[r.plataforma] ?? r.plataforma}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtN(r.total)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.vistas ? fmtN(r.vistas) : "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.likes ? fmtN(r.likes) : "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtN(r.cuentas)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.seguidoresMax ? fmtN(r.seguidoresMax) : "—"}</td>
-                    <td className="px-3 py-2">
-                      <span className="inline-flex h-2 w-24 overflow-hidden rounded-full bg-surface-muted align-middle" role="img" aria-label={`${r.positivo} positivas, ${r.neutral} neutrales, ${r.negativo} negativas`}>
-                        {(["positivo", "neutral", "negativo"] as const).map((t) => (r[t] ? <span key={t} style={{ width: `${(r[t] / r.total) * 100}%`, background: COLOR_TONO[t] }} /> : null))}
-                      </span>
-                      <span className="ml-2 text-[11px] text-muted-foreground">{r.positivo}+ · {r.negativo}−</span>
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.conTonoIa}/{r.total}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">Vistas, me gusta y seguidores solo los entregan YouTube y la prensa que publica sus cifras: Facebook, Instagram, TikTok y X no dan me gusta, comentarios ni seguidores sin su API de pago, así que en esas redes solo se guarda el texto, la fecha, la fuente y el tono.</p>
-        </details>
-      )}
     </section>
   );
 }
@@ -633,8 +562,6 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const [mostrar, setMostrar] = React.useState(40);
   const [extra, setExtra] = React.useState<MencionWeb[]>([]);
   const [barrido, setBarrido] = React.useState<{ estado: "libre" | "corriendo" | "listo" | "error" | "pausa"; hecha: number; tandas: number; total?: number; error?: string }>({ estado: "libre", hecha: 0, tandas: 27 });
-  const [invest, setInvest] = React.useState<Record<string, Investigacion>>({});
-  const [recorriendo, setRecorriendo] = React.useState(false);
   const [ia, setIa] = React.useState<Ia>(() => {
     try {
       return typeof window === "undefined" ? {} : (JSON.parse(localStorage.getItem(CLAVE_IA) ?? "{}") as Ia);
@@ -678,29 +605,6 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
       }
     }
     setBarrido({ estado: "listo", hecha: tandas, tandas, total });
-  }
-
-  async function investigarUno(dep: string): Promise<"ok" | "limitado" | "error"> {
-    setInvest((p) => ({ ...p, [dep]: { estado: "corriendo" } }));
-    try {
-      const res = await fetch(`/api/admin/monitoreo/departamento?dep=${dep}`, { cache: "no-store" });
-      const j = (await res.json()) as { menciones?: MencionWeb[]; consultas?: number; fallidas?: number; limitado?: boolean; error?: string };
-      if (!res.ok || !j.menciones) throw new Error(j.error ?? "No fue posible consultar las fuentes.");
-      setExtra((prev) => [...prev, ...j.menciones!]);
-      setInvest((p) => ({ ...p, [dep]: { estado: j.limitado ? "pausa" : "listo", consultas: j.consultas, fallidas: j.fallidas, nuevas: j.menciones!.length } }));
-      return j.limitado ? "limitado" : "ok";
-    } catch (e) {
-      setInvest((p) => ({ ...p, [dep]: { estado: "error", error: e instanceof Error ? e.message : "Error de red." } }));
-      return "error";
-    }
-  }
-  async function investigarTodos() {
-    setRecorriendo(true);
-    for (const [dep] of DEPARTAMENTOS_CO) {
-      if (invest[dep]?.estado === "listo") continue;
-      if ((await investigarUno(dep)) !== "ok") break; // si Google pide bajar el ritmo, se detiene: «Continuar» sigue por ese departamento
-    }
-    setRecorriendo(false);
   }
 
   const todas = React.useMemo(() => {
@@ -786,9 +690,6 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const conDatos = datos?.plataformas.filter((p) => p.total > 0) ?? [];
   const ultima = base[0];
   const nombreLugar = lugar && cob ? (lugar.modo === "departamento" ? DEPARTAMENTOS_CO.find(([d]) => d === lugar.dane)?.[1] : cob.lugares.find((p) => p.dane === lugar.dane)?.nombre) : undefined;
-  const cubiertos = new Set(MEDIOS_REGIONALES.map((m) => m.dane.slice(0, 2)));
-  const sinPortal = DEPARTAMENTOS_CO.filter(([d]) => !cubiertos.has(d)).map(([, n]) => n);
-  const paginasFb = MEDIOS_REGIONALES.filter((m) => m.fb).map((m) => ({ m, n: base.filter((x) => x.plataforma === "facebook" && x.geo?.medio?.id === m.id).length }));
   const conIa = base.filter((m) => ia[claveTitulo(m.titulo)]).length;
   const estimados = base.filter((m) => m.geo?.medio?.estimado).length;
   const masCalidas = cob ? [...cob.lugares].filter((p) => p.total >= 3) : [];
@@ -796,18 +697,6 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const peor = [...masCalidas].sort((a, b) => a.indice - b.indice)[0];
   const cifras = base.reduce((s, m) => ({ likes: s.likes + (m.metricas?.likes ?? 0), comentarios: s.comentarios + (m.metricas?.comentarios ?? 0), vistas: s.vistas + (m.metricas?.vistas ?? 0) }), { likes: 0, comentarios: 0, vistas: 0 });
 
-  const porDepto = React.useMemo(
-    () =>
-      DEPARTAMENTOS_CO.map(([dep, nombre]) => {
-        const mias = vista.filter((m) => (m.geo?.medio?.dane ?? m.geo?.texto?.dane)?.startsWith(dep));
-        const t = mias.reduce((a, m) => { a[tonoDe(m)]++; return a; }, { positivo: 0, neutral: 0, negativo: 0 } as Record<Tono, number>);
-        const portales = MEDIOS_REGIONALES.filter((m) => m.dane.startsWith(dep));
-        return { dep, nombre, total: mias.length, pub: mias.filter((m) => m.geo?.medio).length, indice: mias.length ? (t.positivo - t.negativo) / mias.length : 0, ultima: mias.reduce((u, m) => (m.fecha > u ? m.fecha : u), ""), portales: portales.length, conBuscador: portales.filter((m) => m.rss).length };
-      }),
-    [vista, tonoDe]
-  );
-  const investigados = Object.values(invest).filter((i) => i.estado === "listo").length;
-  const conMenciones = porDepto.filter((d) => d.total > 0).length;
 
   const pestanas: { id: Pestana; label: string; n?: number }[] = [
     { id: "mapa", label: "De dónde vienen", n: datos ? base.length : undefined },
@@ -974,111 +863,6 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
             </details>
           )}
 
-          <section className="rounded-2xl border border-border p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="min-w-0 flex-1 basis-64">
-                <h3 className="font-display text-base font-semibold">Investigación por departamento</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Cada departamento se busca por su nombre, su ciudad principal y sus municipios más grandes en prensa, Facebook, Instagram, TikTok, X y YouTube, más el buscador propio de cada portal del directorio.
-                  {" "}<strong className="text-foreground">{investigados}</strong> de 33 investigados · <strong className="text-foreground">{conMenciones}</strong> con menciones · <strong className="text-foreground">{33 - conMenciones}</strong> sin ninguna.
-                </p>
-              </div>
-              <button type="button" onClick={investigarTodos} disabled={recorriendo} className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-60">
-                {recorriendo ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <Search className="size-3" aria-hidden="true" />}
-                {recorriendo ? `Investigando… ${investigados}/33` : investigados > 0 && investigados < 33 ? "Continuar la investigación" : investigados === 33 ? "Volver a investigar los 33" : "Investigar los 33 departamentos"}
-              </button>
-            </div>
-            {Object.values(invest).some((i) => i.estado === "pausa") && <p className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">Google pidió bajar el ritmo. Espera unos minutos y pulsa «Continuar la investigación»: sigue por el departamento donde quedó y conserva lo ya encontrado.</p>}
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[40rem] text-left text-xs">
-                <thead className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  <tr><th className="px-2 py-1.5">Departamento</th><th className="px-2 py-1.5 text-right">Portales</th><th className="px-2 py-1.5 text-right">Menciones</th><th className="px-2 py-1.5">Tono</th><th className="px-2 py-1.5">Última</th><th className="px-2 py-1.5">Investigación</th></tr>
-                </thead>
-                <tbody>
-                  {porDepto.map((d) => {
-                    const i = invest[d.dep];
-                    const abierto = lugar?.modo === "departamento" && lugar.dane === d.dep;
-                    return (
-                      <React.Fragment key={d.dep}>
-                        <tr className={`border-t border-border/60 ${abierto ? "bg-brand-soft" : ""}`}>
-                          <td className="px-2 py-1.5"><button type="button" onClick={() => elegir(abierto ? null : { modo: "departamento", dane: d.dep })} aria-expanded={abierto} disabled={d.total === 0} className="text-left font-semibold hover:underline disabled:cursor-default disabled:no-underline">{d.nombre}</button></td>
-                          <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground" title={`${d.conBuscador} con buscador propio`}>{d.portales}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums font-semibold" title={`${d.pub} publicadas desde portales del departamento`}>{d.total}</td>
-                          <td className="px-2 py-1.5">{d.total > 0 ? <span className="inline-block size-3 rounded-full align-middle" style={{ background: colorDeIndice(d.indice * 2.5) }} title={`Índice de tono ${d.indice.toFixed(2)}`} /> : <span className="text-muted-foreground">—</span>}</td>
-                          <td className="px-2 py-1.5 text-muted-foreground">{d.ultima ? hace(d.ultima) : "—"}</td>
-                          <td className="px-2 py-1.5">
-                            {i?.estado === "corriendo" ? <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="size-3 animate-spin" aria-hidden="true" />Investigando…</span>
-                              : i?.estado === "listo" ? <span className="text-emerald-700 dark:text-emerald-300" title={`${i.consultas} consultas, ${i.fallidas} sin respuesta`}>✔ {i.consultas! - i.fallidas!}/{i.consultas} consultas · {i.nuevas} resultados</span>
-                              : i?.estado === "pausa" ? <button type="button" onClick={() => investigarUno(d.dep)} className="font-semibold text-amber-700 hover:underline dark:text-amber-300">Google limitó: reintentar</button>
-                              : i?.estado === "error" ? <button type="button" onClick={() => investigarUno(d.dep)} className="font-semibold text-red-600 hover:underline" title={i.error}>Falló: reintentar</button>
-                              : <button type="button" onClick={() => investigarUno(d.dep)} disabled={recorriendo} className="font-semibold text-brand hover:underline disabled:opacity-50">Investigar</button>}
-                          </td>
-                        </tr>
-                        {abierto && <tr><td colSpan={6} className="px-0 pb-2">{detalleLugar}</td></tr>}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">«Sin menciones» no es «no hablan de ella»: es lo que Google, YouTube y los buscadores de los portales entregan. Sin Facebook ni sus grupos privados la zona rural queda sub-representada.</p>
-          </section>
-
-          <div>
-            <p className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Cuándo publican{lugar ? ` · ${nombreLugar ?? ""}` : " · todo el país"} (30 días)</p>
-            <Cronologia lista={lista} tonoDe={tonoDe} />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              ["Portales y páginas", `${cob.directorio.portales}`, `en ${cob.directorio.departamentos} departamentos${estimados ? `, y ${estimados} medios más ubicados por su página` : ""}`],
-              ["Portales consultados", `${cob.directorio.portalesConsultados}`, "con Google Noticias, esta vez"],
-              ["Páginas de Facebook leídas", `${cob.directorio.paginasConsultadas}`, `de ${cob.directorio.conFacebook} conocidas`],
-              ["Que la nombran", `${cob.directorio.portalesConMenciones}`, `portales o páginas del directorio; ${cob.sinUbicar} notas sin ubicar`],
-            ].map(([t, n, sub]) => (
-              <div key={t} className="rounded-2xl border border-border bg-surface p-3">
-                <p className="text-2xl font-bold tabular-nums">{n}</p>
-                <p className="text-xs font-semibold">{t}</p>
-                <p className="text-[11px] text-muted-foreground">{sub}</p>
-              </div>
-            ))}
-          </div>
-
-          <details className="rounded-2xl border border-border p-4">
-            <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold"><ThumbsUp className="size-4 text-[#1877f2]" aria-hidden="true" /> Páginas de Facebook de portales regionales ({cob.directorio.conFacebook})</summary>
-            <p className="mt-2 text-xs text-muted-foreground">Facebook no deja leer sus páginas sin ser una institución de investigación, así que se buscan las publicaciones que Google Noticias indexa de cada página ({cob.directorio.facebookLegible} de {cob.directorio.conFacebook}). Las otras se pueden abrir y buscar «Cabal» a mano.</p>
-            <ul className="mt-3 grid gap-x-6 sm:grid-cols-2">
-              {paginasFb.sort((a, b) => b.n - a.n || a.m.nombre.localeCompare(b.m.nombre)).map(({ m, n }) => (
-                <li key={m.id} className="flex items-baseline gap-2 border-b border-border/60 py-1.5 text-xs">
-                  <a href={`https://www.facebook.com/${m.fb}`} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1 truncate font-semibold hover:underline">{m.nombre}<span className="font-normal text-muted-foreground"> · {m.ciudad}</span></a>
-                  {m.fbIndexado ? <span className={`tabular-nums ${n > 0 ? "font-bold" : "text-muted-foreground"}`}>{n}</span> : <a href={`https://www.google.com/search?q=${encodeURIComponent(`"María Fernanda Cabal" site:facebook.com/${m.fb}`)}`} target="_blank" rel="noreferrer noopener" className="text-[11px] text-muted-foreground hover:underline" title="Google no entrega sus publicaciones aquí: búscalas a mano">buscar a mano</a>}
-                </li>
-              ))}
-            </ul>
-          </details>
-
-          <details className="rounded-2xl border border-border p-4">
-            <summary className="cursor-pointer text-sm font-semibold">Portales regionales que no la nombran ({cob.sinMenciones.length})</summary>
-            <p className="mt-2 text-xs text-muted-foreground">Se consultaron y no aparece su nombre {soloTitular ? "en ningún titular" : "en ninguna nota"} de los últimos 30 días.</p>
-            <ul className="mt-2 flex flex-wrap gap-1.5">
-              {cob.sinMenciones.map((m) => <li key={m.id} className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px]"><a href={`https://${m.dominio}`} target="_blank" rel="noreferrer noopener" className="hover:underline">{m.nombre}</a><span className="text-muted-foreground"> · {m.ciudad}</span></li>)}
-            </ul>
-          </details>
-
-          <div className="space-y-1.5 text-[11px] text-muted-foreground">
-            <p className="flex items-start gap-1.5">
-              <Database className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-              <span>
-                <strong className="text-foreground">Cifras:</strong> los me gusta, comentarios y vistas solo los entregan YouTube ({datos.youtubeConClave ? "conectado: se muestran" : "conecta su clave en Configuración para verlos"}) y X; Facebook, Instagram y TikTok no los dan sin su API oficial, así que ahí solo hay el enlace y la fecha. <strong className="text-foreground">Tono:</strong> por palabras es una estimación; «Medir el tono con IA» lo afina.
-              </span>
-            </p>
-            <p className="flex items-start gap-1.5">
-              <MapPin className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-              <span>
-                Sin portal en el directorio: {sinPortal.join(", ")}. Las notas de esos lugares se ubican por lo que dice el titular. La ciudad de un portal sale de su propia página; la de un medio que no está en el directorio se deduce de lo que dice su página de inicio y se marca «estimado». El lugar de un titular es una estimación y no ubica los que no nombran lugar.
-              </span>
-            </p>
-          </div>
         </div>
       )}
 
