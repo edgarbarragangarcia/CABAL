@@ -24,11 +24,19 @@ export type PuntoCobertura = {
   vistas: number;
   /** Fecha de la mención más reciente. */
   ultima: string;
+  /** Cuántas menciones hay de cada plataforma (prensa, facebook, youtube…). */
+  porPlataforma: Record<string, number>;
 };
 export type ResumenTono = { total: number; tonos: Record<Tono, number>; indice: number };
 export type Cobertura = {
   /** Ciudades desde las que publican los portales (y páginas de Facebook) regionales que nombran a María Fernanda. */
   publicadas: PuntoCobertura[];
+  /** Todo en un solo mapa: cada mención va a la ciudad del portal que la publica o, si no tiene, al lugar que nombra su titular. */
+  lugares: PuntoCobertura[];
+  /** Menciones que no se pueden ubicar (ni portal con sede ni lugar en el titular). */
+  sinLugar: MencionWeb[];
+  /** Total por departamento (código de 2 dígitos) de las menciones ubicadas. */
+  porDepartamento: Record<string, number>;
   /** Lugares que nombran los titulares (donde pasa lo que cuentan). */
   mencionadas: PuntoCobertura[];
   departamentos: { dep: string; nombre: string; publicadas: number; mencionadas: number }[];
@@ -53,13 +61,16 @@ export type Cobertura = {
 export function calcularCobertura(menciones: MencionWeb[], consultados: { portales: string[]; paginas: string[] }, tonoDe: (m: MencionWeb) => Tono = (m) => m.tono ?? "neutral"): Cobertura {
   const publicadas = new Map<string, PuntoCobertura>();
   const mencionadas = new Map<string, PuntoCobertura>();
+  const lugares = new Map<string, PuntoCobertura>();
+  const sinLugar: MencionWeb[] = [];
+  const porDepartamento: Record<string, number> = {};
   const departamentos = new Map<string, { dep: string; nombre: string; publicadas: number; mencionadas: number }>();
   const conMenciones = new Set<string>();
   let sinUbicar = 0;
   const vacio = (): ResumenTono => ({ total: 0, tonos: { positivo: 0, neutral: 0, negativo: 0 }, indice: 0 });
   const nacionales = vacio();
   const tono = vacio();
-  const nuevo = (dane: string, nombre: string, departamento: string, lat: number, lon: number): PuntoCobertura => ({ dane, nombre, departamento, lat, lon, total: 0, medios: [], facebook: 0, tonos: { positivo: 0, neutral: 0, negativo: 0 }, indice: 0, likes: 0, comentarios: 0, vistas: 0, ultima: "" });
+  const nuevo = (dane: string, nombre: string, departamento: string, lat: number, lon: number): PuntoCobertura => ({ dane, nombre, departamento, lat, lon, total: 0, medios: [], facebook: 0, tonos: { positivo: 0, neutral: 0, negativo: 0 }, indice: 0, likes: 0, comentarios: 0, vistas: 0, ultima: "", porPlataforma: {} });
   const sumar = (p: PuntoCobertura, m: MencionWeb, t: Tono) => {
     p.total++;
     p.tonos[t]++;
@@ -68,6 +79,7 @@ export function calcularCobertura(menciones: MencionWeb[], consultados: { portal
     p.vistas += m.metricas?.vistas ?? 0;
     if (m.fecha > p.ultima) p.ultima = m.fecha;
     if (m.plataforma === "facebook") p.facebook++;
+    p.porPlataforma[m.plataforma] = (p.porPlataforma[m.plataforma] ?? 0) + 1;
   };
   const depDe = (dane: string, nombre: string) => {
     const dep = dane.slice(0, 2);
@@ -83,6 +95,16 @@ export function calcularCobertura(menciones: MencionWeb[], consultados: { portal
       nacionales.tonos[t]++;
     }
     if (!g?.medio && !g?.texto && !m.nacional) sinUbicar++;
+    const ef = g?.medio ? { dane: g.medio.dane, nombre: g.medio.ciudad, departamento: g.medio.departamento, lat: g.medio.lat, lon: g.medio.lon } : g?.texto ? { dane: g.texto.dane, nombre: g.texto.nombre, departamento: g.texto.departamento, lat: g.texto.lat, lon: g.texto.lon } : null;
+    if (ef) {
+      const p = lugares.get(ef.dane) ?? lugares.set(ef.dane, nuevo(ef.dane, ef.nombre, ef.departamento, ef.lat, ef.lon)).get(ef.dane)!;
+      sumar(p, m, t);
+      const fuente = g?.medio?.nombre ?? m.fuente;
+      const medio = p.medios.find((x) => x.nombre === fuente);
+      if (medio) medio.total++;
+      else p.medios.push({ nombre: fuente, total: 1 });
+      porDepartamento[ef.dane.slice(0, 2)] = (porDepartamento[ef.dane.slice(0, 2)] ?? 0) + 1;
+    } else sinLugar.push(m);
     if (g?.medio) {
       const o = g.medio;
       conMenciones.add(o.id);
@@ -103,7 +125,8 @@ export function calcularCobertura(menciones: MencionWeb[], consultados: { portal
   const ordenar = (a: PuntoCobertura, b: PuntoCobertura) => b.total - a.total || a.nombre.localeCompare(b.nombre);
   for (const p of publicadas.values()) p.medios.sort((a, b) => b.total - a.total);
   const indice = (r: { total: number; tonos: Record<Tono, number> }) => (r.total ? (r.tonos.positivo - r.tonos.negativo) / r.total : 0);
-  for (const p of [...publicadas.values(), ...mencionadas.values()]) p.indice = indice(p);
+  for (const p of lugares.values()) p.medios.sort((a, b) => b.total - a.total);
+  for (const p of [...publicadas.values(), ...mencionadas.values(), ...lugares.values()]) p.indice = indice(p);
   nacionales.indice = indice(nacionales);
   tono.indice = indice(tono);
   const web = new Set(consultados.portales);
@@ -111,6 +134,9 @@ export function calcularCobertura(menciones: MencionWeb[], consultados: { portal
   return {
     publicadas: [...publicadas.values()].sort(ordenar),
     mencionadas: [...mencionadas.values()].sort(ordenar),
+    lugares: [...lugares.values()].sort(ordenar),
+    sinLugar,
+    porDepartamento,
     departamentos: [...departamentos.values()].sort((a, b) => b.publicadas + b.mencionadas - (a.publicadas + a.mencionadas)),
     sinUbicar,
     nacionales,
