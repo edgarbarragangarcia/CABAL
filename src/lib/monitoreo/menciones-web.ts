@@ -471,7 +471,7 @@ async function armar(todas: MencionWeb[], ctx: ContextoArmado): Promise<Respuest
       return true;
     })
     .sort((a, b) => b.fecha.localeCompare(a.fecha))
-    .slice(0, 800);
+    .slice(0, 4000);
 
   const youtubeConClave = ctx.vivo ? await enriquecerYouTube(menciones).catch(() => false) : false;
   const enriquecidas = menciones.map(aplicarYouTube);
