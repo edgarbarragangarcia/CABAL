@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { ADMIN_EMAIL, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { usuarioActivo } from "@/lib/admin-usuarios";
 import { AdminShell } from "@/components/admin/admin-shell";
 
 export default async function ProtectedAdminLayout({
@@ -16,6 +17,8 @@ export default async function ProtectedAdminLayout({
   // El middleware ya protege /admin/*; esta comprobación es una segunda
   // capa por si el layout se renderiza sin pasar por él.
   if (!session) redirect("/admin/login");
+  // Un usuario dado de alta que se desactivó o se eliminó pierde el acceso aunque su cookie siga vigente.
+  if (session.email !== ADMIN_EMAIL && !(await usuarioActivo(session.email))) redirect("/admin/login");
 
   return <AdminShell email={session.email}>{children}</AdminShell>;
 }

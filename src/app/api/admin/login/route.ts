@@ -5,6 +5,7 @@ import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
 } from "@/lib/admin-auth";
+import { verificarUsuario } from "@/lib/admin-usuarios";
 
 export async function POST(req: Request) {
   let body: { email?: unknown; password?: unknown };
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   const email = typeof body.email === "string" ? body.email : "";
   const password = typeof body.password === "string" ? body.password : "";
 
-  if (!email || !password || !checkCredentials(email, password)) {
+  if (!email || !password || !(checkCredentials(email, password) || (await verificarUsuario(email, password).catch(() => false)))) {
     return NextResponse.json(
       { ok: false, error: "Correo o clave incorrectos." },
       { status: 401 }

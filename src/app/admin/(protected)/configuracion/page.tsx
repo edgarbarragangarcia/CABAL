@@ -5,6 +5,7 @@ import { Lienzo, Portada } from "@/components/admin/estilo-cabal";
 import { ConfiguracionIA } from "./configuracion-ia";
 import { ConfiguracionRedes } from "./configuracion-redes";
 import { InformeSemanal } from "./informe-semanal";
+import { UsuariosPanel } from "./usuarios-panel";
 
 export default function ConfiguracionPage() {
   return (
@@ -19,6 +20,7 @@ export default function ConfiguracionPage() {
         <div className="mx-auto w-full max-w-3xl">
           <ConfiguracionIA />
           <ConfiguracionRedes />
+          <UsuariosPanel />
           <InformeSemanal />
         </div>
       </Lienzo>

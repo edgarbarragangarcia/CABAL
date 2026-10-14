@@ -32,6 +32,7 @@ export const MODULOS: Modulo[] = [
     ],
   },
   { id: "monitoreo", nombre: "Monitoreo", archivo: "monitoreo.sql", archivos: ["monitoreo"], ancla: "monitoreo_items", tablas: [{ tabla: "monitoreo_items", sirve: "Videos y titulares de cada político, con la marca «nombra a María Fernanda»" }] },
+  { id: "usuarios", nombre: "Usuarios del panel", archivo: "usuarios.sql", archivos: ["usuarios"], ancla: "admin_usuarios", tablas: [{ tabla: "admin_usuarios", sirve: "Personas con acceso al panel (correo y clave con hash)" }] },
   { id: "territorio", nombre: "Territorio", archivo: "territorio.sql", archivos: ["territorio"], ancla: "indicadores_territoriales", tablas: [{ tabla: "indicadores_territoriales", sirve: "Indicadores oficiales por municipio (DANE, víctimas, homicidios…)" }] },
   {
     id: "comunidad", nombre: "Comunidad", archivo: "comunidad.sql", archivos: ["comunidad"], ancla: "miembros",
@@ -183,7 +184,22 @@ async function elecciones(): Promise<Entidad[]> {
 }
 
 async function politicos(c: Cliente): Promise<Entidad[]> {
-  const { data } = await c.from("monitoreo_items").select("personaje, nombra").limit(5000);
+  // María Fernanda: sus menciones (prensa, redes, YouTube) con el desglose por red.
+  const { data: mf } = await c.from("monitoreo_items").select("medio").eq("personaje", "mafe").limit(10000);
+  const porRed = new Map<string, number>();
+  for (const f of (mf ?? []) as unknown as { medio: string | null }[]) {
+    const red = (f.medio ?? "web").split("|")[0] || "web";
+    porRed.set(red, (porRed.get(red) ?? 0) + 1);
+  }
+  const mencionesMafe: Entidad = {
+    id: "mafe",
+    nombre: "María Fernanda en medios y redes",
+    resumen: (mf?.length ?? 0) === 0 ? "Sin menciones guardadas" : `${(mf?.length ?? 0).toLocaleString("es-CO")} menciones del último mes`,
+    cantidad: mf?.length ?? 0,
+    unidad: "menciones",
+    hijos: [...porRed].sort((a, b) => b[1] - a[1]).map(([nombre, cantidad]) => ({ nombre, cantidad })),
+  };
+  const { data } = await c.from("monitoreo_items").select("personaje, nombra").neq("personaje", "mafe").limit(5000);
   const por = new Map<string, { items: number; nombran: number }>();
   for (const f of (data ?? []) as unknown as { personaje: string; nombra: boolean }[]) {
     const e = por.get(f.personaje) ?? { items: 0, nombran: 0 };
@@ -191,16 +207,17 @@ async function politicos(c: Cliente): Promise<Entidad[]> {
     if (f.nombra) e.nombran++;
     por.set(f.personaje, e);
   }
-  return PERSONAJES.map((p) => {
+  return [mencionesMafe, ...PERSONAJES.map((p) => {
     const e = por.get(p.id) ?? { items: 0, nombran: 0 };
     return { id: p.id, nombre: p.nombre, resumen: e.items === 0 ? "Sin hallazgos guardados" : `${e.items} hallazgos · ${e.nombran === 0 ? "no nombra a María Fernanda" : `la nombra en ${e.nombran}`}`, cantidad: e.items, unidad: "hallazgos", hijos: [] };
-  });
+  })];
 }
 
 /** Las tablas simples del módulo, con nombre de persona: «Afiliados», «Publicaciones»… */
 const DESDE_TABLAS: Record<string, Record<string, string>> = {
   comunidad: { miembros: "Afiliados", grupos: "Grupos", grupo_miembros: "Pertenencias a grupos", publicaciones: "Publicaciones", comentarios: "Comentarios", me_gusta: "Reacciones", seguidores: "Seguimientos" },
   territorio: { indicadores_territoriales: "Indicadores por municipio" },
+  usuarios: { admin_usuarios: "Usuarios con acceso" },
 };
 
 export async function mapaDeDatos(): Promise<RespuestaMapa> {

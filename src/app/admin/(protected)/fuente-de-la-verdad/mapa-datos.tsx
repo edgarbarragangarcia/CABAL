@@ -13,10 +13,10 @@ import { usePeticion } from "../analisis-publicaciones/peticion";
  * punto hueco es algo que todavía no tiene datos o cuyas tablas faltan por crear.
  */
 
-const COLOR: Record<string, string> = { electoral: "#10b981", documentos: "#0ea5e9", monitoreo: "#f43f5e", territorio: "#f59e0b", comunidad: "#a855f7", portales: "#14b8a6" };
+const COLOR: Record<string, string> = { electoral: "#10b981", documentos: "#0ea5e9", monitoreo: "#f43f5e", territorio: "#f59e0b", comunidad: "#a855f7", portales: "#14b8a6", usuarios: "#6366f1" };
 // Orden de arriba hacia abajo: primero lo más importante para la Fundación.
-const ORDEN = ["documentos", "electoral", "portales", "comunidad", "territorio", "monitoreo"];
-const UNIDAD: Record<string, string> = { documentos: "documento", electoral: "elección", portales: "portal", comunidad: "tipo de dato", territorio: "conjunto de datos", monitoreo: "político" };
+const ORDEN = ["documentos", "electoral", "portales", "comunidad", "territorio", "monitoreo", "usuarios"];
+const UNIDAD: Record<string, string> = { documentos: "documento", electoral: "elección", portales: "portal", comunidad: "tipo de dato", territorio: "conjunto de datos", monitoreo: "fuente", usuarios: "usuario" };
 
 const W = 880;
 const X_BASE = 62;
