@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AtSign, Database, ExternalLink, Globe, MapPin, ThumbsUp, Newspaper, RefreshCw, Search, Users } from "lucide-react";
 
-import { BannerEnVivo, MonitoreoWidget, RedesWidget, useMonitoreo, useRedes } from "@/components/admin/monitoreo-panel";
+import { BannerEnVivo, RedesWidget, useMonitoreo, useRedes } from "@/components/admin/monitoreo-panel";
 import { usePeticion } from "@/app/admin/(protected)/analisis-publicaciones/peticion";
 import type { DatosPersonaje, NoticiaMarcada, RespuestaPersonajes } from "@/lib/monitoreo/personajes";
 import { MapaMedios } from "@/components/admin/mapa-medios";
@@ -242,9 +242,8 @@ const COLOR_PLATAFORMA: Record<PlataformaId, string> = {
   threads: "#4b5563", reddit: "#f97316", linkedin: "#0a66c2", telegram: "#0ea5e9", web: "#6b7280",
 };
 
-type Pestana = "menciones" | "mapa" | "prensa" | "redes";
+type Pestana = "mapa" | "redes";
 type Modo = "publicadas" | "mencionadas";
-type Filtro = PlataformaId | "todas" | "regional";
 type Lugar = { modo: Modo; dane: string };
 
 /** Las burbujas del mapa y su lista: cuántas menciones vienen de cada ciudad (o hablan de ella). */
@@ -298,10 +297,9 @@ function FilaMencion({ m, plataformas, alLugar }: { m: MencionWeb; plataformas: 
 }
 
 /** Todo lo que se sabe de María Fernanda en un solo lugar: menciones en prensa y redes (con su ciudad), mapa regional, reacción de la prensa y redes oficiales. */
-function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<typeof useMonitoreo>; redes: ReturnType<typeof useRedes> }) {
+function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> }) {
   const [v, setV] = React.useState(0);
-  const [pestana, setPestana] = React.useState<Pestana>("menciones");
-  const [filtro, setFiltro] = React.useState<Filtro>("todas");
+  const [pestana, setPestana] = React.useState<Pestana>("mapa");
   const [soloTitular, setSoloTitular] = React.useState(true);
   const [modo, setModo] = React.useState<Modo>("publicadas");
   const [lugar, setLugar] = React.useState<Lugar | null>(null);
@@ -315,11 +313,10 @@ function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<type
   const lista = React.useMemo(
     () =>
       base.filter((m) => {
-        if (filtro === "regional" ? !m.geo?.medio : filtro !== "todas" && m.plataforma !== filtro) return false;
         if (!lugar) return true;
         return lugar.modo === "publicadas" ? m.geo?.medio?.dane === lugar.dane : m.geo?.texto?.dane === lugar.dane;
       }),
-    [base, filtro, lugar]
+    [base, lugar]
   );
   const elegir = (l: Lugar | null) => {
     setLugar(l);
@@ -338,9 +335,7 @@ function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<type
   const paginasFb = MEDIOS_REGIONALES.filter((m) => m.fb).map((m) => ({ m, n: base.filter((x) => x.plataforma === "facebook" && x.geo?.medio?.id === m.id).length }));
 
   const pestanas: { id: Pestana; label: string; n?: number }[] = [
-    { id: "menciones", label: "Menciones", n: datos ? base.length : undefined },
-    { id: "mapa", label: "De dónde vienen" },
-    { id: "prensa", label: "Prensa y reacción" },
+    { id: "mapa", label: "De dónde vienen", n: datos ? base.length : undefined },
     { id: "redes", label: "Redes oficiales" },
   ];
 
@@ -378,7 +373,7 @@ function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<type
         ))}
       </div>
 
-      {(pestana === "menciones" || pestana === "mapa") && datos && cob && (
+      {pestana === "mapa" && datos && cob && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
           <label className="inline-flex cursor-pointer items-center gap-2 font-semibold">
             <input type="checkbox" checked={soloTitular} onChange={(e) => { setSoloTitular(e.target.checked); setMostrar(40); }} className="size-4 accent-[var(--brand)]" />
@@ -386,36 +381,6 @@ function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<type
           </label>
           <span className="text-muted-foreground">{soloTitular ? "Cuenta solo notas con su nombre en el titular: se pueden comprobar de un vistazo." : "También cuenta notas que la nombran solo en el texto: pueden ser menciones de pasada."}</span>
         </div>
-      )}
-
-      {pestana === "menciones" && datos && cob && (
-        <>
-          <div role="tablist" aria-label="Plataforma" className="flex flex-wrap gap-1.5">
-            <button type="button" role="tab" aria-selected={filtro === "todas"} onClick={() => { setFiltro("todas"); setMostrar(40); }} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filtro === "todas" ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}>Todas <span className="tabular-nums opacity-70">{base.length}</span></button>
-            <button type="button" role="tab" aria-selected={filtro === "regional"} onClick={() => { setFiltro("regional"); setMostrar(40); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${filtro === "regional" ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}><MapPin className="size-3" aria-hidden="true" />Regionales <span className="tabular-nums opacity-70">{regionales}</span></button>
-            {datos.plataformas.map((p) => {
-              const n = base.filter((m) => m.plataforma === p.id).length;
-              return (
-                <button key={p.id} type="button" role="tab" aria-selected={filtro === p.id} disabled={n === 0} onClick={() => { setFiltro(p.id); setMostrar(40); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${filtro === p.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`} title={p.consultada ? undefined : "No respondió en esta consulta"}>
-                  <span className="size-2 rounded-full" style={{ background: COLOR_PLATAFORMA[p.id] }} aria-hidden="true" />{p.nombre} <span className="tabular-nums opacity-70">{n}</span>
-                </button>
-              );
-            })}
-          </div>
-          {lugar && (
-            <p className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-soft px-3 py-2 text-xs font-semibold">
-              <MapPin className="size-3.5" aria-hidden="true" />
-              {lugar.modo === "publicadas" ? "Publicadas desde" : "Que hablan de"} {nombreLugar ?? "este lugar"}: {lista.length}
-              <button type="button" onClick={() => elegir(null)} className="ml-auto rounded-full border border-border bg-surface px-2.5 py-0.5 hover:bg-surface-muted">Quitar filtro</button>
-            </p>
-          )}
-          {lista.length === 0 ? <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Sin menciones con este filtro.</p> : (
-            <ul className="divide-y divide-border rounded-2xl border border-border">
-              {lista.slice(0, mostrar).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} plataformas={datos.plataformas} alLugar={(l) => { elegir(l); setModo(l.modo); }} />)}
-            </ul>
-          )}
-          {lista.length > mostrar && <button type="button" onClick={() => setMostrar((n) => n + 40)} className="rounded-full border border-border px-4 py-2 text-xs font-semibold hover:bg-surface-muted">Ver más ({lista.length - mostrar})</button>}
-        </>
       )}
 
       {pestana === "mapa" && datos && cob && (
@@ -486,7 +451,6 @@ function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<type
         </div>
       )}
 
-      {pestana === "prensa" && <MonitoreoWidget {...monitoreo} />}
       {pestana === "redes" && <RedesWidget {...redes} />}
 
       {datos && (
@@ -518,7 +482,7 @@ export function MonitoreoSecciones() {
         ))}
       </div>
       <div className="rounded-3xl border border-border bg-surface p-5">
-        {seccion === "mafe" && <MariaFernandaEnTodas monitoreo={monitoreo} redes={redes} />}
+        {seccion === "mafe" && <MariaFernandaEnTodas redes={redes} />}
         {seccion === "politicos" && <Politicos />}
       </div>
     </div>
