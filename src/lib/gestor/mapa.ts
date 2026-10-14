@@ -34,6 +34,7 @@ export const MODULOS: Modulo[] = [
   { id: "monitoreo", nombre: "Monitoreo", archivo: "monitoreo.sql", archivos: ["monitoreo"], ancla: "monitoreo_items", tablas: [{ tabla: "monitoreo_items", sirve: "Videos y titulares de cada político, con la marca «nombra a María Fernanda»" }] },
   { id: "usuarios", nombre: "Usuarios del panel", archivo: "usuarios.sql", archivos: ["usuarios"], ancla: "admin_usuarios", tablas: [{ tabla: "admin_usuarios", sirve: "Personas con acceso al panel (correo y clave con hash)" }] },
   { id: "piloto", nombre: "Piloto de IA", archivo: "piloto.sql", archivos: ["piloto"], ancla: "piloto_registros", tablas: [{ tabla: "piloto_registros", sirve: "Tareas hechas con IA: tiempo, costo y precisión" }] },
+  { id: "camaras", nombre: "Cámaras de comercio", archivo: "camaras.sql", archivos: ["camaras"], ancla: "camaras_comercio", tablas: [{ tabla: "camaras_comercio", sirve: "Matrículas y establecimientos de cada una de las 58 cámaras (RUES)" }] },
   { id: "territorio", nombre: "Territorio", archivo: "territorio.sql", archivos: ["territorio"], ancla: "indicadores_territoriales", tablas: [{ tabla: "indicadores_territoriales", sirve: "Indicadores oficiales por municipio (DANE, víctimas, homicidios…)" }] },
   {
     id: "comunidad", nombre: "Comunidad", archivo: "comunidad.sql", archivos: ["comunidad"], ancla: "miembros",
@@ -220,6 +221,7 @@ const DESDE_TABLAS: Record<string, Record<string, string>> = {
   territorio: { indicadores_territoriales: "Indicadores por municipio" },
   usuarios: { admin_usuarios: "Usuarios con acceso" },
   piloto: { piloto_registros: "Tareas anotadas" },
+  camaras: { camaras_comercio: "Cámaras de comercio" },
 };
 
 export async function mapaDeDatos(): Promise<RespuestaMapa> {

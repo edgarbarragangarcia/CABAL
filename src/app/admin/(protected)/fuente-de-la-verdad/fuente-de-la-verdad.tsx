@@ -10,6 +10,7 @@ import { DocumentosTab, type FuenteDatos } from "../analisis-publicaciones/docum
 import { usePeticion } from "../analisis-publicaciones/peticion";
 import { MapaDatos } from "./mapa-datos";
 import { FuentesTerritorio } from "../analisis-publicaciones/territorio-fuentes";
+import { CamarasFuente } from "./camaras-fuente";
 import { MonitoreoFuente } from "./monitoreo-fuente";
 
 const OPCIONES = [
@@ -43,6 +44,9 @@ export function FuenteDeLaVerdad() {
   const terr = usePeticion<{ filas: number | null; actualizado: string | null }>("/api/admin/gestor/mapa?solo=territorio");
   const t = terr.estado === "listo" ? terr.data : null;
   const [vTerr, setVTerr] = React.useState(0);
+  const cam = usePeticion<{ disponible: boolean; camaras: { actualizado_en: string }[]; codigos: string[] }>("/api/admin/camaras");
+  const [vCam, setVCam] = React.useState(0);
+  const camaras = cam.estado === "listo" ? cam.data : null;
   const fuentes: FuenteDatos[] = [
     {
       id: "electoral",
@@ -73,6 +77,16 @@ export function FuenteDeLaVerdad() {
       tono: t?.filas ? "ok" : "pendiente",
       fecha: t?.actualizado ?? null,
       contenido: <FuentesTerritorio key={vTerr} alCargar={() => setVTerr((n) => n + 1)} />,
+    },
+    {
+      id: "camaras",
+      nombre: "Cámaras de comercio",
+      detalle: "Matrículas activas, personas naturales, sociedades, entidades sin ánimo de lucro y establecimientos de las 58 cámaras (RUES)",
+      resumen: !camaras?.disponible ? "—" : `${camaras.camaras.length} de ${camaras.codigos.length} cámaras`,
+      estado: !camaras ? "Leyendo" : !camaras.disponible ? "Falta SQL" : camaras.camaras.length === 0 ? "Sin cargar" : camaras.camaras.length < camaras.codigos.length ? "Incompleta" : "Listo",
+      tono: camaras?.disponible && camaras.camaras.length >= camaras.codigos.length ? "ok" : "pendiente",
+      fecha: camaras?.camaras?.[0]?.actualizado_en ?? null,
+      contenido: <CamarasFuente key={vCam} alCargar={() => setVCam((n) => n + 1)} />,
     },
   ];
 
