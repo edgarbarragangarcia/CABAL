@@ -556,7 +556,7 @@ function ArchivoPanel({ alTerminar }: { alTerminar: () => void }) {
 function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> }) {
   const [v, setV] = React.useState(0);
   const [pestana, setPestana] = React.useState<Pestana>("mapa");
-  const [soloTitular, setSoloTitular] = React.useState(true);
+  const [soloTitular, setSoloTitular] = React.useState(false);
   const [plat, setPlat] = React.useState<PlataformaId | "todas">("todas");
   const [lugar, setLugar] = React.useState<Lugar | null>(null);
   const [mostrar, setMostrar] = React.useState(40);
