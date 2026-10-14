@@ -126,3 +126,40 @@ export function lugarDelTexto(texto: string): LugarTexto | null {
 export function departamentoDe(dane: string): string | null {
   return NOMBRE_DEP.get(dane.slice(0, 2))?.nombre ?? (dane.startsWith("11") ? "Bogotá, D.C." : null);
 }
+
+/**
+ * El lugar que más nombra un texto largo (la página de inicio de un portal): sirve para estimar desde qué ciudad publica un medio que no
+ * está en el directorio. Pide al menos 3 menciones y que el lugar sea más de la mitad de las que hay; si no, no ubica.
+ */
+export function lugarPredominante(texto: string): LugarTexto | null {
+  const t = limpio(texto);
+  const cuenta = new Map<string, { m: Municipio; n: number }>();
+  let total = 0;
+  RE_MUNICIPIO.lastIndex = 0;
+  for (const hit of t.matchAll(RE_MUNICIPIO)) {
+    const candidatos = PORNOMBRE.get(hit[1]);
+    if (candidatos?.length !== 1) continue; // los nombres repetidos en varios departamentos no se cuentan
+    const m = candidatos[0];
+    total++;
+    const c = cuenta.get(m.dane) ?? { m, n: 0 };
+    c.n++;
+    cuenta.set(m.dane, c);
+  }
+  const primero = [...cuenta.values()].sort((a, b) => b.n - a.n)[0];
+  if (!primero || primero.n < 3 || primero.n / total < 0.5) return null;
+  const m = primero.m;
+  return { nivel: "municipio", dane: m.dane, nombre: m.nombre, departamento: m.departamento, lat: m.lat, lon: m.lon };
+}
+
+/** Las ciudades que se recorren en la búsqueda a fondo: capitales y municipios de más de 40.000 habitantes, de mayor a menor. */
+export const CIUDADES_BARRIDO: string[] = (() => {
+  const capital = new Set<string>();
+  const porDep = new Map<string, Municipio>();
+  for (const m of MUNICIPIOS) {
+    const c = porDep.get(m.dep);
+    if (!c || m.poblacion > c.poblacion) porDep.set(m.dep, m);
+  }
+  for (const m of porDep.values()) capital.add(m.dane);
+  const nombre = (m: Municipio) => m.nombre.replace(/, D\.C\./, "").replace(/^San José de (Cúcuta)$/, "$1").replace(/ de Indias$/, "");
+  return MUNICIPIOS.filter((m) => m.poblacion >= 40_000 || capital.has(m.dane)).sort((a, b) => b.poblacion - a.poblacion).map(nombre).filter((n, i, a) => a.indexOf(n) === i);
+})();

@@ -34,7 +34,7 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
 export function MapaMedios({
   puntos,
   departamentos,
-  color,
+  colorDe,
   elegido,
   alElegir,
   etiqueta,
@@ -42,8 +42,8 @@ export function MapaMedios({
   puntos: PuntoCobertura[];
   /** Total por departamento (código de 2 dígitos), para pintar el fondo. */
   departamentos: Record<string, number>;
-  /** Color de las burbujas (una variable CSS o un color). */
-  color: string;
+  /** Color de cada burbuja (aquí, según el tono de lo que dicen). */
+  colorDe: (p: PuntoCobertura) => string;
   elegido: string | null;
   alElegir: (dane: string | null) => void;
   etiqueta: string;
@@ -116,7 +116,7 @@ export function MapaMedios({
               onFocus={() => setSobre(p.dane)}
               onBlur={() => setSobre(null)}
               className="cursor-pointer outline-none"
-              style={{ fill: color, fillOpacity: esDep ? 0.18 : 0.55, stroke: activo ? "var(--foreground)" : color, strokeWidth: activo ? 3 : 1.5, strokeDasharray: esDep ? "4 3" : undefined }}
+              style={{ fill: colorDe(p), fillOpacity: esDep ? 0.25 : 0.7, stroke: activo ? "var(--foreground)" : colorDe(p), strokeWidth: activo ? 3 : 1.5, strokeDasharray: esDep ? "4 3" : undefined }}
             />
           );
         })}
@@ -126,6 +126,7 @@ export function MapaMedios({
           <>
             {actual.nombre}
             <span className="font-normal text-muted-foreground"> · {fmt(actual.total)} {actual.total === 1 ? "mención" : "menciones"}</span>
+            <span className="font-normal text-muted-foreground"> · tono {actual.indice > 0.15 ? "positivo" : actual.indice < -0.15 ? "negativo" : "neutral"}</span>
             {actual.medios.length > 0 && <span className="block text-xs font-normal text-muted-foreground">{actual.medios.slice(0, 3).map((m) => `${m.nombre} ${m.total}`).join(" · ")}</span>}
           </>
         ) : (

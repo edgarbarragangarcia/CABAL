@@ -3,7 +3,9 @@ import "server-only";
 import { entidades } from "@/lib/informe/fuentes";
 import { guardarItems, leerItems, type ItemMonitoreo } from "./historial";
 import { nombraAMariaFernanda } from "./menciones";
-import { lugarDelTexto } from "./lugares";
+import { CIUDADES_BARRIDO, lugarDelTexto, lugarPredominante } from "./lugares";
+import { tonoDeTexto, type Tono } from "./tono";
+import { claveRed } from "@/lib/ia-config";
 import { MEDIOS_REGIONALES, medioPorDominio, medioPorFb, medioPorInicio, type MedioRegional } from "./medios-regionales";
 
 /**
@@ -18,13 +20,17 @@ import { MEDIOS_REGIONALES, medioPorDominio, medioPorFb, medioPorInicio, type Me
 export type PlataformaId = "prensa" | "facebook" | "instagram" | "tiktok" | "x" | "youtube" | "reddit" | "threads" | "linkedin" | "telegram" | "web";
 /** Dónde se ubica una mención: el portal que la publica (y su ciudad) y el lugar que nombra el titular. */
 export type GeoMencion = {
-  medio?: { id: string; nombre: string; ciudad: string; dane: string; departamento: string; lat: number; lon: number };
+  /** `estimado`: el medio no está en el directorio y su ciudad se dedujo de lo que dice su página de inicio. */
+  medio?: { id: string; nombre: string; ciudad: string; dane: string; departamento: string; lat: number; lon: number; estimado?: boolean };
   texto?: { nivel: "municipio" | "departamento"; dane: string; nombre: string; departamento: string; lat: number; lon: number };
 };
-export type MencionWeb = { plataforma: PlataformaId; fuente: string; titulo: string; fecha: string; enlace: string; extracto: string | null; dominio?: string; geo?: GeoMencion; /** El nombre de María Fernanda está en el titular (si no, la nombra el texto de la nota). */ enTitular?: boolean };
+/** Cifras públicas de una publicación (solo las que la fuente entrega: YouTube y X; Facebook, Instagram y TikTok no las dan sin su API). */
+export type Metricas = { vistas?: number; likes?: number; comentarios?: number };
+export type ComentarioMuestra = { texto: string; autor: string; likes: number; fecha: string; tono: Tono };
+export type MencionWeb = { plataforma: PlataformaId; fuente: string; titulo: string; fecha: string; enlace: string; extracto: string | null; dominio?: string; geo?: GeoMencion; /** El nombre de María Fernanda está en el titular (si no, la nombra el texto de la nota). */ enTitular?: boolean; /** Estimado por palabras; el panel lo reemplaza si el usuario mide el tono con IA. */ tono?: Tono; metricas?: Metricas; comentariosMuestra?: ComentarioMuestra[]; /** Prensa nacional o internacional: no se ubica en una ciudad. */ nacional?: boolean };
 export type ResumenPlataforma = { id: PlataformaId; nombre: string; total: number; consultada: boolean };
 
-export type RespuestaMenciones = { generadoEn: string; guardado: boolean; plataformas: ResumenPlataforma[]; menciones: MencionWeb[]; /** Qué portales y páginas de Facebook del directorio respondieron esta vez (para no leer un fallo como «sin menciones»). */ consultados: { portales: string[]; paginas: string[] } };
+export type RespuestaMenciones = { generadoEn: string; guardado: boolean; plataformas: ResumenPlataforma[]; menciones: MencionWeb[]; /** Hay clave de YouTube: las menciones de YouTube traen vistas, likes y comentarios. */ youtubeConClave?: boolean; /** Qué portales y páginas de Facebook del directorio respondieron esta vez (para no leer un fallo como «sin menciones»). */ consultados: { portales: string[]; paginas: string[] } };
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 export const PLATAFORMAS: { id: PlataformaId; nombre: string; sitio?: string }[] = [
@@ -202,7 +208,54 @@ function tareasRegionales(): Tarea[] {
 
 const claveDe = (t: string) => t.toLowerCase().replace(/\W+/g, " ").slice(0, 100);
 
-/** Pone a una mención su ubicación: el portal que la publica y el lugar que nombra el titular. */
+/** Prensa nacional e internacional y sitios de plataformas: no se ubican en una ciudad (su sede no dice de dónde es la nota). */
+const NACIONALES = new Set(
+  ("eltiempo.com elespectador.com semana.com infobae.com noticiascaracol.com caracol.com.co noticiasrcn.com rcnradio.com lafm.com.co wradio.com.co bluradio.com pulzo.com kienyke.com las2orillas.co cambiocolombia.com lasillavacia.com larepublica.co portafolio.co ntn24.com cnnespanol.cnn.com cnn.com bbc.com dw.com france24.com rfi.fr europapress.es elpais.com elmundo.es abc.es lavanguardia.com elconfidencial.com okdiario.com libertaddigital.com eldiario.es 20minutos.es yahoo.com es-us.noticias.yahoo.com msn.com rtvcnoticias.com radionacional.co canalrcn.com publimetro.co colombia.com elnuevosiglo.com.co valoraanalitik.com forbes.co asuntoslegales.com.co agronegocios.co enter.co soho.co colombiacheck.com razonpublica.com elnacional.com elnuevodia.com nytimes.com washingtonpost.com reuters.com efe.com youtube.com facebook.com instagram.com tiktok.com x.com twitter.com t.co linkedin.com reddit.com threads.net t.me news.google.com").split(" ")
+);
+const esNacional = (d: string) => NACIONALES.has(d) || d.endsWith(".gov.co") || d.endsWith(".mil.co") || d.endsWith(".edu.co");
+
+type MedioAuto = { id: string; nombre: string; ciudad: string; dane: string; departamento: string; lat: number; lon: number };
+/** Medios que no están en el directorio y cuya ciudad se dedujo de su página de inicio (null: se intentó y no se pudo). */
+const autoMedios = new Map<string, MedioAuto | null>();
+
+async function ubicarDominio(dominio: string, nombre: string): Promise<void> {
+  if (autoMedios.has(dominio)) return;
+  autoMedios.set(dominio, null);
+  try {
+    const res = await fetch(`https://${dominio}`, { headers: { "User-Agent": UA, "Accept-Language": "es-CO,es;q=0.9" }, redirect: "follow", cache: "no-store", signal: AbortSignal.timeout(6_000) });
+    if (!res.ok) return;
+    const html = (await res.text()).slice(0, 400_000);
+    const lugar = lugarPredominante(texto(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ")));
+    if (lugar?.nivel === "municipio") autoMedios.set(dominio, { id: `auto-${dominio}`, nombre, ciudad: lugar.nombre.replace(/, D\.C\./, ""), dane: lugar.dane, departamento: lugar.departamento, lat: lugar.lat, lon: lugar.lon });
+  } catch {
+    /* se queda sin ubicar */
+  }
+}
+
+/** Deduce la ciudad de los medios que aparecen y no están en el directorio ni son nacionales (hasta `max` por consulta). */
+async function resolverDesconocidos(lista: MencionWeb[], max = 24): Promise<void> {
+  const pendientes = new Map<string, string>();
+  for (const m of lista) {
+    const d = m.dominio;
+    if (!d || d.startsWith("facebook.com") || esNacional(d) || medioPorDominio(d) || autoMedios.has(d) || pendientes.has(d)) continue;
+    pendientes.set(d, m.fuente);
+    if (pendientes.size >= max) break;
+  }
+  const cola = [...pendientes];
+  await Promise.all(Array.from({ length: 6 }, async () => { while (cola.length) { const [d, n] = cola.shift()!; await ubicarDominio(d, n); } }));
+}
+
+/** «12.345 visualizaciones», «1,2 M de visualizaciones», «3,4 mil vistas» → número. */
+export function vistasDeTexto(t: string | null): number | undefined {
+  const m = t?.toLowerCase().match(/([\d.,]+)\s*(mil millones|millones|millón|mil|m|k)?\s*(?:de\s+)?(?:visualizaciones|vistas|views)/);
+  if (!m) return undefined;
+  const num = Number(m[1].replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
+  if (!Number.isFinite(num)) return undefined;
+  const f = m[2] === "mil millones" ? 1e9 : m[2] === "millones" || m[2] === "millón" || m[2] === "m" ? 1e6 : m[2] === "mil" || m[2] === "k" ? 1e3 : 1;
+  return Math.round(num * f);
+}
+
+/** Pone a una mención su ubicación (el portal que la publica y el lugar que nombra el titular), su tono y sus cifras. */
 function ubicar(m: MencionWeb): MencionWeb {
   let portal: MedioRegional | null = null;
   const d = m.dominio ?? "";
@@ -213,10 +266,72 @@ function ubicar(m: MencionWeb): MencionWeb {
   const lugar = lugarDelTexto(`${m.titulo} ${m.extracto ?? ""}`);
   const geo: GeoMencion = {};
   if (portal) geo.medio = { id: portal.id, nombre: portal.nombre, ciudad: portal.ciudad, dane: portal.dane, departamento: portal.departamento, lat: portal.lat, lon: portal.lon };
+  else if (d && autoMedios.get(d)) geo.medio = { ...autoMedios.get(d)!, estimado: true };
   if (lugar) geo.texto = lugar;
-  const enTitular = nombraAMariaFernanda(m.titulo);
-  return geo.medio || geo.texto ? { ...m, geo, enTitular } : { ...m, enTitular };
+  const vistas = m.plataforma === "youtube" ? vistasDeTexto(m.extracto) : undefined;
+  return {
+    ...m,
+    ...(geo.medio || geo.texto ? { geo } : {}),
+    enTitular: nombraAMariaFernanda(m.titulo),
+    tono: tonoDeTexto(m.titulo).tono,
+    ...(vistas !== undefined ? { metricas: { vistas } } : {}),
+    ...(d && esNacional(d) && !portal ? { nacional: true } : {}),
+  };
 }
+
+/* ---- Cifras y comentarios de YouTube (con la clave de YouTube de Configuración; sin ella, solo las vistas de la búsqueda pública) ---- */
+type DatosVideo = { metricas: Metricas; comentarios: ComentarioMuestra[] };
+const videos = new Map<string, { en: number; datos: DatosVideo }>();
+const VIGENCIA_VIDEO_MS = 6 * 3_600_000;
+const idDeVideo = (enlace: string) => enlace.match(/[?&]v=([\w-]{6,})/)?.[1];
+
+async function enriquecerYouTube(lista: MencionWeb[]): Promise<boolean> {
+  const clave = await claveRed("youtube").catch(() => undefined);
+  if (!clave) return false;
+  const api = async <T,>(ruta: string, q: Record<string, string>): Promise<T> => {
+    const r = await fetch(`https://www.googleapis.com/youtube/v3/${ruta}?${new URLSearchParams({ ...q, key: clave })}`, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+    if (!r.ok) throw new Error(`YouTube respondió ${r.status}`);
+    return (await r.json()) as T;
+  };
+  const ahora = Date.now();
+  const ids = [...new Set(lista.filter((m) => m.plataforma === "youtube").map((m) => idDeVideo(m.enlace)).filter((x): x is string => !!x))].filter((id) => !videos.has(id) || ahora - videos.get(id)!.en > VIGENCIA_VIDEO_MS).slice(0, 150);
+  for (let i = 0; i < ids.length; i += 50) {
+    try {
+      const r = await api<{ items?: { id: string; statistics?: Record<string, string> }[] }>("videos", { part: "statistics", id: ids.slice(i, i + 50).join(",") });
+      for (const v of r.items ?? []) {
+        const n = (x?: string) => (x === undefined ? undefined : Number(x));
+        videos.set(v.id, { en: ahora, datos: { metricas: { vistas: n(v.statistics?.viewCount), likes: n(v.statistics?.likeCount), comentarios: n(v.statistics?.commentCount) }, comentarios: [] } });
+      }
+    } catch {
+      /* sin cifras de ese tramo */
+    }
+  }
+  // Comentarios de los videos con más conversación: lo que dice la gente, no solo el titular.
+  const conComentarios = [...videos].filter(([, v]) => (v.datos.metricas.comentarios ?? 0) > 0 && v.datos.comentarios.length === 0 && ahora - v.en <= VIGENCIA_VIDEO_MS).sort((a, b) => (b[1].datos.metricas.comentarios ?? 0) - (a[1].datos.metricas.comentarios ?? 0)).slice(0, 8);
+  await Promise.all(
+    conComentarios.map(async ([id, v]) => {
+      try {
+        const r = await api<{ items?: { snippet: { topLevelComment: { snippet: { textDisplay: string; authorDisplayName: string; likeCount: number; publishedAt: string } } } }[] }>("commentThreads", { part: "snippet", videoId: id, order: "relevance", maxResults: "10", textFormat: "plainText" });
+        v.datos.comentarios = (r.items ?? []).map((it) => {
+          const c = it.snippet.topLevelComment.snippet;
+          return { texto: c.textDisplay.slice(0, 280), autor: c.authorDisplayName, likes: Number(c.likeCount) || 0, fecha: c.publishedAt, tono: tonoDeTexto(c.textDisplay).tono };
+        });
+      } catch {
+        /* los comentarios pueden estar desactivados */
+      }
+    })
+  );
+  return true;
+}
+
+function aplicarYouTube(m: MencionWeb): MencionWeb {
+  const id = m.plataforma === "youtube" ? idDeVideo(m.enlace) : undefined;
+  const v = id ? videos.get(id)?.datos : undefined;
+  return v ? { ...m, metricas: { ...m.metricas, ...Object.fromEntries(Object.entries(v.metricas).filter(([, x]) => x !== undefined)) }, ...(v.comentarios.length ? { comentariosMuestra: v.comentarios } : {}) } : m;
+}
+
+/** Lo que dejó la búsqueda a fondo (se suma a cada consulta mientras el servidor siga encendido; además se guarda en Supabase). */
+const extras = new Map<string, MencionWeb>();
 
 export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> {
   if (!forzar && memoria && Date.now() - memoria.en < TTL) return memoria.datos;
@@ -254,7 +369,7 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
   const guardado = await guardarItems(
     nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}|${m.dominio ?? ""}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto }))
   );
-  let todas = nuevas;
+  let todas = [...nuevas];
   if (guardado) {
     const previas = await leerItems(new Date(Date.now() - 30 * 86_400_000).toISOString());
     if (previas) {
@@ -266,6 +381,8 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
         });
     }
   }
+  for (const e of extras.values()) todas.push(e);
+  await resolverDesconocidos(todas);
   // Se ubica cada mención; al quitar repetidas (mismo enlace o mismo titular en la misma plataforma) gana la que tiene ubicación del portal.
   const ubicadas = todas.map(ubicar).sort((a, b) => Number(!!b.geo?.medio) - Number(!!a.geo?.medio) || b.fecha.localeCompare(a.fecha));
   const vistos = new Set<string>();
@@ -279,10 +396,37 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
       return true;
     })
     .sort((a, b) => b.fecha.localeCompare(a.fecha))
-    .slice(0, 600);
+    .slice(0, 800);
 
+  const youtubeConClave = await enriquecerYouTube(menciones).catch(() => false);
+  const enriquecidas = menciones.map(aplicarYouTube);
   const plataformas = PLATAFORMAS.map((p) => ({ id: p.id, nombre: p.nombre, total: menciones.filter((m) => m.plataforma === p.id).length, consultada: consultada.has(p.id) }));
-  const respuesta = { generadoEn: new Date().toISOString(), guardado, plataformas, menciones, consultados: { portales: [...consultados.portales], paginas: [...consultados.paginas] } };
+  const respuesta = { generadoEn: new Date().toISOString(), guardado, plataformas, menciones: enriquecidas, youtubeConClave, consultados: { portales: [...consultados.portales], paginas: [...consultados.paginas] } };
   memoria = { en: Date.now(), datos: respuesta };
   return respuesta;
+}
+
+/* ------------------------------------------------------------------ Búsqueda a fondo ---- */
+
+/** Ciudades por tanda: cada una son dos consultas (prensa y Facebook) y una función de 60 s las despacha con holgura. */
+const CIUDADES_POR_TANDA = 28;
+export const TANDAS_BARRIDO = Math.ceil(CIUDADES_BARRIDO.length / CIUDADES_POR_TANDA);
+
+/**
+ * Recorre las ciudades principales del país buscando «María Fernanda Cabal» + la ciudad en prensa y en Facebook: así salen los medios
+ * y las páginas que no están en el directorio (el micrositio, la emisora más pequeña). Se llama por tandas desde el panel.
+ */
+export async function barridoCiudades(tanda: number): Promise<{ menciones: MencionWeb[]; tanda: number; tandas: number; ciudades: string[]; total: number }> {
+  const ciudades = CIUDADES_BARRIDO.slice(tanda * CIUDADES_POR_TANDA, (tanda + 1) * CIUDADES_POR_TANDA);
+  const hasta = Date.now() + PRESUPUESTO_MS;
+  const tareas = ciudades.flatMap((c) => [
+    () => googleNoticias(`${NOMBRE} "${c}" when:30d`, "prensa", 40),
+    async () => (await googleNoticias(`${NOMBRE} "${c}" site:facebook.com when:30d`, "facebook", 40)).filter((m) => nombraAMariaFernanda(m.titulo)),
+  ]);
+  const resultados = await conLimite(tareas, 5, hasta);
+  const nuevas = resultados.flatMap((r) => (r?.status === "fulfilled" ? r.value : []));
+  for (const m of nuevas) extras.set(`${m.plataforma}|${m.enlace}`, m);
+  await guardarItems(nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}|${m.dominio ?? ""}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto })));
+  await resolverDesconocidos(nuevas);
+  return { menciones: nuevas.map(ubicar).map(aplicarYouTube), tanda, tandas: TANDAS_BARRIDO, ciudades, total: CIUDADES_BARRIDO.length };
 }
