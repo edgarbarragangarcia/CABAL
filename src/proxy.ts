@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { siteConfig } from "@/config/site";
-import { rutaPermitida, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { RUTA_CAMBIAR, rutaPermitida, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 
 // Rutas de API que mutan estado (contacto, donaciones, newsletter) y por
 // tanto requieren rate limiting + verificación de origen (defensa CSRF).
@@ -73,6 +73,14 @@ async function guardAdmin(request: NextRequest): Promise<NextResponse | null> {
     return NextResponse.redirect(url);
   }
 
+  // Con una clave temporal, lo único que se puede hacer es cambiarla.
+  if (session?.cambiar && pathname !== RUTA_CAMBIAR && !isLoginPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = RUTA_CAMBIAR;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   if (session && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin";
@@ -102,6 +110,7 @@ async function guardAdminApi(request: NextRequest): Promise<NextResponse | null>
 
   const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
   if (session) {
+    if (session.cambiar && pathname !== "/api/admin/cambiar-clave" && pathname !== "/api/admin/logout") return NextResponse.json({ error: "Cambia tu clave temporal para continuar." }, { status: 403 });
     if (!rutaPermitida(session.rol, pathname)) return NextResponse.json({ error: "Tu rol no tiene acceso a esto." }, { status: 403 });
     return null;
   }

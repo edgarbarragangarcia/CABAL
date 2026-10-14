@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const token = await createSessionToken(email.trim().toLowerCase(), usuario?.rol);
+  const token = await createSessionToken(email.trim().toLowerCase(), usuario?.rol, usuario?.cambiar);
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,

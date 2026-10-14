@@ -17,3 +17,6 @@ revoke all on admin_usuarios from anon, authenticated;
 
 -- Rol del usuario: define qué secciones del panel ve (direccion, investigacion, contenidos, formacion, juridico, territorial).
 alter table admin_usuarios add column if not exists rol text not null default 'direccion';
+
+-- Clave temporal: quien entra con ella debe cambiarla antes de usar el panel.
+alter table admin_usuarios add column if not exists cambiar_clave boolean not null default false;

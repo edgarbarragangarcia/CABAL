@@ -31,7 +31,7 @@ export async function PATCH(req: Request) {
   if (!(await principal())) return sinPermiso();
   const b = (await req.json().catch(() => null)) as { email?: string; activo?: boolean; clave?: string; nombre?: string; rol?: string } | null;
   if (!b || typeof b.email !== "string") return NextResponse.json({ error: "Solicitud inválida." }, { status: 400 });
-  const r = await actualizarUsuario(b.email, { activo: b.activo, clave: b.clave, nombre: b.nombre, rol: esRol(b.rol) ? b.rol : undefined });
+  const r = await actualizarUsuario(b.email, { activo: b.activo, clave: b.clave, claveTemporal: true, nombre: b.nombre, rol: esRol(b.rol) ? b.rol : undefined });
   return r.ok ? NextResponse.json({ ok: true }, noCache) : NextResponse.json({ error: r.error }, { status: 400 });
 }
 

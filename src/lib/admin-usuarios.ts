@@ -47,16 +47,18 @@ export async function listarUsuarios(): Promise<UsuarioPanel[]> {
 }
 
 /** Verifica correo y clave contra la tabla; si coincide y está activo, anota el ingreso. */
-export async function verificarUsuario(email: string, clave: string): Promise<{ rol: string } | null> {
+export async function verificarUsuario(email: string, clave: string): Promise<{ rol: string; cambiar: boolean } | null> {
   const c = getSupabaseServerClient();
   if (!c) return null;
-  // Con la columna de rol si ya existe; si falta el SQL nuevo, el usuario entra con acceso completo como antes.
-  let r = await c.from(TABLA).select("email, clave_hash, activo, rol").eq("email", email.trim().toLowerCase()).maybeSingle();
-  if (r.error) r = (await c.from(TABLA).select("email, clave_hash, activo").eq("email", email.trim().toLowerCase()).maybeSingle()) as typeof r;
-  const data = r.data as { email: string; clave_hash: string; activo: boolean; rol?: string } | null;
+  const correo = email.trim().toLowerCase();
+  // Con las columnas nuevas (rol, clave temporal) si ya existen; si falta el SQL, entra como antes.
+  let r = await c.from(TABLA).select("email, clave_hash, activo, rol, cambiar_clave").eq("email", correo).maybeSingle();
+  if (r.error) r = (await c.from(TABLA).select("email, clave_hash, activo, rol").eq("email", correo).maybeSingle()) as typeof r;
+  if (r.error) r = (await c.from(TABLA).select("email, clave_hash, activo").eq("email", correo).maybeSingle()) as typeof r;
+  const data = r.data as { email: string; clave_hash: string; activo: boolean; rol?: string; cambiar_clave?: boolean } | null;
   if (!data || !data.activo || !claveCoincide(clave, String(data.clave_hash))) return null;
   await c.from(TABLA).update({ ultimo_ingreso: new Date().toISOString() }).eq("email", data.email);
-  return { rol: data.rol ?? "direccion" };
+  return { rol: data.rol ?? "direccion", cambiar: data.cambiar_clave === true };
 }
 
 /** ¿Sigue vigente este usuario? (para cerrar sesiones de quien se desactivó) */
@@ -73,12 +75,12 @@ export async function crearUsuario(p: { email: string; nombre: string; clave: st
   const email = p.email.trim().toLowerCase();
   if (!correoValido(email)) return { ok: false, error: "Escribe un correo válido." };
   if (p.clave.length < CLAVE_MINIMA) return { ok: false, error: `La clave debe tener al menos ${CLAVE_MINIMA} caracteres.` };
-  const { error } = await c.from(TABLA).insert({ email, nombre: p.nombre.trim().slice(0, 120), clave_hash: hashDeClave(p.clave), rol: p.rol, creado_por: p.creadoPor });
+  const { error } = await c.from(TABLA).insert({ email, nombre: p.nombre.trim().slice(0, 120), clave_hash: hashDeClave(p.clave), rol: p.rol, creado_por: p.creadoPor, cambiar_clave: true });
   if (error) return { ok: false, error: error.code === "23505" ? "Ese correo ya tiene usuario." : "No se pudo crear el usuario." };
   return { ok: true };
 }
 
-export async function actualizarUsuario(email: string, cambios: { activo?: boolean; clave?: string; nombre?: string; rol?: string }): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function actualizarUsuario(email: string, cambios: { activo?: boolean; clave?: string; nombre?: string; rol?: string; claveTemporal?: boolean }): Promise<{ ok: true } | { ok: false; error: string }> {
   const c = getSupabaseServerClient();
   if (!c) return { ok: false, error: "Supabase no está configurado." };
   const fila: Record<string, unknown> = {};
@@ -88,6 +90,7 @@ export async function actualizarUsuario(email: string, cambios: { activo?: boole
   if (typeof cambios.clave === "string") {
     if (cambios.clave.length < CLAVE_MINIMA) return { ok: false, error: `La clave debe tener al menos ${CLAVE_MINIMA} caracteres.` };
     fila.clave_hash = hashDeClave(cambios.clave);
+    fila.cambiar_clave = cambios.claveTemporal ?? false;
   }
   if (Object.keys(fila).length === 0) return { ok: false, error: "Nada que cambiar." };
   const { error } = await c.from(TABLA).update(fila).eq("email", email.trim().toLowerCase());
