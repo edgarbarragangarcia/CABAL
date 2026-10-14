@@ -8,13 +8,11 @@ import {
   ChevronDown,
   Circle,
   CircleCheck,
-  GitFork,
   Loader2,
   MapPin,
   Network as NetworkIcon,
   RefreshCw,
   Search,
-  Settings2,
   Sparkles,
   TriangleAlert,
   UserPlus,
@@ -103,14 +101,6 @@ function readMapping(): Mapping {
     return JSON.parse(localStorage.getItem(MAPPING_KEY) ?? "{}") as Mapping;
   } catch {
     return {};
-  }
-}
-
-function saveMapping(mapping: Mapping) {
-  try {
-    localStorage.setItem(MAPPING_KEY, JSON.stringify(mapping));
-  } catch {
-    // Sin almacenamiento disponible: el mapeo dura mientras la pestaña esté abierta.
   }
 }
 
@@ -294,14 +284,13 @@ function RedCrm({
 }) {
   const { resolvedTheme } = useTheme();
   const [showSteps, setShowSteps] = React.useState(false);
-  const [mapping, setMapping] = React.useState<Mapping>(() =>
+  const [mapping] = React.useState<Mapping>(() =>
     typeof window === "undefined" ? {} : readMapping()
   );
   const [enabled, setEnabled] = React.useState<ReadonlySet<Dimension>>(ALL_DIMENSIONS);
   const [focus, setFocus] = React.useState<{ network: Network; community: number } | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
-  const [showFields, setShowFields] = React.useState(false);
 
   // Recalcular la red tarda un instante con miles de contactos: mientras, la anterior queda atenuada.
   const deferredMapping = React.useDeferredValue(mapping);
@@ -357,27 +346,6 @@ function RedCrm({
     return network.nodes.flatMap((n, i) => (normalizeText(n.name).includes(q) ? [i] : [])).slice(0, 8);
   }, [network, query]);
 
-  const bridges = React.useMemo(
-    () =>
-      network.nodes
-        .flatMap((n, i) => (n.degree >= 3 && n.bridge >= 0.3 ? [i] : []))
-        .sort((a, b) => {
-          const score = (i: number) => network.nodes[i].bridge * Math.log1p(network.nodes[i].strength);
-          return score(b) - score(a);
-        })
-        .slice(0, 6),
-    [network]
-  );
-
-  const setDimension = (key: string, dim: Dimension | null) => {
-    const next = { ...mapping, [key]: dim };
-    setMapping(next);
-    saveMapping(next);
-  };
-  const resetMapping = () => {
-    setMapping({});
-    saveMapping({});
-  };
   const toggle = (d: Dimension) => {
     const next = new Set(enabled);
     if (next.has(d)) next.delete(d);
@@ -592,13 +560,7 @@ function RedCrm({
             <div className="grid h-[320px] place-items-center p-6 text-center text-sm text-muted-foreground">
               <div>
                 <p className="font-medium text-foreground">No hay relaciones con los campos elegidos.</p>
-                <p className="mt-1">
-                  Activa más relaciones arriba o revisa qué representa cada campo en{" "}
-                  <button type="button" onClick={() => setShowFields(true)} className="font-medium text-brand underline">
-                    Campos del CRM
-                  </button>
-                  .
-                </p>
+                <p className="mt-1">Activa más relaciones arriba.</p>
               </div>
             </div>
           )}
@@ -629,95 +591,6 @@ function RedCrm({
           )}
         </aside>
       </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <Waypoints className="size-4 text-brand" aria-hidden="true" />
-            Relaciones probables
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Personas que aún no están unidas pero tienen varios contactos en común: vale la pena presentarlas o
-            invitarlas juntas.
-          </p>
-          {network.predictions.length ? (
-            <ul className="mt-3 space-y-2">
-              {network.predictions.slice(0, 8).map((p) => (
-                <li key={`${p.a}-${p.b}`} className="rounded-xl border border-border p-3 text-sm">
-                  <p className="flex flex-wrap items-center gap-x-1.5">
-                    <button type="button" onClick={() => choose(p.a)} className="font-medium hover:text-brand">
-                      {nameOf(p.a)}
-                    </button>
-                    <span className="text-muted-foreground">↔</span>
-                    <button type="button" onClick={() => choose(p.b)} className="font-medium hover:text-brand">
-                      {nameOf(p.b)}
-                    </button>
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {plural(p.via.length, "contacto en común", "contactos en común")}:{" "}
-                    {p.via.slice(0, 3).map(nameOf).join(", ")}
-                    {p.via.length > 3 ? "..." : ""}
-                  </p>
-                  {p.shared.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {p.shared.map((t) => (
-                        <TraitChip key={`${t.dim}-${t.value}`} trait={t} />
-                      ))}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">
-              Todavía no hay parejas con contactos en común suficientes.
-            </p>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <GitFork className="size-4 text-brand" aria-hidden="true" />
-            Personas puente
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Sus relaciones cruzan varias comunidades: sirven para llevar un mensaje de un grupo a otro.
-          </p>
-          {bridges.length ? (
-            <ul className="mt-3 space-y-2">
-              {bridges.map((i) => {
-                const reach = new Set([...network.adjacency[i].keys()].map((j) => network.nodes[j].community)).size;
-                return (
-                  <li key={i}>
-                    <button
-                      type="button"
-                      onClick={() => choose(i)}
-                      className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 rounded-xl border border-border p-3 text-left text-sm transition-colors hover:bg-surface-muted"
-                    >
-                      <Dot color={communityColor(network.nodes[i].community, resolvedTheme)} />
-                      <span className="min-w-0 flex-1 truncate font-medium">{nameOf(i)}</span>
-                      <span className="w-full pl-[22px] text-xs text-muted-foreground sm:w-auto sm:pl-0">
-                        conecta {reach} grupos · {plural(network.nodes[i].degree, "vínculo", "vínculos")}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">Nadie conecta todavía comunidades distintas.</p>
-          )}
-        </section>
-      </div>
-
-      <FieldsPanel
-        snapshot={snapshot}
-        mapping={mapping}
-        open={showFields}
-        onToggle={() => setShowFields((v) => !v)}
-        onChange={setDimension}
-        onReset={resetMapping}
-      />
     </div>
   );
 }
@@ -933,108 +806,5 @@ function PersonPanel({
         </>
       )}
     </div>
-  );
-}
-
-function FieldsPanel({
-  snapshot,
-  mapping,
-  open,
-  onToggle,
-  onChange,
-  onReset,
-}: {
-  snapshot: CrmSnapshot;
-  mapping: Mapping;
-  open: boolean;
-  onToggle: () => void;
-  onChange: (key: string, dim: Dimension | null) => void;
-  onReset: () => void;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-surface shadow-sm">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-5 py-4 text-left"
-      >
-        <span className="flex items-center gap-2 text-sm font-semibold">
-          <Settings2 className="size-4 text-brand" aria-hidden="true" />
-          Campos del CRM
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {plural(snapshot.fields.length, "campo", "campos")} · qué relación representa cada uno
-        </span>
-        <ChevronDown
-          className={`ml-auto size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-          aria-hidden="true"
-        />
-      </button>
-      {open && (
-        <div className="border-t border-border px-5 py-4">
-          <p className="text-xs text-muted-foreground">
-            Se asignaron por el nombre de cada campo en Bitrix24. Si alguno quedó mal, cámbialo aquí: el cambio
-            se guarda en este navegador. Solo aparecen campos que relacionan a alguien (los que son únicos por
-            persona, como documentos o direcciones, no se usan).
-          </p>
-          {snapshot.fields.length ? (
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[560px] text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="py-2 pr-3 font-medium">Campo</th>
-                    <th className="py-2 pr-3 font-medium">Contactos con valor</th>
-                    <th className="py-2 pr-3 font-medium">Valores distintos</th>
-                    <th className="py-2 font-medium">Relación</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {snapshot.fields.map((f) => (
-                    <tr key={f.key} className="border-t border-border">
-                      <td className="py-2 pr-3">
-                        <span className="font-medium">{f.label}</span>
-                        <span className="ml-1.5 text-xs text-muted-foreground">{f.key}</span>
-                      </td>
-                      <td className="py-2 pr-3 tabular-nums">{fmt(f.filled)}</td>
-                      <td className="py-2 pr-3 tabular-nums">{fmt(f.values.length)}</td>
-                      <td className="py-2">
-                        <select
-                          value={dimensionOf(f, mapping) ?? ""}
-                          onChange={(e) => onChange(f.key, (e.target.value || null) as Dimension | null)}
-                          aria-label={`Relación del campo ${f.label}`}
-                          className="rounded-lg border border-border bg-surface px-2 py-1 text-sm"
-                        >
-                          <option value="">No usar</option>
-                          {DIMENSIONS.map((d) => (
-                            <option key={d} value={d}>
-                              {DIMENSION_LABEL[d]}
-                              {f.auto === d ? " (automático)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">
-              Los contactos no tienen campos que relacionen a unas personas con otras.
-            </p>
-          )}
-          {Object.keys(mapping).length > 0 && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="mt-3 text-xs font-medium text-brand underline underline-offset-2"
-            >
-              Volver a la asignación automática
-            </button>
-          )}
-        </div>
-      )}
-    </section>
   );
 }

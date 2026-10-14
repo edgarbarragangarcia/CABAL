@@ -30,8 +30,8 @@ const cargar = (url: string) => {
   return p;
 };
 
-const W = 640;
-const H = 560;
+const W = 720;
+const H = 820;
 
 /** Mapa para elegir un lugar con un clic: cada departamento, municipio o localidad es un botón. */
 export function TerritorioMapa({ url, idDe, alElegir, valores }: { url: string; idDe: (c: string) => string; alElegir: (id: string) => void; /** Votos por código del lugar: pinta más oscuro donde hay más. */ valores?: Record<string, number> | null }) {
@@ -52,15 +52,15 @@ export function TerritorioMapa({ url, idDe, alElegir, valores }: { url: string; 
     return fc.features.map((f) => ({ code: String(f.properties.code), name: f.properties.name, d: path(f) ?? "" }));
   }, [fc]);
 
-  if (fc === undefined) return <div className="grid h-72 place-items-center text-sm text-muted-foreground">Cargando el mapa…</div>;
+  if (fc === undefined) return <div className="grid h-[min(80vh,54rem)] place-items-center text-sm text-muted-foreground">Cargando el mapa…</div>;
   if (fc === null) return <p className="text-sm text-muted-foreground">No hay mapa para este lugar: usa la lista.</p>;
   const actual = formas.find((f) => f.code === sobre);
   const max = valores ? Math.max(0, ...Object.values(valores)) : 0;
   const fmt = (n: number) => n.toLocaleString("es-CO");
   const valorDe = (code: string) => (valores ? valores[idDe(code)] ?? valores[code] : undefined);
   return (
-    <div className="relative mx-auto max-w-xl">
-      <svg viewBox={`0 0 ${W} ${H}`} role="group" aria-label="Mapa para elegir un lugar" className="h-auto w-full">
+    <div className="relative w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} role="group" aria-label="Mapa para elegir un lugar" className="mx-auto block h-[min(80vh,54rem)] w-full">
         {formas.map((f) => (
           <path
             key={f.code}
@@ -75,7 +75,7 @@ export function TerritorioMapa({ url, idDe, alElegir, valores }: { url: string; 
             onFocus={() => setSobre(f.code)}
             onBlur={() => setSobre(null)}
             style={valores ? { fillOpacity: valorDe(f.code) === undefined ? 0.06 : 0.1 + 0.85 * Math.sqrt(max > 0 ? valorDe(f.code)! / max : 0) } : { fillOpacity: 0.25 }}
-            className="cursor-pointer fill-brand stroke-surface outline-none transition-[fill-opacity] hover:stroke-foreground focus-visible:stroke-foreground"
+            className="cursor-pointer fill-brand stroke-surface outline-none hover:stroke-foreground focus-visible:stroke-foreground"
             strokeWidth={1}
           />
         ))}

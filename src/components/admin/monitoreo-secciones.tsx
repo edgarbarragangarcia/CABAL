@@ -255,6 +255,7 @@ const claveTitulo = (t: string) => t.toLowerCase().replace(/\W+/g, " ").slice(0,
 const fechaHora = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "America/Bogota" });
 const diaCO = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 const TXT_TONO: Record<Tono, string> = { positivo: "positivo", neutral: "neutral", negativo: "negativo" };
+const fmtN = (n: number) => n.toLocaleString("es-CO");
 const pct = (n: number, total: number) => (total ? `${Math.round((n / total) * 100)} %` : "0 %");
 
 /** Los likes, comentarios y vistas de una publicación o de una ciudad (solo lo que la fuente entrega). */
@@ -573,24 +574,45 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
       {!datos && cargando && <p className="text-sm text-muted-foreground">Buscando en la prensa, en los portales y en las páginas de Facebook de cada región… (puede tardar unos segundos)</p>}
 
       {datos && cob && (
-        <div className="rounded-2xl bg-sky-500/10 p-4">
-          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Lo más importante</p>
-          <p className="mt-1 text-sm leading-relaxed sm:text-base">
-            {base.length === 0 ? "No se encontraron menciones públicas en este momento." : (
-              <>
-                Se encontraron <strong>{base.length}</strong> menciones {soloTitular ? "en titulares" : "en titulares y textos"} en <strong>{conDatos.length}</strong> {conDatos.length === 1 ? "fuente" : "fuentes"}.
-                {regionales > 0 ? <> De ellas, <strong>{regionales}</strong> vienen de <strong>{cob.directorio.portalesConMenciones + estimados}</strong> portales y páginas regionales, publicadas desde <strong>{cob.publicadas.length}</strong> {cob.publicadas.length === 1 ? "ciudad" : "ciudades"}{cob.publicadas[0] ? <>; la que más es <strong>{cob.publicadas[0].nombre}</strong> ({cob.publicadas[0].total})</> : null}.</> : <> Ninguna viene de portales regionales.</>}
-                {ultima ? <> La más reciente es del {fechaHora(ultima.fecha)} ({ultima.fuente}).</> : null}
-              </>
-            )}
-          </p>
-          {base.length > 0 && (
-            <p className="mt-2 text-sm leading-relaxed">
-              Tono {conIa > 0 ? `(medido con IA en ${conIa} de ${base.length}; el resto, estimado por palabras)` : "(estimado por palabras)"}:{" "}
-              <strong className="text-emerald-700 dark:text-emerald-300">{pct(cob.tono.tonos.positivo, cob.tono.total)} positivo</strong> · <strong>{pct(cob.tono.tonos.neutral, cob.tono.total)} neutral</strong> · <strong className="text-red-700 dark:text-red-300">{pct(cob.tono.tonos.negativo, cob.tono.total)} negativo</strong>.
-              {mejor && peor && mejor.dane !== peor.dane ? <> Mejor recibida en <strong>{mejor.nombre}</strong>; con más rechazo en <strong>{peor.nombre}</strong>.</> : null}
-              {cifras.vistas + cifras.likes + cifras.comentarios > 0 ? <> Alcance medible: <strong>{miles(cifras.vistas)}</strong> vistas, <strong>{miles(cifras.likes)}</strong> me gusta, <strong>{miles(cifras.comentarios)}</strong> comentarios.</> : null}
-            </p>
+        <div className="space-y-3">
+          {base.length === 0 ? <p className="rounded-2xl bg-surface-muted p-4 text-sm">No se encontraron menciones públicas en este momento.</p> : (
+            <>
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <div className="rounded-2xl border border-border bg-surface p-4">
+                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Menciones</p>
+                  <p className="mt-1 text-3xl font-bold tabular-nums">{fmtN(base.length)}</p>
+                  <p className="text-xs text-muted-foreground">{soloTitular ? "en titulares" : "en titulares y textos"} · {conDatos.length} {conDatos.length === 1 ? "fuente" : "fuentes"}</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-surface p-4">
+                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Desde las regiones</p>
+                  <p className="mt-1 text-3xl font-bold tabular-nums">{fmtN(regionales)} <span className="text-base font-medium text-muted-foreground">{pct(regionales, base.length)}</span></p>
+                  <p className="text-xs text-muted-foreground">{cob.directorio.portalesConMenciones + estimados} portales y páginas · {cob.publicadas.length} {cob.publicadas.length === 1 ? "ciudad" : "ciudades"}</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-surface p-4">
+                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Tono</p>
+                  <div className="mt-2 flex h-3 overflow-hidden rounded-full bg-surface-muted" role="img" aria-label={`${pct(cob.tono.tonos.positivo, cob.tono.total)} positivo, ${pct(cob.tono.tonos.neutral, cob.tono.total)} neutral, ${pct(cob.tono.tonos.negativo, cob.tono.total)} negativo`}>
+                    {(["positivo", "neutral", "negativo"] as const).map((t) => (cob.tono.tonos[t] ? <span key={t} style={{ width: `${(cob.tono.tonos[t] / cob.tono.total) * 100}%`, background: COLOR_TONO[t] }} /> : null))}
+                  </div>
+                  <p className="mt-2 flex flex-wrap gap-x-3 text-xs font-semibold"><span className="text-emerald-700 dark:text-emerald-300">{pct(cob.tono.tonos.positivo, cob.tono.total)} positivo</span><span className="text-muted-foreground">{pct(cob.tono.tonos.neutral, cob.tono.total)} neutral</span><span className="text-red-700 dark:text-red-300">{pct(cob.tono.tonos.negativo, cob.tono.total)} negativo</span></p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{conIa > 0 ? `Medido con IA en ${conIa} de ${base.length}; el resto, por palabras` : "Estimado por palabras"}</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-surface p-4">
+                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Alcance medible</p>
+                  {cifras.vistas + cifras.likes + cifras.comentarios > 0 ? (
+                    <>
+                      <p className="mt-1 text-3xl font-bold tabular-nums">{miles(cifras.vistas)} <span className="text-base font-medium text-muted-foreground">vistas</span></p>
+                      <p className="text-xs text-muted-foreground">{miles(cifras.likes)} me gusta · {miles(cifras.comentarios)} comentarios</p>
+                    </>
+                  ) : <p className="mt-1 text-sm text-muted-foreground">Sin cifras: solo YouTube y X las entregan.</p>}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {cob.publicadas[0] && <span className="rounded-full bg-sky-500/10 px-3 py-1.5">Más menciones: <strong>{cob.publicadas[0].nombre}</strong> ({cob.publicadas[0].total})</span>}
+                {mejor && <span className="rounded-full bg-emerald-500/10 px-3 py-1.5 text-emerald-900 dark:text-emerald-200">Mejor recibida: <strong>{mejor.nombre}</strong></span>}
+                {peor && mejor && peor.dane !== mejor.dane && <span className="rounded-full bg-red-500/10 px-3 py-1.5 text-red-900 dark:text-red-200">Más rechazo: <strong>{peor.nombre}</strong></span>}
+                {ultima && <span className="rounded-full bg-surface-muted px-3 py-1.5">Última: <strong>{fechaHora(ultima.fecha)}</strong> · {ultima.fuente}</span>}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -631,7 +653,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
             ))}
           </div>
 
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
             <div>
               <MapaMedios puntos={puntos} departamentos={depTotales} colorDe={(p) => colorDeIndice(p.indice * 2.5)} elegido={lugar?.modo === modo ? lugar.dane : null} alElegir={(dane) => elegir(dane ? { modo, dane } : null)} etiqueta={modo === "publicadas" ? "Ciudades desde las que se publica" : "Lugares de los que hablan los titulares"} />
               <div className="mx-auto mt-1 flex max-w-xs items-center gap-2 text-[11px] text-muted-foreground">

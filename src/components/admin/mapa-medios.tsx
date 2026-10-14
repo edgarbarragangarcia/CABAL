@@ -88,8 +88,8 @@ export function MapaMedios({
     .sort((a, b) => b.p.total - a.p.total); // las grandes al fondo, las pequeñas encima
 
   return (
-    <div className="relative mx-auto w-full max-w-md">
-      <svg viewBox={`0 0 ${W} ${H}`} role="group" aria-label={etiqueta} className="h-auto w-full">
+    <div className="relative w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} role="group" aria-label={etiqueta} className="mx-auto block h-[min(80vh,54rem)] w-full">
         {[...geometria.formas, ...geometria.isla].map((f) => {
           const n = departamentos[f.code] ?? 0;
           return <path key={f.code} d={f.d} className="fill-brand stroke-surface" strokeWidth={0.8} style={{ fillOpacity: n > 0 ? 0.1 + 0.4 * Math.sqrt(n / maxDep) : 0.06 }} />;
