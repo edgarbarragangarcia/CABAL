@@ -5,6 +5,7 @@ import { Lienzo, Portada } from "@/components/admin/estilo-cabal";
 import { ConfiguracionIA } from "./configuracion-ia";
 import { ConfiguracionRedes } from "./configuracion-redes";
 import { InformeSemanal } from "./informe-semanal";
+import { PilotoPanel } from "./piloto-panel";
 import { UsuariosPanel } from "./usuarios-panel";
 
 export default function ConfiguracionPage() {
@@ -21,6 +22,7 @@ export default function ConfiguracionPage() {
           <ConfiguracionIA />
           <ConfiguracionRedes />
           <UsuariosPanel />
+          <PilotoPanel />
           <InformeSemanal />
         </div>
       </Lienzo>

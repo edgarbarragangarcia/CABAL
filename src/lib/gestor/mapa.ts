@@ -33,6 +33,7 @@ export const MODULOS: Modulo[] = [
   },
   { id: "monitoreo", nombre: "Monitoreo", archivo: "monitoreo.sql", archivos: ["monitoreo"], ancla: "monitoreo_items", tablas: [{ tabla: "monitoreo_items", sirve: "Videos y titulares de cada político, con la marca «nombra a María Fernanda»" }] },
   { id: "usuarios", nombre: "Usuarios del panel", archivo: "usuarios.sql", archivos: ["usuarios"], ancla: "admin_usuarios", tablas: [{ tabla: "admin_usuarios", sirve: "Personas con acceso al panel (correo y clave con hash)" }] },
+  { id: "piloto", nombre: "Piloto de IA", archivo: "piloto.sql", archivos: ["piloto"], ancla: "piloto_registros", tablas: [{ tabla: "piloto_registros", sirve: "Tareas hechas con IA: tiempo, costo y precisión" }] },
   { id: "territorio", nombre: "Territorio", archivo: "territorio.sql", archivos: ["territorio"], ancla: "indicadores_territoriales", tablas: [{ tabla: "indicadores_territoriales", sirve: "Indicadores oficiales por municipio (DANE, víctimas, homicidios…)" }] },
   {
     id: "comunidad", nombre: "Comunidad", archivo: "comunidad.sql", archivos: ["comunidad"], ancla: "miembros",
@@ -218,6 +219,7 @@ const DESDE_TABLAS: Record<string, Record<string, string>> = {
   comunidad: { miembros: "Afiliados", grupos: "Grupos", grupo_miembros: "Pertenencias a grupos", publicaciones: "Publicaciones", comentarios: "Comentarios", me_gusta: "Reacciones", seguidores: "Seguimientos" },
   territorio: { indicadores_territoriales: "Indicadores por municipio" },
   usuarios: { admin_usuarios: "Usuarios con acceso" },
+  piloto: { piloto_registros: "Tareas anotadas" },
 };
 
 export async function mapaDeDatos(): Promise<RespuestaMapa> {

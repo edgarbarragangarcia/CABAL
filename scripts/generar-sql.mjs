@@ -58,7 +58,7 @@ function plantilla(nombre, ruta, texto) {
 
 // -- Todo el SQL del panel, en el orden en que debe ejecutarse (el mapa de datos del Gestor documental ofrece copiar lo que falte).
 {
-  const ORDEN = ["comunidad", "documentos", "gestor-documental", "elecciones", "territorio", "portales", "portales-crm", "portales-cms-pro", "monitoreo", "usuarios"];
+  const ORDEN = ["comunidad", "documentos", "gestor-documental", "elecciones", "territorio", "portales", "portales-crm", "portales-cms-pro", "monitoreo", "usuarios", "piloto"];
   const porArchivo = Object.fromEntries(ORDEN.map((n) => [n, leer(`supabase/${n}.sql`)]));
   const salida =
     "/** Copia de los archivos de supabase/ (generado por scripts/generar-sql.mjs): el mapa de datos ofrece copiar el SQL de lo que falta. */\n" +
