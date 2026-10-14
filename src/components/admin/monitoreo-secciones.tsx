@@ -403,6 +403,8 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const [barrido, setBarrido] = React.useState<{ estado: "libre" | "corriendo" | "listo" | "error" | "pausa"; hecha: number; tandas: number; total?: number; error?: string }>({ estado: "libre", hecha: 0, tandas: 27 });
   const [invest, setInvest] = React.useState<Record<string, Investigacion>>({});
   const [recorriendo, setRecorriendo] = React.useState(false);
+  const [redFiltro, setRedFiltro] = React.useState<PlataformaId | "todas">("todas");
+  const [redMostrar, setRedMostrar] = React.useState(20);
   const [ia, setIa] = React.useState<Ia>(() => {
     try {
       return typeof window === "undefined" ? {} : (JSON.parse(localStorage.getItem(CLAVE_IA) ?? "{}") as Ia);
@@ -540,6 +542,10 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   }, [base, tonoDe]);
   const investigados = Object.values(invest).filter((i) => i.estado === "listo").length;
   const conMenciones = porDepto.filter((d) => d.total > 0).length;
+
+  const enRedes = React.useMemo(() => base.filter((m) => m.plataforma !== "prensa" && m.plataforma !== "web"), [base]);
+  const redesLista = enRedes.filter((m) => redFiltro === "todas" || m.plataforma === redFiltro);
+  const redesPlataformas = (datos?.plataformas ?? []).filter((p) => p.id !== "prensa" && p.id !== "web");
 
   const pestanas: { id: Pestana; label: string; n?: number }[] = [
     { id: "mapa", label: "De dónde vienen", n: datos ? base.length : undefined },
@@ -686,6 +692,28 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
               </p>
             );
           })()}
+
+          <section className="rounded-2xl border border-border p-4">
+            <h3 className="font-display text-base font-semibold">Redes sociales y YouTube</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">Lo que publican canales, páginas y cuentas de todo el país sobre María Fernanda. No tienen una ciudad de publicación (si el titular nombra un lugar, sale como «Habla de»), por eso no están en las filas de ciudades.</p>
+            <div role="tablist" aria-label="Red social" className="mt-3 flex flex-wrap gap-1.5">
+              <button type="button" role="tab" aria-selected={redFiltro === "todas"} onClick={() => { setRedFiltro("todas"); setRedMostrar(20); }} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${redFiltro === "todas" ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`}>Todas <span className="tabular-nums opacity-70">{enRedes.length}</span></button>
+              {redesPlataformas.map((p) => {
+                const n = enRedes.filter((m) => m.plataforma === p.id).length;
+                return (
+                  <button key={p.id} type="button" role="tab" aria-selected={redFiltro === p.id} disabled={n === 0} onClick={() => { setRedFiltro(p.id); setRedMostrar(20); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${redFiltro === p.id ? "bg-brand text-brand-foreground" : "ring-1 ring-border hover:bg-surface-muted"}`} title={p.consultada ? undefined : "No respondió en esta consulta"}>
+                    <span className="size-2 rounded-full" style={{ background: COLOR_PLATAFORMA[p.id] }} aria-hidden="true" />{p.nombre} <span className="tabular-nums opacity-70">{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {redesLista.length === 0 ? <p className="mt-3 rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Sin publicaciones de esta red en el período.</p> : (
+              <ul className="mt-3 divide-y divide-border rounded-2xl border border-border">
+                {redesLista.slice(0, redMostrar).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} tono={tonoDe(m)} plataformas={datos!.plataformas} alLugar={(l) => { elegir(l); if (l.modo !== "departamento") setModo(l.modo); }} />)}
+              </ul>
+            )}
+            {redesLista.length > redMostrar && <button type="button" onClick={() => setRedMostrar((n) => n + 20)} className="mt-2 rounded-full border border-border px-4 py-2 text-xs font-semibold hover:bg-surface-muted">Ver más ({redesLista.length - redMostrar})</button>}
+          </section>
 
           <section className="rounded-2xl border border-border p-4">
             <div className="flex flex-wrap items-center gap-3">
