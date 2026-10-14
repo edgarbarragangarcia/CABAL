@@ -248,7 +248,7 @@ type Filtro = PlataformaId | "todas" | "regional";
 type Lugar = { modo: Modo; dane: string };
 
 /** Las burbujas del mapa y su lista: cuántas menciones vienen de cada ciudad (o hablan de ella). */
-function Ranking({ puntos, color, elegido, alElegir }: { puntos: PuntoCobertura[]; color: string; elegido: string | null; alElegir: (dane: string) => void }) {
+function Ranking({ puntos, color, elegido, alElegir, detalle }: { puntos: PuntoCobertura[]; color: string; elegido: string | null; alElegir: (dane: string) => void; /** Se despliega bajo la fila elegida. */ detalle?: React.ReactNode }) {
   if (puntos.length === 0) return <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Sin menciones con lugar conocido con este filtro.</p>;
   const max = Math.max(1, ...puntos.map((p) => p.total));
   return (
@@ -264,6 +264,7 @@ function Ranking({ puntos, color, elegido, alElegir }: { puntos: PuntoCobertura[
             </span>
             <span className="text-sm font-bold tabular-nums">{p.total}</span>
           </button>
+          {elegido === p.dane && detalle}
         </li>
       ))}
     </ol>
@@ -428,14 +429,15 @@ function MariaFernandaEnTodas({ monitoreo, redes }: { monitoreo: ReturnType<type
             <MapaMedios puntos={puntos} departamentos={depTotales} color={colorModo} elegido={lugar?.modo === modo ? lugar.dane : null} alElegir={(dane) => elegir(dane ? { modo, dane } : null)} etiqueta={modo === "publicadas" ? "Ciudades desde las que se publica" : "Lugares de los que hablan los titulares"} />
             <div>
               <p className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{modo === "publicadas" ? "Ciudades desde las que se publica" : "Lugares de los que hablan los titulares"}</p>
-              <Ranking puntos={puntos} color={colorModo} elegido={lugar?.modo === modo ? lugar.dane : null} alElegir={(dane) => { const activo = lugar?.modo === modo && lugar.dane === dane; elegir(activo ? null : { modo, dane }); }} />
-              {lugar?.modo === modo && lista.length > 0 && (
-                <div className="mt-3 rounded-2xl border border-border">
-                  <p className="border-b border-border px-4 py-2 text-xs font-semibold">{nombreLugar}: {lista.length} {lista.length === 1 ? "mención" : "menciones"}</p>
-                  <ul className="divide-y divide-border">{lista.slice(0, 4).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} plataformas={datos.plataformas} alLugar={(l) => { elegir(l); setModo(l.modo); }} />)}</ul>
-                  {lista.length > 4 && <button type="button" onClick={() => setPestana("menciones")} className="w-full border-t border-border px-4 py-2 text-xs font-semibold text-brand hover:bg-surface-muted">Ver las {lista.length} en la lista</button>}
+              <Ranking puntos={puntos} color={colorModo} elegido={lugar?.modo === modo ? lugar.dane : null} alElegir={(dane) => { const activo = lugar?.modo === modo && lugar.dane === dane; elegir(activo ? null : { modo, dane }); }} detalle={
+                <div className="mt-1.5 mb-2 ml-7 rounded-2xl border border-border bg-surface">
+                  <p className="border-b border-border px-4 py-2 text-xs font-semibold">{nombreLugar}: {lista.length} {lista.length === 1 ? "mención" : "menciones"} · prensa y redes</p>
+                  {lista.length === 0 ? <p className="px-4 py-3 text-xs text-muted-foreground">Sin menciones con el filtro actual.</p> : (
+                    <ul className="max-h-[32rem] divide-y divide-border overflow-y-auto">{lista.slice(0, mostrar).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} plataformas={datos.plataformas} alLugar={(l) => { elegir(l); setModo(l.modo); }} />)}</ul>
+                  )}
+                  {lista.length > mostrar && <button type="button" onClick={() => setMostrar((n) => n + 40)} className="w-full border-t border-border px-4 py-2 text-xs font-semibold text-brand hover:bg-surface-muted">Ver más ({lista.length - mostrar})</button>}
                 </div>
-              )}
+              } />
             </div>
           </div>
 
