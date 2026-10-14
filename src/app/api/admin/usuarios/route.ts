@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-import { ADMIN_EMAIL, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { ADMIN_EMAIL, esRol, ROLES, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 import { actualizarUsuario, crearUsuario, eliminarUsuario, estadoUsuarios, listarUsuarios } from "@/lib/admin-usuarios";
 
 /** Solo el administrador principal (ADMIN_EMAIL) gestiona usuarios. */
@@ -15,23 +15,23 @@ const noCache = { headers: { "Cache-Control": "no-store" } };
 export async function GET() {
   if (!(await principal())) return sinPermiso();
   const estado = await estadoUsuarios();
-  return NextResponse.json({ ...estado, principal: ADMIN_EMAIL, usuarios: estado.disponible ? await listarUsuarios() : [] }, noCache);
+  return NextResponse.json({ ...estado, principal: ADMIN_EMAIL, roles: Object.entries(ROLES).map(([id, r]) => ({ id, nombre: r.nombre, detalle: r.detalle })), usuarios: estado.disponible ? await listarUsuarios() : [] }, noCache);
 }
 
 export async function POST(req: Request) {
   const yo = await principal();
   if (!yo) return sinPermiso();
-  const b = (await req.json().catch(() => null)) as { email?: string; nombre?: string; clave?: string } | null;
+  const b = (await req.json().catch(() => null)) as { email?: string; nombre?: string; clave?: string; rol?: string } | null;
   if (!b || typeof b.email !== "string" || typeof b.clave !== "string") return NextResponse.json({ error: "Solicitud inválida." }, { status: 400 });
-  const r = await crearUsuario({ email: b.email, nombre: typeof b.nombre === "string" ? b.nombre : "", clave: b.clave, creadoPor: yo });
+  const r = await crearUsuario({ email: b.email, nombre: typeof b.nombre === "string" ? b.nombre : "", clave: b.clave, rol: esRol(b.rol) ? b.rol : "direccion", creadoPor: yo });
   return r.ok ? NextResponse.json({ ok: true }, noCache) : NextResponse.json({ error: r.error }, { status: 400 });
 }
 
 export async function PATCH(req: Request) {
   if (!(await principal())) return sinPermiso();
-  const b = (await req.json().catch(() => null)) as { email?: string; activo?: boolean; clave?: string; nombre?: string } | null;
+  const b = (await req.json().catch(() => null)) as { email?: string; activo?: boolean; clave?: string; nombre?: string; rol?: string } | null;
   if (!b || typeof b.email !== "string") return NextResponse.json({ error: "Solicitud inválida." }, { status: 400 });
-  const r = await actualizarUsuario(b.email, { activo: b.activo, clave: b.clave, nombre: b.nombre });
+  const r = await actualizarUsuario(b.email, { activo: b.activo, clave: b.clave, nombre: b.nombre, rol: esRol(b.rol) ? b.rol : undefined });
   return r.ok ? NextResponse.json({ ok: true }, noCache) : NextResponse.json({ error: r.error }, { status: 400 });
 }
 

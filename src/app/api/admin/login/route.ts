@@ -21,14 +21,16 @@ export async function POST(req: Request) {
   const email = typeof body.email === "string" ? body.email : "";
   const password = typeof body.password === "string" ? body.password : "";
 
-  if (!email || !password || !(checkCredentials(email, password) || (await verificarUsuario(email, password).catch(() => false)))) {
+  const principal = !!email && !!password && checkCredentials(email, password);
+  const usuario = !principal && email && password ? await verificarUsuario(email, password).catch(() => null) : null;
+  if (!principal && !usuario) {
     return NextResponse.json(
       { ok: false, error: "Correo o clave incorrectos." },
       { status: 401 }
     );
   }
 
-  const token = await createSessionToken(email.trim().toLowerCase());
+  const token = await createSessionToken(email.trim().toLowerCase(), usuario?.rol);
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,

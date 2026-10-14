@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { siteConfig } from "@/config/site";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { rutaPermitida, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 
 // Rutas de API que mutan estado (contacto, donaciones, newsletter) y por
 // tanto requieren rate limiting + verificación de origen (defensa CSRF).
@@ -80,6 +80,14 @@ async function guardAdmin(request: NextRequest): Promise<NextResponse | null> {
     return NextResponse.redirect(url);
   }
 
+  // Un usuario con rol solo entra a lo de su equipo.
+  if (session && !isLoginPage && !rutaPermitida(session.rol, pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   return null;
 }
 
@@ -93,7 +101,10 @@ async function guardAdminApi(request: NextRequest): Promise<NextResponse | null>
   if (pathname === "/api/admin/login" || pathname === "/api/admin/logout") return null;
 
   const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
-  if (session) return null;
+  if (session) {
+    if (!rutaPermitida(session.rol, pathname)) return NextResponse.json({ error: "Tu rol no tiene acceso a esto." }, { status: 403 });
+    return null;
+  }
   return NextResponse.json({ error: "Inicia sesión en el panel administrativo." }, { status: 401 });
 }
 

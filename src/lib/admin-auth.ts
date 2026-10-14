@@ -74,13 +74,46 @@ export function checkCredentials(email: string, password: string): boolean {
   );
 }
 
-export type AdminSession = { email: string; exp: number };
+export type AdminSession = { email: string; exp: number; /** Rol del usuario dado de alta; sin rol (o «direccion») ve todo el panel. */ rol?: string };
+
+/**
+ * Roles del panel y lo que ve cada uno. «direccion» (y el administrador principal) ve todo. Los prefijos son de páginas (/admin/...) y
+ * de las APIs que las alimentan (/api/admin/...). El login, el cierre de sesión y el asistente son de todos.
+ */
+export const ROLES = {
+  direccion: { nombre: "Dirección política", detalle: "Todo el panel", paginas: ["*"], apis: ["*"] },
+  investigacion: { nombre: "Investigación y análisis", detalle: "Análisis y gestor documental", paginas: ["analisis-publicaciones", "fuente-de-la-verdad"], apis: ["avales", "cabal-resultados", "elecciones", "monitoreo", "red-crm", "secop", "territorio", "documentos", "gestor"] },
+  contenidos: { nombre: "Contenidos y comunicación", detalle: "Redactor, portales, comunidad y gestor documental", paginas: ["redactor", "portales", "comunidad", "fuente-de-la-verdad"], apis: ["portales", "comunidad", "documentos", "gestor"] },
+  formacion: { nombre: "Formación política", detalle: "LMS y gestor documental", paginas: ["lms", "fuente-de-la-verdad"], apis: ["documentos", "gestor"] },
+  juridico: { nombre: "Jurídico y electoral", detalle: "Gestor documental y votaciones", paginas: ["fuente-de-la-verdad", "analisis-publicaciones"], apis: ["documentos", "gestor", "elecciones", "cabal-resultados"] },
+  territorial: { nombre: "Coordinación territorial", detalle: "Análisis y comunidad", paginas: ["analisis-publicaciones", "comunidad"], apis: ["avales", "cabal-resultados", "elecciones", "territorio", "red-crm", "comunidad"] },
+} as const;
+export type RolId = keyof typeof ROLES;
+export const esRol = (r: unknown): r is RolId => typeof r === "string" && r in ROLES;
+
+/** ¿Puede esta sesión abrir esta ruta del panel (página o API)? */
+export function rutaPermitida(rol: string | undefined, pathname: string): boolean {
+  if (!rol || rol === "direccion" || !esRol(rol)) return !rol || rol === "direccion";
+  const def = ROLES[rol];
+  if (pathname === "/admin" || pathname === "/admin/") return true;
+  if (pathname.startsWith("/admin/")) {
+    const seccion = pathname.split("/")[2] ?? "";
+    return (def.paginas as readonly string[]).includes(seccion);
+  }
+  if (pathname.startsWith("/api/admin/")) {
+    const seccion = pathname.split("/")[3] ?? "";
+    if (["login", "logout", "asistente"].includes(seccion)) return true;
+    return (def.apis as readonly string[]).includes(seccion);
+  }
+  return true;
+}
 
 /** Crea el valor de la cookie de sesión: `payload_b64.firma_b64`. */
-export async function createSessionToken(email: string): Promise<string> {
+export async function createSessionToken(email: string, rol?: string): Promise<string> {
   const payload: AdminSession = {
     email,
     exp: Date.now() + SESSION_TTL_SECONDS * 1000,
+    ...(rol && rol !== "direccion" ? { rol } : {}),
   };
   const payloadB64 = toBase64Url(encoder.encode(JSON.stringify(payload)));
   const sig = await sign(payloadB64);

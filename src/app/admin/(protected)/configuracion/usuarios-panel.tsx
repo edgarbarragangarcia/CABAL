@@ -5,8 +5,8 @@ import { UserPlus, Users } from "lucide-react";
 
 import { usePeticion } from "../analisis-publicaciones/peticion";
 
-type Usuario = { email: string; nombre: string; activo: boolean; creado_en: string; ultimo_ingreso: string | null };
-type Respuesta = { disponible: boolean; sql?: string; error?: string; principal: string; usuarios: Usuario[] };
+type Usuario = { email: string; rol?: string; nombre: string; activo: boolean; creado_en: string; ultimo_ingreso: string | null };
+type Respuesta = { roles?: { id: string; nombre: string; detalle: string }[]; disponible: boolean; sql?: string; error?: string; principal: string; usuarios: Usuario[] };
 
 const campo = "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm";
 
@@ -14,7 +14,7 @@ const campo = "w-full rounded-lg border border-border bg-surface px-3 py-2 text-
 export function UsuariosPanel() {
   const [v, setV] = React.useState(0);
   const lectura = usePeticion<Respuesta>(`/api/admin/usuarios?v=${v}`);
-  const [f, setF] = React.useState({ nombre: "", email: "", clave: "" });
+  const [f, setF] = React.useState({ nombre: "", email: "", clave: "", rol: "direccion" });
   const [msg, setMsg] = React.useState<{ ok: boolean; texto: string } | null>(null);
   const [ocupado, setOcupado] = React.useState(false);
 
@@ -34,9 +34,14 @@ export function UsuariosPanel() {
     }
   };
 
-  // Un usuario que no es el principal recibe 403: la sección no aplica y no se muestra.
-  if (lectura.estado === "error") return null;
-  if (lectura.estado === "cargando") return null;
+  if (lectura.estado !== "listo") {
+    return (
+      <section className="mt-6 rounded-2xl border border-border bg-surface p-5">
+        <h2 className="flex items-center gap-2 font-semibold"><Users className="size-4 text-brand" aria-hidden="true" />Usuarios del panel</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{lectura.estado === "cargando" ? "Leyendo los usuarios…" : lectura.error}</p>
+      </section>
+    );
+  }
   const d = lectura.data;
 
   return (
@@ -57,19 +62,22 @@ export function UsuariosPanel() {
       ) : (
         <>
           <form
-            className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]"
+            className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]"
             onSubmit={async (e) => {
               e.preventDefault();
               setMsg(null);
               if (await llamar({ method: "POST", body: JSON.stringify(f) })) {
                 setMsg({ ok: true, texto: `Usuario ${f.email.trim().toLowerCase()} dado de alta.` });
-                setF({ nombre: "", email: "", clave: "" });
+                setF({ nombre: "", email: "", clave: "", rol: f.rol });
               }
             }}
           >
             <input className={campo} placeholder="Nombre" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} maxLength={120} />
             <input className={campo} type="email" required placeholder="correo@ejemplo.com" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
             <input className={campo} type="password" required minLength={8} autoComplete="new-password" placeholder="Clave (mín. 8)" value={f.clave} onChange={(e) => setF({ ...f, clave: e.target.value })} />
+            <select className={campo} value={f.rol} onChange={(e) => setF({ ...f, rol: e.target.value })} aria-label="Rol">
+              {(d.roles ?? []).map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            </select>
             <button type="submit" disabled={ocupado} className="inline-flex items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground disabled:opacity-60"><UserPlus className="size-4" aria-hidden="true" />Dar de alta</button>
           </form>
           {msg && <p className={`mt-2 text-sm ${msg.ok ? "text-emerald-700" : "text-red-700"}`}>{msg.texto}</p>}
@@ -80,8 +88,11 @@ export function UsuariosPanel() {
               <li key={u.email} className="flex flex-wrap items-center gap-3 py-3 text-sm">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">{u.nombre || u.email}{!u.activo && <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[11px]">desactivado</span>}</p>
-                  <p className="text-xs text-muted-foreground">{u.email} · {u.ultimo_ingreso ? `último ingreso ${new Date(u.ultimo_ingreso).toLocaleString("es-CO")}` : "aún no ha ingresado"}</p>
+                  <p className="text-xs text-muted-foreground">{(d.roles ?? []).find((r) => r.id === (u.rol ?? "direccion"))?.nombre ?? u.rol} · {u.email} · {u.ultimo_ingreso ? `último ingreso ${new Date(u.ultimo_ingreso).toLocaleString("es-CO")}` : "aún no ha ingresado"}</p>
                 </div>
+                <select value={u.rol ?? "direccion"} disabled={ocupado} onChange={(e) => void llamar({ method: "PATCH", body: JSON.stringify({ email: u.email, rol: e.target.value }) })} aria-label={`Rol de ${u.email}`} className="rounded-full border border-border bg-surface px-2 py-1 text-xs font-semibold">
+                  {(d.roles ?? []).map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                </select>
                 <button type="button" disabled={ocupado} onClick={() => void llamar({ method: "PATCH", body: JSON.stringify({ email: u.email, activo: !u.activo }) })} className="rounded-full border border-border px-3 py-1 text-xs font-semibold">{u.activo ? "Desactivar" : "Activar"}</button>
                 <button
                   type="button"

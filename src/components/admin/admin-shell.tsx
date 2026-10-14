@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 
-const NAV = [
+const NAV_TODAS = [
   { href: "/admin/analisis-publicaciones", label: "Análisis", icon: BarChart3 },
   { href: "/admin/fuente-de-la-verdad", label: "Gestor documental", icon: Library },
   { href: "/admin/lms", label: "LMS", icon: GraduationCap },
@@ -23,11 +23,15 @@ const NAV = [
 
 export function AdminShell({
   email,
+  secciones,
   children,
 }: {
   email: string;
+  /** Secciones (/admin/...) que ve esta persona según su rol; sin lista, todas. */
+  secciones?: string[];
   children: React.ReactNode;
 }) {
+  const NAV = NAV_TODAS.filter((i) => !secciones || secciones.includes(i.href));
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);

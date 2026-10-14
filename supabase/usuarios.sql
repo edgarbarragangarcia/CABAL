@@ -14,3 +14,6 @@ create table if not exists admin_usuarios (
 
 alter table admin_usuarios enable row level security;
 revoke all on admin_usuarios from anon, authenticated;
+
+-- Rol del usuario: define qué secciones del panel ve (direccion, investigacion, contenidos, formacion, juridico, territorial).
+alter table admin_usuarios add column if not exists rol text not null default 'direccion';

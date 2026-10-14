@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { ADMIN_EMAIL, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { ADMIN_EMAIL, rutaPermitida, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 import { usuarioActivo } from "@/lib/admin-usuarios";
 import { AdminShell } from "@/components/admin/admin-shell";
 
@@ -20,5 +20,7 @@ export default async function ProtectedAdminLayout({
   // Un usuario dado de alta que se desactivó o se eliminó pierde el acceso aunque su cookie siga vigente.
   if (session.email !== ADMIN_EMAIL && !(await usuarioActivo(session.email))) redirect("/admin/login");
 
-  return <AdminShell email={session.email}>{children}</AdminShell>;
+  const todas = ["analisis-publicaciones", "fuente-de-la-verdad", "lms", "redactor", "comunidad", "portales", "configuracion"];
+  const secciones = session.rol ? todas.filter((s) => rutaPermitida(session.rol, `/admin/${s}`)).map((s) => `/admin/${s}`) : undefined;
+  return <AdminShell email={session.email} secciones={secciones}>{children}</AdminShell>;
 }
