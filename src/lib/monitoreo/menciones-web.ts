@@ -3,7 +3,7 @@ import "server-only";
 import { entidades } from "@/lib/informe/fuentes";
 import { guardarItems, leerItems, type ItemMonitoreo } from "./historial";
 import { nombraAMariaFernanda } from "./menciones";
-import { CIUDADES_BARRIDO, lugarDelTexto, lugarPredominante, lugaresDeDepartamentos } from "./lugares";
+import { CIUDADES_BARRIDO, infoDepartamento, lugarDelTexto, lugarPredominante, lugaresDeDepartamentos } from "./lugares";
 import { tonoDeTexto, type Tono } from "./tono";
 import { claveRed } from "@/lib/ia-config";
 import { MEDIOS_REGIONALES, medioPorDominio, medioPorFb, medioPorInicio, type MedioRegional } from "./medios-regionales";
@@ -119,8 +119,8 @@ type Nodo = Record<string, unknown>;
 const nodo = (x: unknown): Nodo => (x && typeof x === "object" ? (x as Nodo) : {});
 
 /** La búsqueda pública de YouTube, por fecha: videos de cualquier canal que la nombran. */
-async function youtubeBusqueda(): Promise<MencionWeb[]> {
-  const html = await pedir(`https://www.youtube.com/results?${new URLSearchParams({ search_query: '"María Fernanda Cabal"', sp: "CAI%3D" })}`);
+async function youtubeBusqueda(consulta = '"María Fernanda Cabal"'): Promise<MencionWeb[]> {
+  const html = await pedir(`https://www.youtube.com/results?${new URLSearchParams({ search_query: consulta, sp: "CAI%3D" })}`);
   const m = html.match(/var ytInitialData\s*=\s*(\{[\s\S]*?\});<\/script>/);
   if (!m) return [];
   let datos: unknown;
@@ -182,8 +182,37 @@ async function conLimite<T>(tareas: (() => Promise<T>)[], limite: number, hasta:
  *  - los portales se buscan de a cinco con `site:` (Google Noticias dice de qué dominio es cada noticia);
  *  - cada página de Facebook se busca sola con `site:facebook.com/<página>`, así se sabe de qué portal, y de qué ciudad, es cada publicación.
  */
+/** Busca «Cabal» en el propio buscador de un portal (WordPress: /?s=…&feed=rss2): enlaces directos, sin pasar por Google. */
+async function buscarEnPortal(m: MedioRegional): Promise<MencionWeb[]> {
+  let xml = "";
+  for (const host of [m.dominio, `www.${m.dominio}`]) {
+    try {
+      const res = await fetch(`https://${host}/?${new URLSearchParams({ s: "Cabal", feed: "rss2" })}`, { headers: { "User-Agent": UA, "Accept-Language": "es-CO,es;q=0.9" }, redirect: "follow", cache: "no-store", signal: AbortSignal.timeout(9_000) });
+      const t = await res.text();
+      if (res.ok && /<rss|<feed/.test(t.slice(0, 600))) {
+        xml = t;
+        break;
+      }
+    } catch {
+      /* se prueba la otra forma */
+    }
+  }
+  if (!xml) throw new Error(`${m.dominio} no respondió`);
+  const lista: MencionWeb[] = [];
+  for (const it of xml.match(/<item>[\s\S]*?<\/item>/g) ?? []) {
+    const titulo = texto(etiqueta(it, "title"));
+    const extracto = texto(etiqueta(it, "description")).slice(0, 240);
+    const fecha = etiqueta(it, "pubDate");
+    const enlace = texto(etiqueta(it, "link"));
+    // La búsqueda del portal también trae notas que dicen «Cabal» en otro sentido (Santa Rosa de Cabal): solo cuentan las que la nombran.
+    if (!titulo || !fecha || !enlace || !nombraAMariaFernanda(`${titulo} ${extracto}`)) continue;
+    lista.push({ plataforma: "prensa", fuente: m.nombre, titulo, fecha: new Date(fecha).toISOString(), enlace, extracto: extracto || null, dominio: m.dominio });
+  }
+  return lista;
+}
+
 function tareasRegionales(): Tarea[] {
-  const tareas: Tarea[] = [];
+  const tareas: Tarea[] = MEDIOS_REGIONALES.filter((m) => m.rss).map((m) => ({ plataforma: "prensa" as PlataformaId, cubre: { portales: [m.id] }, ejecutar: () => buscarEnPortal(m) }));
   const web = MEDIOS_REGIONALES.filter((m) => m.web);
   for (let i = 0; i < web.length; i += GRUPO) {
     const grupo = web.slice(i, i + GRUPO);
@@ -354,7 +383,7 @@ export async function mencionesWeb(forzar = false): Promise<RespuestaMenciones> 
       plataforma: p.id,
       ejecutar: async () => (await googleNoticias(`${NOMBRE} site:${p.sitio} when:30d`, p.id, 100)).filter((m) => nombraAMariaFernanda(m.titulo)).slice(0, 60),
     })),
-    { plataforma: "youtube" as PlataformaId, ejecutar: youtubeBusqueda },
+    { plataforma: "youtube" as PlataformaId, ejecutar: () => youtubeBusqueda() },
   ];
   const regionales = tareasRegionales();
   const trabajos = [...generales, ...regionales];
@@ -449,4 +478,57 @@ export async function barridoCiudades(tanda: number): Promise<{ menciones: Menci
   await guardarItems(nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}|${m.dominio ?? ""}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto })));
   await resolverDesconocidos(nuevas);
   return { menciones: nuevas.map(ubicar).map(aplicarYouTube), tanda, tandas: TANDAS_BARRIDO, ciudades, total: LUGARES_BARRIDO.length, limitado: hechas > 0 && bloqueadas / hechas > 0.3 };
+}
+
+
+/* ------------------------------------------------------------ Investigación por departamento ---- */
+
+export type InformeDepartamento = { dep: string; nombre: string; consultas: number; fallidas: number; limitado: boolean; menciones: MencionWeb[]; portales: { directorio: number; consultados: number } };
+
+/**
+ * Investiga un departamento a fondo: su nombre, su ciudad principal y sus municipios más grandes, en prensa, Facebook, Instagram, TikTok,
+ * X y YouTube, más el buscador propio de cada portal del directorio que está allí. Se llama una vez por departamento desde el panel.
+ */
+export async function investigarDepartamento(dep: string): Promise<InformeDepartamento | null> {
+  const info = infoDepartamento(dep);
+  if (!info) return null;
+  const { nombre, capital, principales } = info;
+  const hasta = Date.now() + PRESUPUESTO_MS;
+  const pausa = () => new Promise((ok) => setTimeout(ok, 350));
+  const g = (q: string, p: PlataformaId, limite = 40, filtrar = false) => async () => {
+    const r = await googleNoticias(q, p, limite);
+    await pausa();
+    return filtrar ? r.filter((m) => nombraAMariaFernanda(m.titulo)) : r;
+  };
+  const portales = MEDIOS_REGIONALES.filter((m) => m.dane.startsWith(dep));
+  const sitios = ["instagram.com", "tiktok.com", "x.com"] as const;
+  const tareas: (() => Promise<MencionWeb[]>)[] = [
+    g(`${NOMBRE} "${nombre}" when:30d`, "prensa"),
+    g(`${NOMBRE} "${capital}" when:30d`, "prensa"),
+    g(`${NOMBRE} (emisora OR radio OR noticiero OR periódico) "${nombre}" when:60d`, "prensa"),
+    g(`${NOMBRE} (alcalde OR gobernador OR concejo OR asamblea OR diputado) "${nombre}" when:60d`, "prensa"),
+    g(`${NOMBRE} "${nombre}" site:facebook.com when:60d`, "facebook", 60, true),
+    g(`(Cabal OR MaFe) "${nombre}" site:facebook.com when:60d`, "facebook", 60, true),
+    g(`(Cabal OR MaFe) "${capital}" site:facebook.com when:60d`, "facebook", 60, true),
+    g(`(Cabal OR MaFe) (${principales.map((c) => `"${c}"`).join(" OR ")}) site:facebook.com when:60d`, "facebook", 60, true),
+    ...sitios.map((s) => g(`${NOMBRE} "${nombre}" site:${s} when:60d`, s === "instagram.com" ? "instagram" : s === "tiktok.com" ? "tiktok" : "x", 40, true)),
+    async () => { const r = await youtubeBusqueda(`"María Fernanda Cabal" ${nombre}`); await pausa(); return r; },
+    ...portales.filter((m) => m.rss).map((m) => () => buscarEnPortal(m)),
+  ];
+  const resultados = await conLimite(tareas, 3, hasta);
+  const hechas = resultados.filter(Boolean);
+  const bloqueadas = hechas.filter((r) => r?.status === "rejected" && /respondió (429|503)/.test(String((r as PromiseRejectedResult).reason?.message))).length;
+  const nuevas = resultados.flatMap((r) => (r?.status === "fulfilled" ? r.value : []));
+  for (const m of nuevas) extras.set(`${m.plataforma}|${m.enlace}`, m);
+  await guardarItems(nuevas.map((m): ItemMonitoreo => ({ personaje: PERSONAJE, tipo: "web", enlace: m.enlace, titulo: m.titulo, medio: `${m.plataforma}|${m.fuente}|${m.dominio ?? ""}`, fecha: m.fecha, vistas: null, nombra: true, donde: m.plataforma, contexto: m.extracto })));
+  await resolverDesconocidos(nuevas);
+  return {
+    dep,
+    nombre,
+    consultas: tareas.length,
+    fallidas: hechas.filter((r) => r?.status === "rejected").length + (tareas.length - hechas.length),
+    limitado: hechas.length > 0 && bloqueadas / hechas.length > 0.3,
+    menciones: nuevas.map(ubicar).map(aplicarYouTube),
+    portales: { directorio: portales.length, consultados: portales.filter((m) => m.rss).length },
+  };
 }

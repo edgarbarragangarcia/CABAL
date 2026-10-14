@@ -245,7 +245,9 @@ const COLOR_PLATAFORMA: Record<PlataformaId, string> = {
 
 type Pestana = "mapa" | "redes";
 type Modo = "publicadas" | "mencionadas";
-type Lugar = { modo: Modo; dane: string };
+/** `departamento`: todo lo de un departamento (lo publicado desde allí y lo que habla de él). */
+type Lugar = { modo: Modo | "departamento"; dane: string };
+type Investigacion = { estado: "corriendo" | "listo" | "pausa" | "error"; consultas?: number; fallidas?: number; nuevas?: number; error?: string };
 type Ia = Record<string, Tono>;
 
 const CLAVE_IA = "mafe-tono-ia-v1";
@@ -398,6 +400,8 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const [mostrar, setMostrar] = React.useState(40);
   const [extra, setExtra] = React.useState<MencionWeb[]>([]);
   const [barrido, setBarrido] = React.useState<{ estado: "libre" | "corriendo" | "listo" | "error" | "pausa"; hecha: number; tandas: number; total?: number; error?: string }>({ estado: "libre", hecha: 0, tandas: 27 });
+  const [invest, setInvest] = React.useState<Record<string, Investigacion>>({});
+  const [recorriendo, setRecorriendo] = React.useState(false);
   const [ia, setIa] = React.useState<Ia>(() => {
     try {
       return typeof window === "undefined" ? {} : (JSON.parse(localStorage.getItem(CLAVE_IA) ?? "{}") as Ia);
@@ -436,6 +440,29 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
       }
     }
     setBarrido({ estado: "listo", hecha: tandas, tandas, total });
+  }
+
+  async function investigarUno(dep: string): Promise<"ok" | "limitado" | "error"> {
+    setInvest((p) => ({ ...p, [dep]: { estado: "corriendo" } }));
+    try {
+      const res = await fetch(`/api/admin/monitoreo/departamento?dep=${dep}`, { cache: "no-store" });
+      const j = (await res.json()) as { menciones?: MencionWeb[]; consultas?: number; fallidas?: number; limitado?: boolean; error?: string };
+      if (!res.ok || !j.menciones) throw new Error(j.error ?? "No fue posible consultar las fuentes.");
+      setExtra((prev) => [...prev, ...j.menciones!]);
+      setInvest((p) => ({ ...p, [dep]: { estado: j.limitado ? "pausa" : "listo", consultas: j.consultas, fallidas: j.fallidas, nuevas: j.menciones!.length } }));
+      return j.limitado ? "limitado" : "ok";
+    } catch (e) {
+      setInvest((p) => ({ ...p, [dep]: { estado: "error", error: e instanceof Error ? e.message : "Error de red." } }));
+      return "error";
+    }
+  }
+  async function investigarTodos() {
+    setRecorriendo(true);
+    for (const [dep] of DEPARTAMENTOS_CO) {
+      if (invest[dep]?.estado === "listo") continue;
+      if ((await investigarUno(dep)) !== "ok") break; // si Google pide bajar el ritmo, se detiene: «Continuar» sigue por ese departamento
+    }
+    setRecorriendo(false);
   }
 
   const todas = React.useMemo(() => {
@@ -478,7 +505,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   }
 
   const cob = React.useMemo(() => (datos ? calcularCobertura(base, datos.consultados, tonoDe) : null), [datos, base, tonoDe]);
-  const lista = React.useMemo(() => base.filter((m) => (lugar ? (lugar.modo === "publicadas" ? m.geo?.medio?.dane === lugar.dane : m.geo?.texto?.dane === lugar.dane) : true)), [base, lugar]);
+  const lista = React.useMemo(() => base.filter((m) => (lugar ? (lugar.modo === "departamento" ? !!m.geo?.medio?.dane.startsWith(lugar.dane) || !!m.geo?.texto?.dane.startsWith(lugar.dane) : lugar.modo === "publicadas" ? m.geo?.medio?.dane === lugar.dane : m.geo?.texto?.dane === lugar.dane) : true)), [base, lugar]);
   const elegir = (l: Lugar | null) => {
     setLugar(l);
     setMostrar(40);
@@ -489,7 +516,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const regionales = base.filter((m) => m.geo?.medio).length;
   const conDatos = datos?.plataformas.filter((p) => p.total > 0) ?? [];
   const ultima = base[0];
-  const nombreLugar = lugar && cob ? [...cob.publicadas, ...cob.mencionadas].find((p) => p.dane === lugar.dane)?.nombre : undefined;
+  const nombreLugar = lugar && cob ? (lugar.modo === "departamento" ? DEPARTAMENTOS_CO.find(([d]) => d === lugar.dane)?.[1] : [...cob.publicadas, ...cob.mencionadas].find((p) => p.dane === lugar.dane)?.nombre) : undefined;
   const cubiertos = new Set(MEDIOS_REGIONALES.map((m) => m.dane.slice(0, 2)));
   const sinPortal = DEPARTAMENTOS_CO.filter(([d]) => !cubiertos.has(d)).map(([, n]) => n);
   const paginasFb = MEDIOS_REGIONALES.filter((m) => m.fb).map((m) => ({ m, n: base.filter((x) => x.plataforma === "facebook" && x.geo?.medio?.id === m.id).length }));
@@ -499,6 +526,19 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
   const mejor = [...masCalidas].sort((a, b) => b.indice - a.indice)[0];
   const peor = [...masCalidas].sort((a, b) => a.indice - b.indice)[0];
   const cifras = base.reduce((s, m) => ({ likes: s.likes + (m.metricas?.likes ?? 0), comentarios: s.comentarios + (m.metricas?.comentarios ?? 0), vistas: s.vistas + (m.metricas?.vistas ?? 0) }), { likes: 0, comentarios: 0, vistas: 0 });
+
+  const porDepto = React.useMemo(() => {
+    const filas = DEPARTAMENTOS_CO.map(([dep, nombre]) => {
+      const mias = base.filter((m) => m.geo?.medio?.dane.startsWith(dep) || m.geo?.texto?.dane.startsWith(dep));
+      const pub = mias.filter((m) => m.geo?.medio?.dane.startsWith(dep)).length;
+      const t = mias.reduce((a, m) => { a[tonoDe(m)]++; return a; }, { positivo: 0, neutral: 0, negativo: 0 } as Record<Tono, number>);
+      const portales = MEDIOS_REGIONALES.filter((m) => m.dane.startsWith(dep));
+      return { dep, nombre, total: mias.length, pub, hab: mias.length - pub, indice: mias.length ? (t.positivo - t.negativo) / mias.length : 0, ultima: mias.reduce((u, m) => (m.fecha > u ? m.fecha : u), ""), portales: portales.length, conBuscador: portales.filter((m) => m.rss).length };
+    });
+    return filas;
+  }, [base, tonoDe]);
+  const investigados = Object.values(invest).filter((i) => i.estado === "listo").length;
+  const conMenciones = porDepto.filter((d) => d.total > 0).length;
 
   const pestanas: { id: Pestana; label: string; n?: number }[] = [
     { id: "mapa", label: "De dónde vienen", n: datos ? base.length : undefined },
@@ -515,7 +555,7 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
         </span>
       </p>
       {lista.length === 0 ? <p className="px-4 py-3 text-xs text-muted-foreground">Sin menciones con el filtro actual.</p> : (
-        <ul className="max-h-[32rem] divide-y divide-border overflow-y-auto">{lista.slice(0, mostrar).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} tono={tonoDe(m)} plataformas={datos!.plataformas} alLugar={(l) => { elegir(l); setModo(l.modo); }} />)}</ul>
+        <ul className="max-h-[32rem] divide-y divide-border overflow-y-auto">{lista.slice(0, mostrar).map((m) => <FilaMencion key={`${m.plataforma}${m.enlace}`} m={m} tono={tonoDe(m)} plataformas={datos!.plataformas} alLugar={(l) => { elegir(l); if (l.modo !== "departamento") setModo(l.modo); }} />)}</ul>
       )}
       {lista.length > mostrar && <button type="button" onClick={() => setMostrar((n) => n + 40)} className="w-full border-t border-border px-4 py-2 text-xs font-semibold text-brand hover:bg-surface-muted">Ver más ({lista.length - mostrar})</button>}
     </div>
@@ -624,6 +664,57 @@ function MariaFernandaEnTodas({ redes }: { redes: ReturnType<typeof useRedes> })
               </p>
             );
           })()}
+
+          <section className="rounded-2xl border border-border p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-0 flex-1 basis-64">
+                <h3 className="font-display text-base font-semibold">Investigación por departamento</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Cada departamento se busca por su nombre, su ciudad principal y sus municipios más grandes en prensa, Facebook, Instagram, TikTok, X y YouTube, más el buscador propio de cada portal del directorio.
+                  {" "}<strong className="text-foreground">{investigados}</strong> de 33 investigados · <strong className="text-foreground">{conMenciones}</strong> con menciones · <strong className="text-foreground">{33 - conMenciones}</strong> sin ninguna.
+                </p>
+              </div>
+              <button type="button" onClick={investigarTodos} disabled={recorriendo} className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-60">
+                {recorriendo ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <Search className="size-3" aria-hidden="true" />}
+                {recorriendo ? `Investigando… ${investigados}/33` : investigados > 0 && investigados < 33 ? "Continuar la investigación" : investigados === 33 ? "Volver a investigar los 33" : "Investigar los 33 departamentos"}
+              </button>
+            </div>
+            {Object.values(invest).some((i) => i.estado === "pausa") && <p className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">Google pidió bajar el ritmo. Espera unos minutos y pulsa «Continuar la investigación»: sigue por el departamento donde quedó y conserva lo ya encontrado.</p>}
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[40rem] text-left text-xs">
+                <thead className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  <tr><th className="px-2 py-1.5">Departamento</th><th className="px-2 py-1.5 text-right">Portales</th><th className="px-2 py-1.5 text-right">Publican</th><th className="px-2 py-1.5 text-right">Hablan de él</th><th className="px-2 py-1.5">Tono</th><th className="px-2 py-1.5">Última</th><th className="px-2 py-1.5">Investigación</th></tr>
+                </thead>
+                <tbody>
+                  {porDepto.map((d) => {
+                    const i = invest[d.dep];
+                    const abierto = lugar?.modo === "departamento" && lugar.dane === d.dep;
+                    return (
+                      <React.Fragment key={d.dep}>
+                        <tr className={`border-t border-border/60 ${abierto ? "bg-brand-soft" : ""}`}>
+                          <td className="px-2 py-1.5"><button type="button" onClick={() => elegir(abierto ? null : { modo: "departamento", dane: d.dep })} aria-expanded={abierto} disabled={d.total === 0} className="text-left font-semibold hover:underline disabled:cursor-default disabled:no-underline">{d.nombre}</button></td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground" title={`${d.conBuscador} con buscador propio`}>{d.portales}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{d.pub}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{d.hab}</td>
+                          <td className="px-2 py-1.5">{d.total > 0 ? <span className="inline-block size-3 rounded-full align-middle" style={{ background: colorDeIndice(d.indice * 2.5) }} title={`Índice de tono ${d.indice.toFixed(2)}`} /> : <span className="text-muted-foreground">—</span>}</td>
+                          <td className="px-2 py-1.5 text-muted-foreground">{d.ultima ? hace(d.ultima) : "—"}</td>
+                          <td className="px-2 py-1.5">
+                            {i?.estado === "corriendo" ? <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="size-3 animate-spin" aria-hidden="true" />Investigando…</span>
+                              : i?.estado === "listo" ? <span className="text-emerald-700 dark:text-emerald-300" title={`${i.consultas} consultas, ${i.fallidas} sin respuesta`}>✔ {i.consultas! - i.fallidas!}/{i.consultas} consultas · {i.nuevas} resultados</span>
+                              : i?.estado === "pausa" ? <button type="button" onClick={() => investigarUno(d.dep)} className="font-semibold text-amber-700 hover:underline dark:text-amber-300">Google limitó: reintentar</button>
+                              : i?.estado === "error" ? <button type="button" onClick={() => investigarUno(d.dep)} className="font-semibold text-red-600 hover:underline" title={i.error}>Falló: reintentar</button>
+                              : <button type="button" onClick={() => investigarUno(d.dep)} disabled={recorriendo} className="font-semibold text-brand hover:underline disabled:opacity-50">Investigar</button>}
+                          </td>
+                        </tr>
+                        {abierto && <tr><td colSpan={7} className="px-0 pb-2">{detalleLugar}</td></tr>}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">«Sin menciones» no es «no hablan de ella»: es lo que Google, YouTube y los buscadores de los portales entregan. Sin Facebook ni sus grupos privados la zona rural queda sub-representada.</p>
+          </section>
 
           <div>
             <p className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Cuándo publican{lugar ? ` · ${nombreLugar ?? ""}` : " · todo el país"} (30 días)</p>

@@ -175,3 +175,13 @@ export function lugaresDeDepartamentos(codigos: Set<string>): string[] {
   }
   return salida;
 }
+
+/** Lo que hace falta para investigar un departamento: su nombre, su ciudad principal y sus cinco municipios más grandes. */
+export function infoDepartamento(dep: string): { dep: string; nombre: string; capital: string; principales: string[] } | null {
+  const d = DEPARTAMENTOS.find((x) => x.dep === dep) ?? (dep === "11" ? { dep: "11", nombre: "Bogotá, D.C.", lat: 0, lon: 0, clave: "bogota", ambiguo: false } : null);
+  if (!d) return null;
+  const lista = MUNICIPIOS.filter((m) => m.dep === dep).sort((a, b) => b.poblacion - a.poblacion);
+  const corto = (n: string) => n.replace(/, D\.C\./, "").replace(/^San José de (Cúcuta)$/, "$1").replace(/ de Indias$/, "");
+  const nombre = d.nombre.replace(/, D\.C\./, "").replace(/^Archipiélago de /, "").replace(/ y Providencia.*$/, "");
+  return { dep, nombre, capital: corto(lista[0]?.nombre ?? nombre), principales: lista.slice(0, 5).map((m) => corto(m.nombre)) };
+}
