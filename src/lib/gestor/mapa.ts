@@ -260,6 +260,20 @@ export async function mapaDeDatos(): Promise<RespuestaMapa> {
 }
 
 /** Lo mínimo de los datos electorales para mostrarlos como una fuente más del gestor (dos consultas livianas). */
+/** Filas y última actualización de los indicadores territoriales (DANE y datos abiertos). */
+export async function resumenTerritorio(): Promise<{ filas: number | null; actualizado: string | null }> {
+  const c = getSupabaseServerClient();
+  if (!c) return { filas: null, actualizado: null };
+  try {
+    const { count, error } = await c.from("indicadores_territoriales").select("*", { count: "estimated", head: true });
+    if (error) return { filas: null, actualizado: null };
+    const { data } = await c.from("indicadores_territoriales").select("actualizado_en").order("actualizado_en", { ascending: false }).limit(1);
+    return { filas: count ?? 0, actualizado: (data?.[0] as { actualizado_en?: string } | undefined)?.actualizado_en ?? null };
+  } catch {
+    return { filas: null, actualizado: null };
+  }
+}
+
 export async function resumenElectoral(): Promise<{ filas: number | null }> {
   const c = getSupabaseServerClient();
   if (!c) return { filas: null };

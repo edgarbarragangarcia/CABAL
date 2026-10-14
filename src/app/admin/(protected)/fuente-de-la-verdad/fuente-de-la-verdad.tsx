@@ -9,6 +9,7 @@ import { DatosTab } from "../analisis-publicaciones/datos-tab";
 import { DocumentosTab, type FuenteDatos } from "../analisis-publicaciones/documentos-tab";
 import { usePeticion } from "../analisis-publicaciones/peticion";
 import { MapaDatos } from "./mapa-datos";
+import { FuentesTerritorio } from "../analisis-publicaciones/territorio-fuentes";
 import { MonitoreoFuente } from "./monitoreo-fuente";
 
 const OPCIONES = [
@@ -39,6 +40,9 @@ export function FuenteDeLaVerdad() {
   const enMarcha = !!c?.enMarcha;
   const mon = usePeticion<{ disponible: boolean; total: number; ultimaActualizacion: string | null }>("/api/admin/monitoreo/archivo");
   const m = mon.estado === "listo" ? mon.data : null;
+  const terr = usePeticion<{ filas: number | null; actualizado: string | null }>("/api/admin/gestor/mapa?solo=territorio");
+  const t = terr.estado === "listo" ? terr.data : null;
+  const [vTerr, setVTerr] = React.useState(0);
   const fuentes: FuenteDatos[] = [
     {
       id: "electoral",
@@ -59,6 +63,16 @@ export function FuenteDeLaVerdad() {
       tono: m && m.disponible && m.total > 0 ? "ok" : "pendiente",
       fecha: m?.ultimaActualizacion ?? null,
       contenido: <MonitoreoFuente />,
+    },
+    {
+      id: "territorio",
+      nombre: "Territorio · DANE y datos abiertos",
+      detalle: "Víctimas, homicidios, masacres, coca, PDET y demás indicadores oficiales por municipio, para cruzar con los resultados",
+      resumen: t?.filas == null ? "—" : `${t.filas.toLocaleString("es-CO")} filas`,
+      estado: t?.filas == null ? "Falta SQL" : t.filas === 0 ? "Sin cargar" : "Listo",
+      tono: t?.filas ? "ok" : "pendiente",
+      fecha: t?.actualizado ?? null,
+      contenido: <FuentesTerritorio key={vTerr} alCargar={() => setVTerr((n) => n + 1)} />,
     },
   ];
 
