@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Bold, Check, ChevronRight, Heading2, List, Loader2, PenLine, Plus, Quote, Save, Search, Send, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Bold, Check, ChevronRight, Copy, Heading2, List, Loader2, PenLine, Plus, Printer, Quote, Save, Search, Send, Sparkles, Trash2 } from "lucide-react";
 
 import { aHtml, auditar, palabras, puntajeSeo, type Nota } from "@/lib/redactor/analisis";
+import { esNota, FORMATOS, FORMATOS_ORDEN, partesDeHilo, type FormatoId } from "@/lib/redactor/formatos";
 
 import { usePeticion } from "../analisis-publicaciones/peticion";
 
@@ -11,11 +12,11 @@ type Grafica = { tipo: "barras" | "lineas" | "torta"; titulo: string; fuente: st
 type Fuente = { titulo: string; url: string };
 type Guardada = {
   id: string; titulo: string; resumen: string; cuerpo: string; claves: string[]; palabraClave: string; portadaUrl: string; portadaAlt: string; seccion: string; region: string;
-  seoTitulo: string; seoDescripcion: string; grafica: Grafica | null; material: string; fuentes: Fuente[]; modo: "manual" | "ia"; tono: string; estado: string;
+  seoTitulo: string; seoDescripcion: string; grafica: Grafica | null; material: string; fuentes: Fuente[]; modo: "manual" | "ia"; formato?: string; tono: string; estado: string;
   generadaConIa: boolean; revisada: boolean; actualizadoEn: string;
 };
 type Estado = {
-  id: string | null; modo: "manual" | "ia"; tema: string; enfoque: string; tono: string; palabras: number; titulo: string; resumen: string; cuerpo: string; claves: string[]; palabraClave: string;
+  id: string | null; modo: "manual" | "ia"; formato: FormatoId; tema: string; enfoque: string; tono: string; palabras: number; titulo: string; resumen: string; cuerpo: string; claves: string[]; palabraClave: string;
   portadaUrl: string; portadaAlt: string; seccion: string; region: string; seoTitulo: string; seoDescripcion: string; seoAlternativas: string[]; grafica: Grafica | null;
   material: string; fuentes: Fuente[]; generadaConIa: boolean; revisada: boolean; estado: string;
 };
@@ -27,8 +28,8 @@ const PASOS = [
 type PasoId = (typeof PASOS)[number]["id"];
 const SECCIONES = ["Política", "Economía", "Seguridad", "Campo", "Educación", "Regiones", "Opinión", "Institucional"];
 const DEPARTAMENTOS = ["Nacional", "Amazonas", "Antioquia", "Arauca", "Atlántico", "Bogotá", "Bolívar", "Boyacá", "Caldas", "Caquetá", "Casanare", "Cauca", "Cesar", "Chocó", "Córdoba", "Cundinamarca", "Guainía", "Guaviare", "Huila", "La Guajira", "Magdalena", "Meta", "Nariño", "Norte de Santander", "Putumayo", "Quindío", "Risaralda", "San Andrés", "Santander", "Sucre", "Tolima", "Valle del Cauca", "Vaupés", "Vichada"];
-const vacio = (modo: "manual" | "ia"): Estado => ({ id: null, modo, tema: "", enfoque: "", tono: "institucional", palabras: 450, titulo: "", resumen: "", cuerpo: "", claves: [], palabraClave: "", portadaUrl: "", portadaAlt: "", seccion: "", region: "Nacional", seoTitulo: "", seoDescripcion: "", seoAlternativas: [], grafica: null, material: "", fuentes: [], generadaConIa: false, revisada: false, estado: "borrador" });
-const desde = (g: Guardada): Estado => ({ ...vacio(g.modo), ...g, tema: g.titulo, seoAlternativas: [], grafica: g.grafica ?? null, estado: g.estado });
+const vacio = (modo: "manual" | "ia"): Estado => ({ id: null, modo, formato: "nota", tema: "", enfoque: "", tono: "institucional", palabras: 450, titulo: "", resumen: "", cuerpo: "", claves: [], palabraClave: "", portadaUrl: "", portadaAlt: "", seccion: "", region: "Nacional", seoTitulo: "", seoDescripcion: "", seoAlternativas: [], grafica: null, material: "", fuentes: [], generadaConIa: false, revisada: false, estado: "borrador" });
+const desde = (g: Guardada): Estado => ({ ...vacio(g.modo), ...g, formato: (g.formato as FormatoId) ?? "nota", tema: g.titulo, seoAlternativas: [], grafica: g.grafica ?? null, estado: g.estado });
 
 const campo = "w-full rounded-xl border border-border bg-surface px-4 py-3 text-[15px] outline-none transition placeholder:text-muted-foreground/60 hover:border-foreground/25 focus:border-brand focus:ring-4 focus:ring-brand/10";
 const boton = "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
@@ -105,6 +106,7 @@ export function RedactorWizard() {
   const [aud, setAud] = React.useState<ReturnType<typeof auditar> | null>(null);
   const portales = usePeticion<{ portales: { id: string; nombre: string }[] }>(e && paso === "vista" ? "/api/admin/portales" : null);
   const [portalId, setPortalId] = React.useState("");
+  const [copiado, setCopiado] = React.useState(false);
 
   const set = (c: Partial<Estado>) => setE((x) => (x ? { ...x, ...c } : x));
   const seo = React.useMemo(() => {
@@ -120,7 +122,7 @@ export function RedactorWizard() {
     try {
       const r = await api<{ nota: Guardada }>("/api/admin/redactor", {
         method: "POST",
-        body: JSON.stringify({ id: e.id, titulo: e.titulo, resumen: e.resumen, cuerpo: e.cuerpo, claves: e.claves, palabraClave: e.palabraClave, portadaUrl: e.portadaUrl, portadaAlt: e.portadaAlt, seccion: e.seccion, region: e.region, seoTitulo: e.seoTitulo, seoDescripcion: e.seoDescripcion, grafica: e.grafica, material: e.material, fuentes: e.fuentes, modo: e.modo, tono: e.tono, generadaConIa: e.generadaConIa, revisada: e.revisada, ...(estado ? { estado } : {}) }),
+        body: JSON.stringify({ id: e.id, titulo: e.titulo, resumen: e.resumen, cuerpo: e.cuerpo, claves: e.claves, palabraClave: e.palabraClave, portadaUrl: e.portadaUrl, portadaAlt: e.portadaAlt, seccion: e.seccion, region: e.region, seoTitulo: e.seoTitulo, seoDescripcion: e.seoDescripcion, grafica: e.grafica, material: e.material, fuentes: e.fuentes, modo: e.modo, formato: e.formato, tono: e.tono, generadaConIa: e.generadaConIa, revisada: e.revisada, ...(estado ? { estado } : {}) }),
       });
       set({ id: r.nota.id, estado: r.nota.estado });
       setMsg({ ok: true, texto: estado === "revision" ? "Enviada a revisión." : "Borrador guardado." });
@@ -140,14 +142,14 @@ export function RedactorWizard() {
     setOcupado("generar");
     try {
       const r = await api<{ borrador?: { titulo: string; cuerpo: string; resumen: string; palabraClave: string; claves: string[]; seoTitulos: string[]; seoDescripcion: string }; auditoria?: ReturnType<typeof auditar>; insuficiente?: boolean; pedir?: string }>("/api/admin/redactor/generar", {
-        method: "POST", body: JSON.stringify({ accion: "borrador", tema: e.tema, enfoque: e.enfoque || undefined, material: e.material, tono: e.tono, palabras: e.palabras, region: e.region !== "Nacional" ? e.region : undefined }),
+        method: "POST", body: JSON.stringify({ accion: "borrador", tema: e.tema, enfoque: e.enfoque || undefined, material: e.material, tono: e.tono, formato: e.formato, palabras: FORMATOS[e.formato].palabras ?? e.palabras, region: e.region !== "Nacional" ? e.region : undefined }),
       });
       if (r.insuficiente) return setMsg({ ok: false, texto: `Falta material: ${r.pedir}` });
       const b = r.borrador!;
       set({ titulo: b.titulo, cuerpo: b.cuerpo, resumen: b.resumen, palabraClave: b.palabraClave, claves: b.claves, seoAlternativas: b.seoTitulos, seoTitulo: b.seoTitulos[0] ?? "", seoDescripcion: b.seoDescripcion, generadaConIa: true, revisada: false });
       setAud(r.auditoria ?? null);
       setMsg({ ok: true, texto: "Borrador listo. Revísalo: la IA no publica nada." });
-      setPaso("resumen");
+      setPaso(esNota(e.formato) ? "resumen" : "cuerpo");
     } catch (err) {
       setMsg({ ok: false, texto: err instanceof Error ? err.message : "No se pudo generar." });
     } finally {
@@ -251,14 +253,41 @@ export function RedactorWizard() {
   }
 
   // ------------------------------------------------------------------ asistente
-  const i = PASOS.findIndex((p) => p.id === paso);
-  const anterior = PASOS[i - 1]?.id;
-  const siguiente = PASOS[i + 1];
+  const nota = esNota(e.formato);
+  // Las piezas que no son nota (redes, columna, discurso, bullets) se escriben en tres pasos.
+  const pasos = nota ? PASOS : PASOS.filter((p) => p.id === "tema" || p.id === "cuerpo" || p.id === "vista");
+  const i = Math.max(0, pasos.findIndex((p) => p.id === paso));
+  const anterior = pasos[i - 1]?.id;
+  const siguiente = pasos[i + 1];
+  const fmt = FORMATOS[e.formato];
   const numPal = palabras(e.cuerpo);
   const info = AYUDA_PASO[paso];
   const tituloPaso = paso === "tema" && e.modo === "manual" ? "Título" : info.titulo;
   const materialListo = Math.min(100, Math.round((e.material.trim().length / 200) * 100));
   const bloqueIa = e.modo === "ia" && paso === "tema";
+
+  async function copiar() {
+    if (!e) return;
+    const texto = e.formato === "x" ? partesDeHilo(e.cuerpo).map((t) => t.texto).join("\n\n") : e.cuerpo;
+    try {
+      await navigator.clipboard.writeText(`${e.titulo ? `${e.titulo}\n\n` : ""}${texto}`);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1800);
+    } catch {
+      setMsg({ ok: false, texto: "No se pudo copiar: selecciona el texto y cópialo a mano." });
+    }
+  }
+
+  function imprimir() {
+    if (!e) return;
+    const w = window.open("", "_blank", "width=800,height=900");
+    if (!w) return setMsg({ ok: false, texto: "El navegador bloqueó la ventana de impresión." });
+    const cuerpo = e.formato === "x" ? partesDeHilo(e.cuerpo).map((t) => `<p>${aHtml(t.texto).replace(/<\/?p>/g, "")}</p>`).join("<hr/>") : aHtml(e.cuerpo);
+    w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${(e.titulo || FORMATOS[e.formato].nombre).replace(/</g, "&lt;")}</title><style>body{font:18px/1.6 Georgia,serif;max-width:680px;margin:32px auto;padding:0 16px;color:#111}h1{font:700 26px system-ui}h3{font:700 20px system-ui;margin-top:24px}li{margin:6px 0}hr{border:0;border-top:1px solid #ccc;margin:18px 0}</style></head><body><h1>${(e.titulo || FORMATOS[e.formato].nombre).replace(/</g, "&lt;")}</h1>${cuerpo}</body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
 
   function formato(antes: string, despues = "", enLinea = false) {
     const el = document.getElementById("cuerpo-nota") as HTMLTextAreaElement | null;
@@ -287,7 +316,7 @@ export function RedactorWizard() {
       {/* Pasos: una línea continua con el progreso; en pantallas chicas se desplaza de lado. */}
       <nav aria-label="Pasos" className="shrink-0 overflow-x-auto pb-1 [scrollbar-width:none]">
         <ol className="flex min-w-max items-start">
-          {PASOS.map((p, k) => {
+          {pasos.map((p, k) => {
             const hecho = k < i;
             const actual = k === i;
             return (
@@ -298,7 +327,7 @@ export function RedactorWizard() {
                   </span>
                   <span className={`text-[11px] leading-tight ${actual ? "font-bold text-foreground" : "font-medium text-muted-foreground"}`}>{p.id === "tema" && e.modo === "manual" ? "Título" : p.etiqueta}</span>
                 </button>
-                {k < PASOS.length - 1 && <span aria-hidden="true" className={`mt-4 h-0.5 w-4 shrink-0 ${hecho ? "bg-brand" : "bg-border"}`} />}
+                {k < pasos.length - 1 && <span aria-hidden="true" className={`mt-4 h-0.5 w-4 shrink-0 ${hecho ? "bg-brand" : "bg-border"}`} />}
               </li>
             );
           })}
@@ -308,12 +337,21 @@ export function RedactorWizard() {
       <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface">
           <header className="shrink-0 border-b border-border px-6 pt-4 pb-3">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Paso {i + 1} de {PASOS.length}</p>
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Paso {i + 1} de {pasos.length}</p>
             <h3 className="mt-0.5 text-2xl font-bold tracking-tight">{tituloPaso}</h3>
             <p className="mt-0.5 text-sm text-muted-foreground">{info.ayuda}</p>
           </header>
 
           <div className={`min-h-0 flex-1 px-6 py-5 ${paso === "cuerpo" ? "flex flex-col gap-4 overflow-hidden" : "space-y-5 overflow-y-auto"}`}>
+            {paso === "tema" && (
+              <Campo etiqueta="¿Qué vas a escribir?" ayuda={fmt.ayuda}>
+                <div className="flex flex-wrap gap-2">
+                  {FORMATOS_ORDEN.map((f) => (
+                    <button key={f} type="button" onClick={() => set({ formato: f })} aria-pressed={e.formato === f} className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${e.formato === f ? "border-brand bg-brand text-brand-foreground" : "border-border bg-surface hover:border-foreground/30"}`}>{FORMATOS[f].corto}</button>
+                  ))}
+                </div>
+              </Campo>
+            )}
             {paso === "tema" && (e.modo === "ia" ? (
               <>
                 <Campo etiqueta="Tema de la nota"><input className={campo} value={e.tema} onChange={(ev) => set({ tema: ev.target.value })} placeholder="p. ej. La alianza presenta su propuesta de seguridad rural" maxLength={400} /></Campo>
@@ -333,7 +371,7 @@ export function RedactorWizard() {
                 </div>
               </>
             ) : (
-              <Campo etiqueta="Título de la nota" contador={<Rango n={e.titulo.length} min={30} max={65} />}><input className={`${campo} text-lg font-semibold`} value={e.titulo} onChange={(ev) => set({ titulo: ev.target.value })} maxLength={160} autoFocus /></Campo>
+              <Campo etiqueta={nota ? "Título de la nota" : "Nombre de la pieza"} contador={nota ? <Rango n={e.titulo.length} min={30} max={65} /> : undefined}><input className={`${campo} text-lg font-semibold`} value={e.titulo} onChange={(ev) => set({ titulo: ev.target.value })} maxLength={160} autoFocus /></Campo>
             ))}
 
             {paso === "resumen" && (
@@ -386,6 +424,15 @@ export function RedactorWizard() {
                   </div>
                   <textarea id="cuerpo-nota" className="block min-h-0 w-full flex-1 resize-none bg-surface px-5 py-4 font-serif text-[16px] leading-[1.75] outline-none" value={e.cuerpo} onChange={(ev) => set({ cuerpo: ev.target.value, revisada: false })} placeholder="Escribe o pega el texto de la nota…" />
                 </div>
+                {!nota && e.cuerpo && fmt.limite && (
+                  <div className="rounded-xl border border-border p-4 text-sm">
+                    {e.formato === "x" ? (
+                      <ul className="space-y-1.5">{partesDeHilo(e.cuerpo).map((t, k) => <li key={k} className="flex items-baseline justify-between gap-3"><span className="min-w-0 truncate text-muted-foreground">Trino {k + 1}: {t.texto}</span><span className={`shrink-0 text-xs font-semibold tabular-nums ${t.largo > 280 ? "text-red-600" : "text-emerald-600"}`}>{t.largo} / 280</span></li>)}</ul>
+                    ) : (
+                      <p className="flex items-center justify-between"><span>Largo de la publicación</span><span className={`text-xs font-semibold tabular-nums ${[...e.cuerpo].length > fmt.limite ? "text-red-600" : "text-emerald-600"}`}>{[...e.cuerpo].length} / {fmt.limite}</span></p>
+                    )}
+                  </div>
+                )}
                 {auditoria && e.cuerpo && (
                   <div className={`rounded-xl border p-4 text-sm ${auditoria.sinRespaldo.length ? "border-amber-500/40 bg-amber-500/10" : "border-emerald-500/30 bg-emerald-500/10"}`}>
                     <p className="flex items-center gap-2 font-semibold">
@@ -436,7 +483,26 @@ export function RedactorWizard() {
               </>
             )}
 
-            {paso === "vista" && (
+            {paso === "vista" && !nota && (
+              <div className="mx-auto max-w-2xl space-y-4">
+                <div className="rounded-2xl border border-border p-6">
+                  <p className="text-xs font-bold tracking-wide text-brand uppercase">{fmt.nombre}</p>
+                  <h2 className="mt-1 text-2xl font-bold leading-tight">{e.titulo || "Sin nombre"}</h2>
+                  {e.formato === "x" ? (
+                    <ol className="mt-4 space-y-3">{partesDeHilo(e.cuerpo).map((t, k) => <li key={k} className="rounded-2xl border border-border p-4 text-[15px] leading-relaxed whitespace-pre-wrap">{t.texto}<span className={`mt-2 block text-right text-xs tabular-nums ${t.largo > 280 ? "text-red-600" : "text-muted-foreground"}`}>{t.largo} / 280</span></li>)}</ol>
+                  ) : (
+                    <div className={`mt-4 space-y-3 leading-relaxed [&_blockquote]:border-l-4 [&_blockquote]:border-brand/40 [&_blockquote]:pl-4 [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-bold [&_li]:my-1 [&_ul]:list-disc [&_ul]:pl-6 ${e.formato === "bullets" ? "text-[17px]" : "font-serif text-[17px] leading-[1.75]"}`} dangerouslySetInnerHTML={{ __html: aHtml(e.cuerpo) }} />
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface-muted p-4">
+                  {e.generadaConIa && <label className="flex w-full cursor-pointer items-start gap-3 rounded-xl bg-surface p-3 text-sm"><input type="checkbox" className="mt-0.5 size-4 accent-[var(--brand)]" checked={e.revisada} onChange={(ev) => set({ revisada: ev.target.checked })} /><span><strong>Lo revisé.</strong> Verifiqué cada cifra y cada cita.</span></label>}
+                  <button type="button" onClick={() => void copiar()} className={botonPrimario}><Copy className="size-4" aria-hidden="true" />{copiado ? "¡Copiado!" : "Copiar texto"}</button>
+                  <button type="button" onClick={imprimir} className={botonContorno}><Printer className="size-4" aria-hidden="true" />Imprimir</button>
+                  <button type="button" disabled={!!ocupado} onClick={() => void guardar("borrador")} className={botonContorno}>Guardar</button>
+                </div>
+              </div>
+            )}
+            {paso === "vista" && nota && (
               <>
                 <article className="mx-auto max-w-2xl rounded-2xl border border-border p-6">
                   <p className="text-xs font-bold tracking-wide text-brand uppercase">{e.seccion || "Sin sección"}{e.region && e.region !== "Nacional" ? ` · ${e.region}` : ""}</p>
@@ -495,7 +561,20 @@ export function RedactorWizard() {
           </footer>
         </section>
 
-        {seo && (
+        {!nota && (
+          <aside className="hidden min-h-0 overflow-y-auto rounded-2xl border border-border bg-surface p-5 lg:block">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Formato</p>
+            <p className="mt-1 text-xl font-bold">{fmt.nombre}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{fmt.ayuda}</p>
+            <ul className="mt-4 space-y-2 text-[13px] text-muted-foreground">
+              <li>La IA solo usa tu material; las cifras y citas se comprueban.</li>
+              <li>Nada se publica desde aquí: copia o imprime lo que necesites.</li>
+              {e.formato === "bullets" && <li>Imprímelo o ábrelo en el celular antes de la entrevista.</li>}
+              {e.formato === "discurso" && <li>Las pausas van marcadas con «(pausa)».</li>}
+            </ul>
+          </aside>
+        )}
+        {nota && seo && (
           <aside className="hidden min-h-0 overflow-y-auto rounded-2xl border border-border bg-surface p-5 lg:block">
             <div className="flex items-center gap-4">
               <Anillo puntos={seo.puntos} />

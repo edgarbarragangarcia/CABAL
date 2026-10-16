@@ -29,6 +29,9 @@ create table if not exists redactor_notas (
   actualizado_en timestamptz not null default now()
 );
 
+-- Tipo de pieza: nota, x, instagram, facebook, tiktok, columna, discurso o bullets (ayuda de memoria para entrevistas).
+alter table redactor_notas add column if not exists formato text not null default 'nota';
+
 create index if not exists redactor_notas_actualizado_idx on redactor_notas (actualizado_en desc);
 
 alter table redactor_notas enable row level security;

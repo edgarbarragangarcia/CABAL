@@ -34,6 +34,7 @@ const nota = z.object({
   material: z.string().max(60_000).optional(),
   fuentes: z.array(z.object({ titulo: z.string().max(300), url: z.string().max(800) })).max(40).optional(),
   modo: z.enum(["manual", "ia"]).optional(),
+  formato: z.enum(["nota", "x", "instagram", "facebook", "tiktok", "columna", "discurso", "bullets"]).optional(),
   tono: z.string().max(40).optional(),
   estado: z.enum(["borrador", "revision"]).optional(),
   generadaConIa: z.boolean().optional(),
