@@ -6,6 +6,7 @@ import { SQL_POR_ARCHIVO } from "@/lib/gestor/sql";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 import { construirHuella, elegirEjemplos, bloqueVoz, type Huella, type ItemVoz } from "./huella";
+import { guardarFragmentosVoz, pasajesParecidos } from "./vectores";
 
 const TABLA = "voz_corpus";
 export const FORMATOS_VOZ = ["general", "x", "instagram", "facebook", "tiktok", "columna", "discurso", "entrevista"] as const;
@@ -44,7 +45,10 @@ export async function agregarTexto(d: { tipo: FuenteVoz["tipo"]; titulo: string;
     if (error.code === "23505") return { ok: false, duplicado: true, error: "Ese texto ya estaba cargado." };
     return { ok: false, error: /voz_corpus|schema cache|does not exist/i.test(error.message) ? "Falta crear la tabla de la voz: ejecuta voz.sql en Supabase." : error.message };
   }
-  return { ok: true, id: String((data as Fila).id), palabras };
+  const id = String((data as Fila).id);
+  // Lectura por significado: se divide en fragmentos (el vector se agrega después). Si falta el SQL de vectores, el texto se guarda igual.
+  await guardarFragmentosVoz(id, contenido).catch(() => 0);
+  return { ok: true, id, palabras };
 }
 
 export async function cambiarVoz(id: string, c: { activo?: boolean; formato?: string; titulo?: string }): Promise<boolean> {
@@ -78,7 +82,10 @@ export async function vozParaRedactar(formato: string, tema: string): Promise<{ 
   if (!items.length) return { bloque: "", huella: null };
   const huella = construirHuella(items.map((i) => i.contenido));
   const fmt = formato === "nota" ? "general" : formato === "bullets" ? "entrevista" : formato;
-  return { bloque: bloqueVoz(huella, elegirEjemplos(items, fmt, tema)), huella };
+  // Con vectores, se traen sus pasajes más parecidos al tema (de todo lo cargado); si no, los más parecidos por palabras.
+  const porSignificado = await pasajesParecidos(tema, fmt).catch(() => null);
+  const ejemplos = porSignificado ? porSignificado.map((p) => ({ fuente: p.fuente, texto: p.texto })) : elegirEjemplos(items, fmt, tema);
+  return { bloque: bloqueVoz(huella, ejemplos), huella };
 }
 
 export async function huellaActual(): Promise<Huella | null> {
