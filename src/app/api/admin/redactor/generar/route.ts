@@ -6,6 +6,8 @@ import { aTexto } from "@/lib/texto-ia";
 import { auditar } from "@/lib/redactor/analisis";
 import { FORMATOS, type FormatoId } from "@/lib/redactor/formatos";
 import { leerGuia } from "@/lib/redactor/store";
+import { verificarVoz } from "@/lib/voz/huella";
+import { vozParaRedactar } from "@/lib/voz/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -64,8 +66,9 @@ export async function POST(req: Request) {
     }
     const d = p.data;
     if (d.material.length < 200) return NextResponse.json({ error: "Sin material no se redacta: pega el material (datos, citas, documentos) o arma un dossier con fuentes." }, { status: 422 });
+    const voz = await vozParaRedactar(d.formato, `${d.tema} ${d.enfoque ?? ""}`);
     const salida = await generarTexto({
-      system: SISTEMA(d.tono, d.palabras, d.formato) + (await bloqueGuia()),
+      system: SISTEMA(d.tono, d.palabras, d.formato) + (await bloqueGuia()) + voz.bloque,
       user: `Tema: ${d.tema}\n${d.enfoque ? `Enfoque: ${d.enfoque}\n` : ""}${d.region ? `Región: ${d.region}\n` : ""}\nMATERIAL (única base de los hechos):\n"""\n${d.material}\n"""`,
       maxTokens: 4000,
     });
@@ -82,6 +85,7 @@ export async function POST(req: Request) {
         seoTitulos: lista(j.seoTitulos).slice(0, 3), seoDescripcion: aTexto(j.seoDescripcion),
       },
       auditoria: auditar(cuerpo, d.material),
+      voz: voz.huella ? verificarVoz(cuerpo, voz.huella) : null,
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "No fue posible generar la nota." }, { status: 502 });

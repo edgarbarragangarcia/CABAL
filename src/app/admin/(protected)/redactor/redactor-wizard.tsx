@@ -27,6 +27,7 @@ const PASOS = [
   { id: "tema", etiqueta: "Título y contexto" }, { id: "resumen", etiqueta: "Resumen" }, { id: "claves", etiqueta: "Palabras clave" }, { id: "portada", etiqueta: "Imagen" },
   { id: "seccion", etiqueta: "Sección" }, { id: "cuerpo", etiqueta: "Cuerpo" }, { id: "grafica", etiqueta: "Gráfica" }, { id: "seo", etiqueta: "Buscadores" }, { id: "vista", etiqueta: "Vista previa" },
 ] as const;
+type Voz = { suena: "parecido" | "revisar" | "no_parecido" | "sin_referencia"; palabrasPorFrase: { texto: number; ella: number }; vocabularioAjeno: { porcentaje: number; palabras: string[] }; muletillas: { nombre: string; veces: number }[]; frasesSuyas: string[]; avisos: string[] };
 type PasoId = (typeof PASOS)[number]["id"];
 const SECCIONES = ["Política", "Economía", "Seguridad", "Campo", "Educación", "Regiones", "Opinión", "Institucional"];
 const DEPARTAMENTOS = ["Nacional", "Amazonas", "Antioquia", "Arauca", "Atlántico", "Bogotá", "Bolívar", "Boyacá", "Caldas", "Caquetá", "Casanare", "Cauca", "Cesar", "Chocó", "Córdoba", "Cundinamarca", "Guainía", "Guaviare", "Huila", "La Guajira", "Magdalena", "Meta", "Nariño", "Norte de Santander", "Putumayo", "Quindío", "Risaralda", "San Andrés", "Santander", "Sucre", "Tolima", "Valle del Cauca", "Vaupés", "Vichada"];
@@ -112,6 +113,8 @@ export function RedactorWizard() {
   const [portalId, setPortalId] = React.useState("");
   const [copiado, setCopiado] = React.useState(false);
   const [guiaAbierta, setGuiaAbierta] = React.useState(false);
+  const [voz, setVoz] = React.useState<Voz | null | undefined>(undefined);
+  const [comprobando, setComprobando] = React.useState(false);
   const [modoNuevo, setModoNuevo] = React.useState<"ia" | "manual">("ia");
   const [enlace, setEnlace] = React.useState("");
   const [motivo, setMotivo] = React.useState("");
@@ -151,13 +154,14 @@ export function RedactorWizard() {
     setMsg(null);
     setOcupado("generar");
     try {
-      const r = await api<{ borrador?: { titulo: string; cuerpo: string; resumen: string; palabraClave: string; claves: string[]; seoTitulos: string[]; seoDescripcion: string }; auditoria?: ReturnType<typeof auditar>; insuficiente?: boolean; pedir?: string }>("/api/admin/redactor/generar", {
+      const r = await api<{ borrador?: { titulo: string; cuerpo: string; resumen: string; palabraClave: string; claves: string[]; seoTitulos: string[]; seoDescripcion: string }; auditoria?: ReturnType<typeof auditar>; voz?: Voz | null; insuficiente?: boolean; pedir?: string }>("/api/admin/redactor/generar", {
         method: "POST", body: JSON.stringify({ accion: "borrador", tema: e.tema, enfoque: e.enfoque || undefined, material: e.material, tono: e.tono, formato: e.formato, palabras: FORMATOS[e.formato].palabras ?? e.palabras, region: e.region !== "Nacional" ? e.region : undefined }),
       });
       if (r.insuficiente) return setMsg({ ok: false, texto: `Falta material: ${r.pedir}` });
       const b = r.borrador!;
       set({ titulo: b.titulo, cuerpo: b.cuerpo, resumen: b.resumen, palabraClave: b.palabraClave, claves: b.claves, seoAlternativas: b.seoTitulos, seoTitulo: b.seoTitulos[0] ?? "", seoDescripcion: b.seoDescripcion, generadaConIa: true, revisada: false });
       setAud(r.auditoria ?? null);
+      setVoz(r.voz ?? null);
       setMsg({ ok: true, texto: "Borrador listo. Revísalo: la IA no publica nada." });
       setPaso(esNota(e.formato) ? "resumen" : "cuerpo");
     } catch (err) {
@@ -328,6 +332,19 @@ export function RedactorWizard() {
       setMsg({ ok: false, texto: err instanceof Error ? err.message : "No se pudo completar." });
     } finally {
       setOcupado("");
+    }
+  }
+
+  async function comprobarVoz() {
+    if (!e || !e.cuerpo.trim()) return;
+    setComprobando(true);
+    try {
+      const r = await api<{ verificacion: Voz | null }>("/api/admin/redactor/voz", { method: "POST", body: JSON.stringify({ texto: e.cuerpo }) });
+      setVoz(r.verificacion);
+    } catch (err) {
+      setMsg({ ok: false, texto: err instanceof Error ? err.message : "No se pudo comprobar la voz." });
+    } finally {
+      setComprobando(false);
     }
   }
 
@@ -553,6 +570,26 @@ export function RedactorWizard() {
                   </div>
                   <textarea id="cuerpo-nota" className="block min-h-0 w-full flex-1 resize-none bg-surface px-5 py-4 font-serif text-[16px] leading-[1.75] outline-none" value={e.cuerpo} onChange={(ev) => set({ cuerpo: ev.target.value, revisada: false })} placeholder="Escribe o pega el texto de la nota…" />
                 </div>
+                {e.cuerpo.trim() && (
+                  <div className="rounded-xl border border-border p-4 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold">¿Suena a la Dra.?</p>
+                      <button type="button" disabled={comprobando} onClick={() => void comprobarVoz()} className={`${botonContorno} !px-4 !py-1.5 text-xs`}>{comprobando ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}Comprobar la voz</button>
+                    </div>
+                    {voz === undefined && <p className="mt-1 text-xs text-muted-foreground">Compara el texto con sus escritos reales: largo de frases, vocabulario, giros de máquina y expresiones suyas.</p>}
+                    {voz === null && <p className="mt-1 text-xs text-muted-foreground">Aún no hay textos suyos cargados. Súbelos en Configuración › Voz de la Dra.</p>}
+                    {voz && voz.suena === "sin_referencia" && <p className="mt-1 text-xs text-amber-700">{voz.avisos[0]}</p>}
+                    {voz && voz.suena !== "sin_referencia" && (
+                      <div className="mt-2 space-y-2">
+                        <p className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${voz.suena === "parecido" ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300" : voz.suena === "revisar" ? "bg-amber-500/15 text-amber-800 dark:text-amber-300" : "bg-red-500/15 text-red-700"}`}>{voz.suena === "parecido" ? "Suena a ella" : voz.suena === "revisar" ? "Revisar" : "No suena a ella"}</p>
+                        <p className="text-xs text-muted-foreground">Frases de {voz.palabrasPorFrase.texto} palabras en promedio; las suyas, {voz.palabrasPorFrase.ella}. Vocabulario que ella no usa: {voz.vocabularioAjeno.porcentaje}%.</p>
+                        {voz.avisos.map((a) => <p key={a} className="text-xs text-amber-800 dark:text-amber-300">• {a}</p>)}
+                        {voz.vocabularioAjeno.palabras.length > 0 && <p className="text-xs text-muted-foreground">Palabras ajenas: {voz.vocabularioAjeno.palabras.join(", ")}.</p>}
+                        {voz.frasesSuyas.length > 0 && <p className="text-xs text-emerald-700 dark:text-emerald-400">Expresiones suyas presentes: {voz.frasesSuyas.join(" · ")}.</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {!nota && e.cuerpo && fmt.limite && (
                   <div className="rounded-xl border border-border p-4 text-sm">
                     {e.formato === "x" ? (
