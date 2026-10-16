@@ -35,6 +35,7 @@ export const MODULOS: Modulo[] = [
   { id: "usuarios", nombre: "Usuarios del panel", archivo: "usuarios.sql", archivos: ["usuarios"], ancla: "admin_usuarios", tablas: [{ tabla: "admin_usuarios", sirve: "Personas con acceso al panel (correo y clave con hash)" }] },
   { id: "piloto", nombre: "Piloto de IA", archivo: "piloto.sql", archivos: ["piloto"], ancla: "piloto_registros", tablas: [{ tabla: "piloto_registros", sirve: "Tareas hechas con IA: tiempo, costo y precisión" }] },
   { id: "camaras", nombre: "Cámaras de comercio", archivo: "camaras.sql", archivos: ["camaras"], ancla: "camaras_comercio", tablas: [{ tabla: "camaras_comercio", sirve: "Matrículas y establecimientos de cada una de las 58 cámaras (RUES)" }] },
+  { id: "redactor", nombre: "Redactor", archivo: "redactor.sql", archivos: ["redactor"], ancla: "redactor_notas", tablas: [{ tabla: "redactor_notas", sirve: "Borradores de notas con su material, fuentes y auditoría" }] },
   { id: "territorio", nombre: "Territorio", archivo: "territorio.sql", archivos: ["territorio"], ancla: "indicadores_territoriales", tablas: [{ tabla: "indicadores_territoriales", sirve: "Indicadores oficiales por municipio (DANE, víctimas, homicidios…)" }] },
   {
     id: "comunidad", nombre: "Comunidad", archivo: "comunidad.sql", archivos: ["comunidad"], ancla: "miembros",
@@ -222,6 +223,7 @@ const DESDE_TABLAS: Record<string, Record<string, string>> = {
   usuarios: { admin_usuarios: "Usuarios con acceso" },
   piloto: { piloto_registros: "Tareas anotadas" },
   camaras: { camaras_comercio: "Cámaras de comercio" },
+  redactor: { redactor_notas: "Notas del redactor" },
 };
 
 export async function mapaDeDatos(): Promise<RespuestaMapa> {

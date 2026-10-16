@@ -86,7 +86,7 @@ export const RUTA_CAMBIAR = "/admin/cambiar-clave";
 export const ROLES = {
   direccion: { nombre: "Dirección política", detalle: "Todo el panel", paginas: ["*"], apis: ["*"] },
   investigacion: { nombre: "Investigación y análisis", detalle: "Análisis y gestor documental", paginas: ["analisis-publicaciones", "fuente-de-la-verdad"], apis: ["avales", "cabal-resultados", "elecciones", "monitoreo", "red-crm", "secop", "territorio", "documentos", "gestor"] },
-  contenidos: { nombre: "Contenidos y comunicación", detalle: "Redactor, portales, comunidad y gestor documental", paginas: ["redactor", "portales", "comunidad", "fuente-de-la-verdad"], apis: ["portales", "comunidad", "documentos", "gestor"] },
+  contenidos: { nombre: "Contenidos y comunicación", detalle: "Redactor, portales, comunidad y gestor documental", paginas: ["redactor", "portales", "comunidad", "fuente-de-la-verdad"], apis: ["portales", "comunidad", "documentos", "gestor", "redactor"] },
   formacion: { nombre: "Formación política", detalle: "LMS y gestor documental", paginas: ["lms", "fuente-de-la-verdad"], apis: ["documentos", "gestor"] },
   juridico: { nombre: "Jurídico y electoral", detalle: "Gestor documental y votaciones", paginas: ["fuente-de-la-verdad", "analisis-publicaciones"], apis: ["documentos", "gestor", "elecciones", "cabal-resultados"] },
   territorial: { nombre: "Coordinación territorial", detalle: "Análisis y comunidad", paginas: ["analisis-publicaciones", "comunidad"], apis: ["avales", "cabal-resultados", "elecciones", "territorio", "red-crm", "comunidad"] },
