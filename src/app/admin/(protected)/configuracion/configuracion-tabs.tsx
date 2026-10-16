@@ -3,6 +3,7 @@
 import * as React from "react";
 import { BrainCircuit, Gauge, Mail, Mic, Share2, Users } from "lucide-react";
 
+import { AvatarMafe } from "./avatar-mafe";
 import { ConfiguracionIA } from "./configuracion-ia";
 import { ConfiguracionRedes } from "./configuracion-redes";
 import { InformeSemanal } from "./informe-semanal";
@@ -43,7 +44,7 @@ export function ConfiguracionTabs() {
         })}
       </div>
       <div className="mt-6">
-        {abiertas.has("ia") && <div role="tabpanel" id="panel-ia" aria-labelledby="tab-ia" hidden={tab !== "ia"} className="mx-auto w-full max-w-3xl"><ConfiguracionIA /></div>}
+        {abiertas.has("ia") && <div role="tabpanel" id="panel-ia" aria-labelledby="tab-ia" hidden={tab !== "ia"} className="mx-auto w-full max-w-3xl"><ConfiguracionIA /><AvatarMafe /></div>}
         {abiertas.has("voz") && <div role="tabpanel" id="panel-voz" aria-labelledby="tab-voz" hidden={tab !== "voz"}><VozPanel /></div>}
         {abiertas.has("redes") && <div role="tabpanel" id="panel-redes" aria-labelledby="tab-redes" hidden={tab !== "redes"} className="mx-auto w-full max-w-3xl"><ConfiguracionRedes /></div>}
         {abiertas.has("usuarios") && <div role="tabpanel" id="panel-usuarios" aria-labelledby="tab-usuarios" hidden={tab !== "usuarios"} className="mx-auto w-full max-w-3xl"><UsuariosPanel /></div>}

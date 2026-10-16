@@ -1,5 +1,6 @@
 "use client";
 
+import { fijarOculto, useMafeOculto } from "./visibilidad";
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -78,6 +79,7 @@ function TypingDots() {
 }
 
 function MafeChatInterno() {
+  const oculto = useMafeOculto();
   const [open, setOpen] = React.useState(false);
   const [showIntro, setShowIntro] = React.useState(false);
   const [messages, setMessages] = React.useState<ChatMessage[]>([GREETING]);
@@ -333,7 +335,7 @@ function MafeChatInterno() {
       </AnimatePresence>
 
       {/* Lanzador */}
-      <div className={cn("fixed bottom-5 right-5 z-[60] flex items-end gap-3 max-md:hidden sm:right-6", open && "max-sm:hidden")}>
+      <div className={cn("fixed bottom-5 right-5 z-[60] flex items-end gap-3 max-md:hidden sm:right-6", open && "max-sm:hidden", oculto && !open && "hidden")}>
         <AnimatePresence>
           {showIntro && !open && (
             <motion.div
@@ -360,6 +362,18 @@ function MafeChatInterno() {
           )}
         </AnimatePresence>
 
+        <div className="group/avatar relative">
+        {!open && (
+          <button
+            type="button"
+            onClick={() => { setShowIntro(false); fijarOculto(true); }}
+            className="absolute -left-2 -top-2 z-10 flex size-6 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground opacity-0 shadow-sm transition hover:text-foreground focus-visible:opacity-100 group-hover/avatar:opacity-100"
+            aria-label="Quitar el avatar de MaFe"
+            title="Quitar el avatar (puedes volver a ponerlo en Configuración)"
+          >
+            <X className="size-3" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => (open ? setOpen(false) : openChat())}
@@ -379,6 +393,7 @@ function MafeChatInterno() {
             <MafeAvatar className="relative size-16" />
           )}
         </button>
+        </div>
       </div>
     </>
   );
