@@ -37,6 +37,8 @@ const LOTE = 300;
 
 async function copiarTabla(t) {
   let total = 0;
+  // El SQL de instalación siembra a la cuenta oficial con otro id: se quita para que entre la del origen (mismo usuario) sin chocar.
+  if (t === "miembros") await destino.from("miembros").delete().eq("es_oficial", true);
   for (let desde = 0; ; desde += PAGINA) {
     const { data, error } = await origen.from(t).select("*").range(desde, desde + PAGINA - 1);
     if (error) return { t, error: `leer: ${error.message}` };
