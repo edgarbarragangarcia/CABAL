@@ -1,3 +1,12 @@
 {
-  "crons": [{ "path": "/api/cron/informe-semanal", "schedule": "0 12 * * 1" }]
+  "crons": [
+    {
+      "path": "/api/cron/informe-semanal",
+      "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/carga-electoral",
+      "schedule": "0 8 * * *"
+    }
+  ]
 }
