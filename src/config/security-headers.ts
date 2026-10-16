@@ -14,13 +14,13 @@ const isDev = process.env.NODE_ENV !== "production";
 
 const contentSecurityPolicy = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${isDev ? "'unsafe-eval'" : ""} https://vercel.live;
+  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${isDev ? "'unsafe-eval'" : ""} https://vercel.live https://accounts.google.com;
   style-src 'self' 'unsafe-inline';
   img-src 'self' blob: data: https:;
   font-src 'self' data:;
-  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://audio.wherrera.com;
+  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://audio.wherrera.com https://www.googleapis.com https://accounts.google.com;
   media-src 'self' https://audio.wherrera.com;
-  frame-src 'self' https://checkout.wompi.co https://checkout.bold.co https://www.youtube.com;
+  frame-src 'self' https://checkout.wompi.co https://checkout.bold.co https://www.youtube.com https://accounts.google.com;
   frame-ancestors 'none';
   object-src 'none';
   base-uri 'self';

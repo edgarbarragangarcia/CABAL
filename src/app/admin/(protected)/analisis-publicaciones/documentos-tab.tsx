@@ -1,5 +1,6 @@
 "use client";
 
+import { GoogleDrive } from "@/components/admin/google-drive";
 import * as React from "react";
 import {
   Archive, ArchiveRestore, Check, Copy, Database, Download, FileText, Folder, FolderOpen, FolderPlus, History, Inbox, Library, Loader2, MessageSquareText,
@@ -116,6 +117,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
   const [tipo, setTipo] = React.useState("");
   const [estadoF, setEstadoF] = React.useState("");
   const [categoriaF, setCategoriaF] = React.useState("");
+  const [drive, setDrive] = React.useState(false);
   const [ambitoF, setAmbitoF] = React.useState("");
   const [orden, setOrden] = React.useState<"reciente" | "titulo" | "tamano">("reciente");
   const [conVersiones, setConVersiones] = React.useState(false);
@@ -447,6 +449,8 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
             </p>
           </div>
           <button type="button" onClick={() => entrada.current?.click()} disabled={!datos?.tabla} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-50"><UploadCloud className="size-4" /> Subir documentos</button>
+          <button type="button" onClick={() => setDrive(true)} disabled={!datos?.tabla} className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-5 py-2 text-sm font-semibold hover:bg-surface-muted disabled:opacity-50">Google Drive</button>
+          {drive && <GoogleDrive alCerrar={() => setDrive(false)} alElegir={(f) => agregar(f)} />}
           <button type="button" onClick={() => void recargar()} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-surface-muted">Actualizar</button>
           <input ref={entrada} type="file" multiple accept={FORMATOS} className="hidden" onChange={(e) => { if (e.target.files) agregar(e.target.files); e.target.value = ""; }} />
           <input ref={entradaVersion} type="file" accept={FORMATOS} className="hidden" onChange={(e) => { if (e.target.files?.length && versionDe.current) agregar(e.target.files, versionDe.current); e.target.value = ""; }} />

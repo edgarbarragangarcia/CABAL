@@ -3,6 +3,8 @@
 import * as React from "react";
 import { FileText, Loader2, Mic, Trash2, Upload, Video } from "lucide-react";
 
+import { GoogleDrive } from "@/components/admin/google-drive";
+
 import { usePeticion } from "../analisis-publicaciones/peticion";
 
 type Fuente = { id: string; tipo: "archivo" | "youtube" | "texto"; titulo: string; fuente: string | null; formato: string; palabras: number; caracteres: number; paginas: number | null; activo: boolean; creadoEn: string; vistaPrevia: string };
@@ -41,6 +43,7 @@ export function VozPanel() {
   const [pegado, setPegado] = React.useState<{ abierto: boolean; titulo: string; texto: string; fuente: string; msg?: string }>({ abierto: false, titulo: "", texto: "", fuente: "" });
   const [abierta, setAbierta] = React.useState<string | null>(null);
   const [arrastrando, setArrastrando] = React.useState(false);
+  const [drive, setDrive] = React.useState(false);
   const entrada = React.useRef<HTMLInputElement>(null);
   const recargar = () => setV((x) => x + 1);
 
@@ -103,6 +106,7 @@ export function VozPanel() {
 
   return (
     <div className="space-y-6">
+      {drive && <GoogleDrive alCerrar={() => setDrive(false)} alElegir={subir} />}
       <div className="rounded-2xl border border-border bg-surface p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl">
@@ -144,6 +148,7 @@ export function VozPanel() {
               <p className="mt-1 text-xs text-muted-foreground">PDF con texto, Word, TXT, Markdown, CSV o HTML · hasta 4 MB cada uno · se leen por completo</p>
               <input ref={entrada} type="file" multiple accept=".pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.xml,.html,.htm,.log" className="hidden" onChange={(e) => { void subir([...(e.target.files ?? [])]); e.target.value = ""; }} />
               <button type="button" disabled={ocupado} onClick={() => entrada.current?.click()} className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground disabled:opacity-50">{ocupado ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Upload className="size-4" aria-hidden="true" />}Elegir archivos</button>
+              <button type="button" disabled={ocupado} onClick={() => setDrive(true)} className="ml-2 mt-4 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-semibold hover:bg-surface-muted disabled:opacity-50">Desde Google Drive</button>
               {subidas.length > 0 && (
                 <ul className="mt-4 max-h-56 space-y-1 overflow-y-auto text-left text-xs">
                   {subidas.map((s, i) => <li key={i} className="flex items-start justify-between gap-3 rounded-lg bg-surface-muted px-3 py-1.5"><span className="min-w-0 truncate font-medium">{s.nombre}</span><span className={`shrink-0 ${marca(s)}`}>{s.fase === "subiendo" ? "Leyendo…" : s.fase === "espera" ? "En fila" : s.texto}</span></li>)}
