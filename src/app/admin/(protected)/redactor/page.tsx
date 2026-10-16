@@ -11,7 +11,7 @@ export default function RedactorPage() {
         <Newspaper className="size-5 text-brand" aria-hidden="true" />
         Redactor
       </h1>
-      <p className="mt-1 text-sm text-muted-foreground">Escribe una nota con IA a partir de tu material o a mano. La IA nunca publica.</p>
+      <p className="mt-1 text-sm text-muted-foreground">El espacio del equipo de redacción y de redes de María Fernanda Cabal: escribe, revisa, aprueba y publica a mano. La IA nunca publica.</p>
       <Lienzo className="mt-4">
         <RedactorWizard />
       </Lienzo>

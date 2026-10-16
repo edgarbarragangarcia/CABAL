@@ -8,7 +8,7 @@ const TABLA = "redactor_notas";
 export type NotaGuardada = {
   id: string; titulo: string; resumen: string; cuerpo: string; claves: string[]; palabraClave: string; portadaUrl: string; portadaAlt: string;
   seccion: string; region: string; seoTitulo: string; seoDescripcion: string; grafica: unknown; material: string; fuentes: { titulo: string; url: string }[];
-  modo: "manual" | "ia"; formato: string; tono: string; estado: "borrador" | "revision" | "enviada"; generadaConIa: boolean; revisada: boolean; portalId: string | null;
+  modo: "manual" | "ia"; formato: string; tono: string; estado: "borrador" | "revision" | "aprobada" | "publicada" | "enviada"; programadaPara: string | null; aprobadaPor: string | null; aprobadaEn: string | null; enlacePublicado: string | null; publicadaEn: string | null; notaRevision: string | null; generadaConIa: boolean; revisada: boolean; portalId: string | null;
   autor: string | null; creadoEn: string; actualizadoEn: string;
 };
 
@@ -18,7 +18,7 @@ const aNota = (f: Fila): NotaGuardada => ({
   palabraClave: String(f.palabra_clave ?? ""), portadaUrl: String(f.portada_url ?? ""), portadaAlt: String(f.portada_alt ?? ""), seccion: String(f.seccion ?? ""),
   region: String(f.region ?? ""), seoTitulo: String(f.seo_titulo ?? ""), seoDescripcion: String(f.seo_descripcion ?? ""), grafica: f.grafica ?? null,
   material: String(f.material ?? ""), fuentes: (f.fuentes as { titulo: string; url: string }[]) ?? [], modo: f.modo === "ia" ? "ia" : "manual", formato: String(f.formato ?? "nota"),
-  tono: String(f.tono ?? "institucional"), estado: (f.estado as NotaGuardada["estado"]) ?? "borrador", generadaConIa: !!f.generada_con_ia, revisada: !!f.revisada,
+  tono: String(f.tono ?? "institucional"), estado: (f.estado as NotaGuardada["estado"]) ?? "borrador", programadaPara: (f.programada_para as string | null) ?? null, aprobadaPor: (f.aprobada_por as string | null) ?? null, aprobadaEn: (f.aprobada_en as string | null) ?? null, enlacePublicado: (f.enlace_publicado as string | null) ?? null, publicadaEn: (f.publicada_en as string | null) ?? null, notaRevision: (f.nota_revision as string | null) ?? null, generadaConIa: !!f.generada_con_ia, revisada: !!f.revisada,
   portalId: (f.portal_id as string | null) ?? null, autor: (f.autor as string | null) ?? null, creadoEn: String(f.creado_en), actualizadoEn: String(f.actualizado_en),
 });
 
@@ -32,6 +32,8 @@ const aFila = (n: Partial<NotaGuardada>) => ({
   ...(n.modo !== undefined && { modo: n.modo }), ...(n.formato !== undefined && { formato: n.formato }), ...(n.tono !== undefined && { tono: n.tono }), ...(n.estado !== undefined && { estado: n.estado }),
   ...(n.generadaConIa !== undefined && { generada_con_ia: n.generadaConIa }), ...(n.revisada !== undefined && { revisada: n.revisada }),
   ...(n.portalId !== undefined && { portal_id: n.portalId }),
+  ...(n.programadaPara !== undefined && { programada_para: n.programadaPara }), ...(n.aprobadaPor !== undefined && { aprobada_por: n.aprobadaPor }), ...(n.aprobadaEn !== undefined && { aprobada_en: n.aprobadaEn }),
+  ...(n.enlacePublicado !== undefined && { enlace_publicado: n.enlacePublicado }), ...(n.publicadaEn !== undefined && { publicada_en: n.publicadaEn }), ...(n.notaRevision !== undefined && { nota_revision: n.notaRevision }),
 });
 
 export async function listarNotas(): Promise<{ disponible: boolean; sql?: string; notas: NotaGuardada[] }> {
@@ -70,4 +72,25 @@ export async function borrarNota(id: string): Promise<boolean> {
   const c = getSupabaseServerClient();
   if (!c) return false;
   return !(await c.from(TABLA).delete().eq("id", id)).error;
+}
+
+// ---------------------------------------------------------------- guía de voz ---
+
+export type Guia = { voz: string; mensajes: string; lineasRojas: string; hashtags: string; cuentas: string; actualizadoEn: string | null; actualizadoPor: string | null };
+const GUIA_VACIA: Guia = { voz: "", mensajes: "", lineasRojas: "", hashtags: "", cuentas: "", actualizadoEn: null, actualizadoPor: null };
+
+export async function leerGuia(): Promise<{ disponible: boolean; guia: Guia }> {
+  const c = getSupabaseServerClient();
+  if (!c) return { disponible: false, guia: GUIA_VACIA };
+  const { data, error } = await c.from("redactor_guia").select("*").eq("id", "principal").maybeSingle();
+  if (error) return { disponible: false, guia: GUIA_VACIA };
+  const f = (data ?? {}) as Fila;
+  return { disponible: true, guia: { voz: String(f.voz ?? ""), mensajes: String(f.mensajes ?? ""), lineasRojas: String(f.lineas_rojas ?? ""), hashtags: String(f.hashtags ?? ""), cuentas: String(f.cuentas ?? ""), actualizadoEn: (f.actualizado_en as string | null) ?? null, actualizadoPor: (f.actualizado_por as string | null) ?? null } };
+}
+
+export async function guardarGuia(g: Pick<Guia, "voz" | "mensajes" | "lineasRojas" | "hashtags" | "cuentas">, por: string | null): Promise<void> {
+  const c = getSupabaseServerClient();
+  if (!c) throw new Error("Falta conectar Supabase.");
+  const { error } = await c.from("redactor_guia").upsert({ id: "principal", voz: g.voz, mensajes: g.mensajes, lineas_rojas: g.lineasRojas, hashtags: g.hashtags, cuentas: g.cuentas, actualizado_en: new Date().toISOString(), actualizado_por: por }, { onConflict: "id" });
+  if (error) throw new Error(/redactor_guia|schema cache|does not exist/i.test(error.message) ? "Falta crear la tabla de la guía de voz: vuelve a ejecutar redactor.sql en Supabase." : error.message);
 }

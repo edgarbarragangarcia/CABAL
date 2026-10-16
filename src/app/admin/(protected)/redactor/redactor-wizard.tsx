@@ -1,24 +1,26 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Bold, Check, ChevronRight, Copy, Heading2, List, Loader2, PenLine, Plus, Printer, Quote, Save, Search, Send, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Bold, Check, ChevronRight, CalendarClock, Copy, Heading2, Camera, List, Loader2, MessageSquare, Mic, Newspaper, PenLine, Plus, Printer, Quote, Save, Search, Send, Sparkles, Trash2, Hash, Video } from "lucide-react";
 
 import { aHtml, auditar, palabras, puntajeSeo, type Nota } from "@/lib/redactor/analisis";
 import { esNota, FORMATOS, FORMATOS_ORDEN, partesDeHilo, type FormatoId } from "@/lib/redactor/formatos";
 
 import { usePeticion } from "../analisis-publicaciones/peticion";
+import { GuiaVoz } from "./guia-voz";
 
 type Grafica = { tipo: "barras" | "lineas" | "torta"; titulo: string; fuente: string; datos: { etiqueta: string; valor: number }[] };
 type Fuente = { titulo: string; url: string };
 type Guardada = {
   id: string; titulo: string; resumen: string; cuerpo: string; claves: string[]; palabraClave: string; portadaUrl: string; portadaAlt: string; seccion: string; region: string;
-  seoTitulo: string; seoDescripcion: string; grafica: Grafica | null; material: string; fuentes: Fuente[]; modo: "manual" | "ia"; formato?: string; tono: string; estado: string;
+  seoTitulo: string; seoDescripcion: string; grafica: Grafica | null; material: string; fuentes: Fuente[]; modo: "manual" | "ia"; formato?: string; tono: string; estado: string; programadaPara?: string | null; aprobadaPor?: string | null; notaRevision?: string | null; enlacePublicado?: string | null; autor?: string | null;
   generadaConIa: boolean; revisada: boolean; actualizadoEn: string;
 };
 type Estado = {
   id: string | null; modo: "manual" | "ia"; formato: FormatoId; tema: string; enfoque: string; tono: string; palabras: number; titulo: string; resumen: string; cuerpo: string; claves: string[]; palabraClave: string;
   portadaUrl: string; portadaAlt: string; seccion: string; region: string; seoTitulo: string; seoDescripcion: string; seoAlternativas: string[]; grafica: Grafica | null;
   material: string; fuentes: Fuente[]; generadaConIa: boolean; revisada: boolean; estado: string;
+  programadaPara: string | null; aprobadaPor: string | null; notaRevision: string | null; enlacePublicado: string | null;
 };
 
 const PASOS = [
@@ -28,7 +30,7 @@ const PASOS = [
 type PasoId = (typeof PASOS)[number]["id"];
 const SECCIONES = ["Política", "Economía", "Seguridad", "Campo", "Educación", "Regiones", "Opinión", "Institucional"];
 const DEPARTAMENTOS = ["Nacional", "Amazonas", "Antioquia", "Arauca", "Atlántico", "Bogotá", "Bolívar", "Boyacá", "Caldas", "Caquetá", "Casanare", "Cauca", "Cesar", "Chocó", "Córdoba", "Cundinamarca", "Guainía", "Guaviare", "Huila", "La Guajira", "Magdalena", "Meta", "Nariño", "Norte de Santander", "Putumayo", "Quindío", "Risaralda", "San Andrés", "Santander", "Sucre", "Tolima", "Valle del Cauca", "Vaupés", "Vichada"];
-const vacio = (modo: "manual" | "ia"): Estado => ({ id: null, modo, formato: "nota", tema: "", enfoque: "", tono: "institucional", palabras: 450, titulo: "", resumen: "", cuerpo: "", claves: [], palabraClave: "", portadaUrl: "", portadaAlt: "", seccion: "", region: "Nacional", seoTitulo: "", seoDescripcion: "", seoAlternativas: [], grafica: null, material: "", fuentes: [], generadaConIa: false, revisada: false, estado: "borrador" });
+const vacio = (modo: "manual" | "ia"): Estado => ({ id: null, modo, formato: "nota", tema: "", enfoque: "", tono: "institucional", palabras: 450, titulo: "", resumen: "", cuerpo: "", claves: [], palabraClave: "", portadaUrl: "", portadaAlt: "", seccion: "", region: "Nacional", seoTitulo: "", seoDescripcion: "", seoAlternativas: [], grafica: null, material: "", fuentes: [], generadaConIa: false, revisada: false, estado: "borrador", programadaPara: null, aprobadaPor: null, notaRevision: null, enlacePublicado: null });
 const desde = (g: Guardada): Estado => ({ ...vacio(g.modo), ...g, formato: (g.formato as FormatoId) ?? "nota", tema: g.titulo, seoAlternativas: [], grafica: g.grafica ?? null, estado: g.estado });
 
 const campo = "w-full rounded-xl border border-border bg-surface px-4 py-3 text-[15px] outline-none transition placeholder:text-muted-foreground/60 hover:border-foreground/25 focus:border-brand focus:ring-4 focus:ring-brand/10";
@@ -83,6 +85,8 @@ const AYUDA_PASO: Record<PasoId, { titulo: string; ayuda: string }> = {
 };
 
 const ESTADOS: Record<string, { texto: string; clase: string }> = {
+  aprobada: { texto: "Aprobada", clase: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300" },
+  publicada: { texto: "Publicada", clase: "bg-sky-500/15 text-sky-800 dark:text-sky-300" },
   borrador: { texto: "Borrador", clase: "bg-surface-muted text-muted-foreground" },
   revision: { texto: "En revisión", clase: "bg-amber-500/15 text-amber-800 dark:text-amber-300" },
   enviada: { texto: "Enviada al portal", clase: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300" },
@@ -107,6 +111,12 @@ export function RedactorWizard() {
   const portales = usePeticion<{ portales: { id: string; nombre: string }[] }>(e && paso === "vista" ? "/api/admin/portales" : null);
   const [portalId, setPortalId] = React.useState("");
   const [copiado, setCopiado] = React.useState(false);
+  const [guiaAbierta, setGuiaAbierta] = React.useState(false);
+  const [modoNuevo, setModoNuevo] = React.useState<"ia" | "manual">("ia");
+  const [enlace, setEnlace] = React.useState("");
+  const [motivo, setMotivo] = React.useState("");
+  const permisos = usePeticion<{ puedeEditar: boolean }>("/api/admin/redactor/guia");
+  const esDireccion = permisos.estado === "listo" && permisos.data.puedeEditar;
 
   const set = (c: Partial<Estado>) => setE((x) => (x ? { ...x, ...c } : x));
   const seo = React.useMemo(() => {
@@ -179,7 +189,6 @@ export function RedactorWizard() {
     setOcupado("enviar");
     try {
       await api("/api/admin/redactor/enviar", { method: "POST", body: JSON.stringify({ id, portalId }) });
-      set({ estado: "enviada" });
       setMsg({ ok: true, texto: "Enviada al portal como borrador sin revisar: allí una persona la revisa y la publica." });
       setV((n) => n + 1);
     } catch (err) {
@@ -189,63 +198,101 @@ export function RedactorWizard() {
     }
   }
 
-  // ------------------------------------------------------------------ inicio: elegir cómo escribir y ver las notas
+  // ------------------------------------------------------------------ inicio: el tablero del equipo de redacción y redes
   if (!e) {
-    const nueva = (modo: "ia" | "manual") => { setE(vacio(modo)); setPaso("tema"); setMsg(null); setAud(null); };
+    const nueva = (formato: FormatoId) => { setE({ ...vacio(modoNuevo), formato }); setPaso("tema"); setMsg(null); setAud(null); };
+    const ICONO: Record<FormatoId, React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" }>> = { nota: Newspaper, x: Hash, instagram: Camera, facebook: MessageSquare, tiktok: Video, columna: PenLine, discurso: Mic, bullets: List };
+    // Lo que más produce el equipo, primero: redes, luego piezas largas.
+    const ORDEN_INICIO: FormatoId[] = ["x", "instagram", "facebook", "tiktok", "bullets", "columna", "discurso", "nota"];
+    const COLUMNAS = [
+      { id: "borrador", titulo: "Borrador", nota: "Se está escribiendo" },
+      { id: "revision", titulo: "En revisión", nota: "Espera a Dirección" },
+      { id: "aprobada", titulo: "Aprobada", nota: "Lista para publicar" },
+      { id: "publicada", titulo: "Publicada", nota: "Ya salió" },
+    ] as const;
+    const notas = lista.estado === "listo" ? lista.data.notas : [];
+    if (guiaAbierta) return <GuiaVoz alCerrar={() => setGuiaAbierta(false)} />;
     return (
       <div className="space-y-8">
-        <div className="grid gap-4 md:grid-cols-2">
-          <button type="button" onClick={() => nueva("ia")} className="group relative rounded-2xl border border-brand/30 bg-brand-soft p-6 text-left transition hover:border-brand hover:shadow-md">
-            <span className="absolute top-4 right-4 rounded-full bg-brand px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-brand-foreground uppercase">Recomendado</span>
-            <span className="grid size-11 place-items-center rounded-full bg-brand text-brand-foreground"><Sparkles className="size-5" aria-hidden="true" /></span>
-            <h3 className="mt-4 text-xl"><span className="font-light">Escribir </span><span className="font-bold">con IA</span></h3>
-            <p className="mt-1.5 text-sm text-muted-foreground">Das el tema y tu material; la IA arma el borrador solo con lo que tú le entregaste. Cifras y citas se comprueban.</p>
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand">Empezar<ChevronRight className="size-4 transition group-hover:translate-x-0.5" aria-hidden="true" /></span>
-          </button>
-          <button type="button" onClick={() => nueva("manual")} className="group rounded-2xl border border-border bg-surface p-6 text-left transition hover:border-foreground/30 hover:shadow-md">
-            <span className="grid size-11 place-items-center rounded-full bg-surface-muted"><PenLine className="size-5" aria-hidden="true" /></span>
-            <h3 className="mt-4 text-xl"><span className="font-light">Escribir </span><span className="font-bold">a mano</span></h3>
-            <p className="mt-1.5 text-sm text-muted-foreground">Redactas tú el texto. Te acompañan el puntaje de buscadores y la vista previa.</p>
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold">Empezar<ChevronRight className="size-4 transition group-hover:translate-x-0.5" aria-hidden="true" /></span>
-          </button>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Equipo de redacción y redes · María Fernanda Cabal</p>
+            <h2 className="mt-1 text-3xl"><span className="font-light">¿Qué vas a </span><span className="font-bold">producir hoy?</span></h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div role="group" aria-label="Cómo escribir" className="inline-flex rounded-full border border-border bg-surface p-1 text-xs font-semibold">
+              {([["ia", "Con IA", Sparkles], ["manual", "A mano", PenLine]] as const).map(([id, t, I]) => (
+                <button key={id} type="button" onClick={() => setModoNuevo(id)} aria-pressed={modoNuevo === id} className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 transition ${modoNuevo === id ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`}><I className="size-3.5" aria-hidden="true" />{t}</button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setGuiaAbierta(true)} className={botonContorno}>Guía de voz</button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {ORDEN_INICIO.map((f) => {
+            const I = ICONO[f];
+            return (
+              <button key={f} type="button" onClick={() => nueva(f)} className="group flex flex-col rounded-2xl border border-border bg-surface p-4 text-left transition hover:border-brand hover:shadow-md">
+                <span className="grid size-10 place-items-center rounded-full bg-brand-soft text-brand transition group-hover:bg-brand group-hover:text-brand-foreground"><I className="size-5" aria-hidden="true" /></span>
+                <span className="mt-3 text-base font-bold">{FORMATOS[f].nombre}</span>
+                <span className="mt-0.5 text-[13px] leading-snug text-muted-foreground">{FORMATOS[f].ayuda}</span>
+              </button>
+            );
+          })}
         </div>
 
         <section>
-          <h3 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">Tus notas</h3>
-          {lista.estado === "cargando" && <p className="text-sm text-muted-foreground">Leyendo tus notas…</p>}
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">Tablero del equipo</h3>
+            <span className="text-xs text-muted-foreground">Nada se publica desde aquí: se publica en cada red y se anota el enlace.</span>
+          </div>
+          {lista.estado === "cargando" && <p className="text-sm text-muted-foreground">Leyendo el tablero…</p>}
           {lista.estado === "error" && <p className="text-sm text-red-700">{lista.error}</p>}
           {lista.estado === "listo" && !lista.data.disponible && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
-              <p className="font-semibold">Para guardar las notas falta crear la tabla del redactor en Supabase.</p>
+              <p className="font-semibold">Para guardar el trabajo del equipo falta crear las tablas del redactor en Supabase.</p>
               <p className="mt-0.5 text-muted-foreground">Puedes escribir sin guardar. Copia este SQL, pégalo en Supabase › SQL Editor › Run y recarga.</p>
               {lista.data.sql && <textarea readOnly value={lista.data.sql} rows={6} className={`${campo} mt-3 font-mono text-xs`} onFocus={(ev) => ev.currentTarget.select()} />}
             </div>
           )}
-          {lista.estado === "listo" && lista.data.disponible && lista.data.notas.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">Todavía no hay notas. Empieza una arriba.</div>
-          )}
-          {lista.estado === "listo" && lista.data.notas.length > 0 && (
-            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {lista.data.notas.map((n) => {
-                const est = ESTADOS[n.estado] ?? ESTADOS.borrador;
+          {lista.estado === "listo" && lista.data.disponible && (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {COLUMNAS.map((col) => {
+                const delas = notas.filter((n) => (n.estado === "enviada" ? "borrador" : n.estado) === col.id);
                 return (
-                  <li key={n.id} className="group relative flex flex-col rounded-2xl border border-border bg-surface p-4 transition hover:border-foreground/30 hover:shadow-md">
-                    <button type="button" onClick={() => { setE(desde(n)); setPaso(n.cuerpo ? "cuerpo" : "tema"); setMsg(null); setAud(null); }} className="flex-1 text-left">
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${est.clase}`}>{est.texto}</span>
-                        {n.modo === "ia" && <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:text-sky-300">Con IA</span>}
-                      </span>
-                      <span className="mt-2 line-clamp-2 block text-base leading-snug font-semibold">{n.titulo || "Sin título"}</span>
-                      <span className="mt-1 line-clamp-2 block text-sm text-muted-foreground">{n.resumen || "Sin resumen."}</span>
-                    </button>
-                    <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{new Date(n.actualizadoEn).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
-                      <button type="button" aria-label="Borrar la nota" onClick={() => window.confirm("¿Borrar esta nota?") && void api(`/api/admin/redactor?id=${n.id}`, { method: "DELETE" }).then(() => setV((x) => x + 1))} className="rounded-full p-1.5 opacity-0 transition hover:bg-surface-muted group-hover:opacity-100 focus:opacity-100"><Trash2 className="size-4" aria-hidden="true" /></button>
+                  <div key={col.id} className="rounded-2xl bg-surface-muted p-3">
+                    <div className="mb-2 flex items-baseline justify-between px-1">
+                      <span className="text-sm font-bold">{col.titulo} <span className="font-medium text-muted-foreground">{delas.length}</span></span>
+                      <span className="text-[11px] text-muted-foreground">{col.nota}</span>
                     </div>
-                  </li>
+                    <ul className="space-y-2">
+                      {delas.length === 0 && <li className="rounded-xl border border-dashed border-border px-3 py-5 text-center text-xs text-muted-foreground">Sin piezas</li>}
+                      {delas.map((n) => {
+                        const F = FORMATOS[(n.formato as FormatoId) ?? "nota"] ?? FORMATOS.nota;
+                        return (
+                          <li key={n.id} className="group relative rounded-xl border border-border bg-surface p-3 transition hover:border-foreground/30 hover:shadow-sm">
+                            <button type="button" onClick={() => { setE(desde(n)); setPaso(n.cuerpo ? "vista" : "tema"); setMsg(null); setAud(null); }} className="block w-full text-left">
+                              <span className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
+                                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-brand">{F.corto}</span>
+                                {n.modo === "ia" && <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-sky-700 dark:text-sky-300">IA</span>}
+                                {n.notaRevision && col.id === "borrador" && <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-red-700 dark:text-red-300">Devuelta</span>}
+                              </span>
+                              <span className="mt-1.5 line-clamp-3 block text-sm leading-snug font-semibold">{n.titulo || (n.cuerpo ? n.cuerpo.slice(0, 80) : "Sin título")}</span>
+                              <span className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                                {n.programadaPara ? <><CalendarClock className="size-3" aria-hidden="true" />{new Date(n.programadaPara).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</> : <>{new Date(n.actualizadoEn).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</>}
+                                {n.autor ? ` · ${n.autor.split("@")[0]}` : ""}
+                              </span>
+                            </button>
+                            <button type="button" aria-label="Borrar la pieza" onClick={() => window.confirm("¿Borrar esta pieza?") && void api(`/api/admin/redactor?id=${n.id}`, { method: "DELETE" }).then(() => setV((x) => x + 1))} className="absolute top-2 right-2 rounded-full p-1.5 opacity-0 transition hover:bg-surface-muted group-hover:opacity-100 focus:opacity-100"><Trash2 className="size-3.5" aria-hidden="true" /></button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 );
               })}
-            </ul>
+            </div>
           )}
         </section>
       </div>
@@ -265,6 +312,24 @@ export function RedactorWizard() {
   const tituloPaso = paso === "tema" && e.modo === "manual" ? "Título" : info.titulo;
   const materialListo = Math.min(100, Math.round((e.material.trim().length / 200) * 100));
   const bloqueIa = e.modo === "ia" && paso === "tema";
+
+  /** Una acción del flujo del equipo (revisión, aprobación, publicada…): primero se guarda lo escrito. */
+  async function flujo(accion: "revision" | "aprobar" | "devolver" | "publicada" | "reabrir" | "programar", extra: Record<string, unknown> = {}) {
+    if (!e) return;
+    const id = (await guardar()) ?? e.id;
+    if (!id) return;
+    setOcupado("guardar");
+    try {
+      const r = await api<{ nota: Guardada }>("/api/admin/redactor/flujo", { method: "POST", body: JSON.stringify({ id, accion, ...extra }) });
+      set({ estado: r.nota.estado, programadaPara: r.nota.programadaPara ?? null, aprobadaPor: r.nota.aprobadaPor ?? null, notaRevision: r.nota.notaRevision ?? null, enlacePublicado: r.nota.enlacePublicado ?? null });
+      setMsg({ ok: true, texto: ({ revision: "Enviada a revisión: Dirección la verá en su tablero.", aprobar: "Aprobada.", devolver: "Devuelta al equipo con tu motivo.", publicada: "Marcada como publicada.", reabrir: "Reabierta como borrador.", programar: "Fecha guardada." } as const)[accion] });
+      setV((n) => n + 1);
+    } catch (err) {
+      setMsg({ ok: false, texto: err instanceof Error ? err.message : "No se pudo completar." });
+    } finally {
+      setOcupado("");
+    }
+  }
 
   async function copiar() {
     if (!e) return;
@@ -300,6 +365,70 @@ export function RedactorWizard() {
     set({ cuerpo: nuevo, revisada: false });
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + prefijo.length + antes.length, a + prefijo.length + antes.length + sel.length); });
   }
+
+  const est = ESTADOS[e.estado] ?? ESTADOS.borrador;
+  const aLocal = (iso: string | null) => (iso ? new Date(new Date(iso).getTime() - new Date(iso).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "");
+  /** El flujo del equipo en la vista previa: lo que se puede hacer depende del estado de la pieza y de quién eres. */
+  const panelFlujo = (
+    <div className="mx-auto max-w-2xl space-y-4 rounded-2xl border border-border bg-surface-muted p-5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${est.clase}`}>{est.texto}</span>
+        {e.aprobadaPor && <span className="text-xs text-muted-foreground">Aprobada por {e.aprobadaPor.split("@")[0]}</span>}
+        {e.estado === "borrador" && <span className="text-xs text-muted-foreground">Cuando esté lista, envíala a revisión.</span>}
+        {e.estado === "revision" && <span className="text-xs text-muted-foreground">Espera la aprobación de Dirección.</span>}
+      </div>
+      {e.notaRevision && e.estado === "borrador" && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-800 dark:text-red-300"><strong>Dirección la devolvió:</strong> {e.notaRevision}</p>}
+      {e.generadaConIa && (e.estado === "borrador") && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-surface p-3 text-sm"><input type="checkbox" className="mt-0.5 size-4 accent-[var(--brand)]" checked={e.revisada} onChange={(ev) => set({ revisada: ev.target.checked })} /><span><strong>Lo revisé.</strong> Leí todo y verifiqué cada cifra y cada cita.</span></label>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => void copiar()} className={botonContorno}><Copy className="size-4" aria-hidden="true" />{copiado ? "¡Copiado!" : "Copiar texto"}</button>
+        <button type="button" onClick={imprimir} className={botonContorno}><Printer className="size-4" aria-hidden="true" />Imprimir</button>
+        {e.estado === "borrador" && <button type="button" disabled={!!ocupado} onClick={() => void guardar("borrador")} className={botonContorno}><Save className="size-4" aria-hidden="true" />Guardar</button>}
+        {e.estado === "borrador" && <button type="button" disabled={!!ocupado || (e.generadaConIa && !e.revisada) || !e.cuerpo.trim()} onClick={() => void flujo("revision")} className={botonPrimario}><Send className="size-4" aria-hidden="true" />Enviar a revisión</button>}
+      </div>
+      {e.estado === "revision" && (esDireccion ? (
+        <div className="space-y-3 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={!!ocupado} onClick={() => void flujo("aprobar")} className={botonPrimario}><Check className="size-4" aria-hidden="true" />Aprobar</button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input value={motivo} onChange={(ev) => setMotivo(ev.target.value)} placeholder="Qué hay que corregir (opcional)" className={`${campo} !w-auto min-w-64 flex-1 !py-2.5 text-sm`} />
+            <button type="button" disabled={!!ocupado} onClick={() => void flujo("devolver", { motivo })} className={botonContorno}>Devolver al equipo</button>
+          </div>
+        </div>
+      ) : <p className="border-t border-border pt-4 text-xs text-muted-foreground">Solo Dirección aprueba o devuelve. Te avisamos aquí cuando cambie el estado.</p>)}
+      {e.estado === "aprobada" && (
+        <div className="space-y-3 border-t border-border pt-4">
+          <Campo etiqueta="Cuándo se piensa publicar" ayuda="Es una fecha de referencia para el equipo: no se publica sola.">
+            <div className="flex flex-wrap items-center gap-2">
+              <input type="datetime-local" defaultValue={aLocal(e.programadaPara)} onChange={(ev) => set({ programadaPara: ev.target.value ? new Date(ev.target.value).toISOString() : null })} className={`${campo} !w-auto !py-2.5 text-sm`} />
+              <button type="button" disabled={!!ocupado} onClick={() => void flujo("programar", { programadaPara: e.programadaPara })} className={botonContorno}><CalendarClock className="size-4" aria-hidden="true" />Guardar fecha</button>
+            </div>
+          </Campo>
+          <Campo etiqueta="Ya la publicaste en la red" ayuda="Pega el enlace de la publicación para dejar constancia.">
+            <div className="flex flex-wrap items-center gap-2">
+              <input value={enlace} onChange={(ev) => setEnlace(ev.target.value)} placeholder="https://…" className={`${campo} !w-auto min-w-64 flex-1 !py-2.5 text-sm`} />
+              <button type="button" disabled={!!ocupado} onClick={() => void flujo("publicada", { enlace })} className={botonPrimario}>Marcar como publicada</button>
+            </div>
+          </Campo>
+          {nota && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <select value={portalId} onChange={(ev) => setPortalId(ev.target.value)} className={`${campo} !w-auto min-w-52 !rounded-full !py-2.5 text-sm`} aria-label="Portal"><option value="">Llevar a un portal…</option>{portales.estado === "listo" && portales.data.portales.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select>
+              <button type="button" disabled={!portalId || !!ocupado} onClick={() => void enviar()} className={botonContorno}><Send className="size-4" aria-hidden="true" />Enviar al portal como borrador</button>
+            </div>
+          )}
+        </div>
+      )}
+      {e.estado === "publicada" && (
+        <div className="space-y-2 border-t border-border pt-4 text-sm">
+          {e.enlacePublicado ? <a href={e.enlacePublicado} target="_blank" rel="noreferrer noopener" className="font-semibold text-brand underline">Ver la publicación</a> : <span className="text-muted-foreground">Sin enlace anotado.</span>}
+          {esDireccion && <div><button type="button" disabled={!!ocupado} onClick={() => void flujo("reabrir")} className={botonContorno}>Reabrir como borrador</button></div>}
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">El Redactor no publica nada: cada pieza se publica a mano en su red o su portal.</p>
+    </div>
+  );
 
   // El editor ocupa siempre la misma altura: lo único que se desplaza es el contenido de cada paso, por dentro. Nada se mueve de lugar.
   return (
@@ -494,12 +623,7 @@ export function RedactorWizard() {
                     <div className={`mt-4 space-y-3 leading-relaxed [&_blockquote]:border-l-4 [&_blockquote]:border-brand/40 [&_blockquote]:pl-4 [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-bold [&_li]:my-1 [&_ul]:list-disc [&_ul]:pl-6 ${e.formato === "bullets" ? "text-[17px]" : "font-serif text-[17px] leading-[1.75]"}`} dangerouslySetInnerHTML={{ __html: aHtml(e.cuerpo) }} />
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface-muted p-4">
-                  {e.generadaConIa && <label className="flex w-full cursor-pointer items-start gap-3 rounded-xl bg-surface p-3 text-sm"><input type="checkbox" className="mt-0.5 size-4 accent-[var(--brand)]" checked={e.revisada} onChange={(ev) => set({ revisada: ev.target.checked })} /><span><strong>Lo revisé.</strong> Verifiqué cada cifra y cada cita.</span></label>}
-                  <button type="button" onClick={() => void copiar()} className={botonPrimario}><Copy className="size-4" aria-hidden="true" />{copiado ? "¡Copiado!" : "Copiar texto"}</button>
-                  <button type="button" onClick={imprimir} className={botonContorno}><Printer className="size-4" aria-hidden="true" />Imprimir</button>
-                  <button type="button" disabled={!!ocupado} onClick={() => void guardar("borrador")} className={botonContorno}>Guardar</button>
-                </div>
+                {panelFlujo}
               </div>
             )}
             {paso === "vista" && nota && (
@@ -523,23 +647,7 @@ export function RedactorWizard() {
                   {e.fuentes.length > 0 && <div className="mt-6 border-t border-border pt-4 text-xs text-muted-foreground"><p className="font-semibold">Fuentes</p><ul className="mt-1 list-disc space-y-0.5 pl-5">{e.fuentes.map((f) => <li key={f.url}><a className="underline" href={f.url} target="_blank" rel="noreferrer noopener">{f.titulo || f.url}</a></li>)}</ul></div>}
                 </article>
 
-                <div className="mx-auto max-w-2xl space-y-4 rounded-2xl border border-border bg-surface-muted p-5">
-                  {e.generadaConIa && (
-                    <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-surface p-3 text-sm"><input type="checkbox" className="mt-0.5 size-4 accent-[var(--brand)]" checked={e.revisada} onChange={(ev) => set({ revisada: ev.target.checked })} /><span><strong>Lo revisé.</strong> Leí la nota completa y verifiqué cada cifra y cada cita.</span></label>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" disabled={!!ocupado} onClick={() => void guardar("borrador")} className={botonContorno}>Guardar borrador</button>
-                    <button type="button" disabled={!!ocupado} onClick={() => void guardar("revision")} className={botonContorno}>Enviar a revisión</button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                    <select value={portalId} onChange={(ev) => setPortalId(ev.target.value)} className={`${campo} !w-auto min-w-52 !rounded-full !py-2.5 text-sm`} aria-label="Portal">
-                      <option value="">Elige un portal…</option>
-                      {portales.estado === "listo" && portales.data.portales.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
-                    <button type="button" disabled={!portalId || !!ocupado || (e.generadaConIa && !e.revisada)} onClick={() => void enviar()} className={botonPrimario}>{ocupado === "enviar" ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}Enviar al portal como borrador</button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">El Redactor no publica nada: la nota llega al portal como borrador y una persona la publica allí.</p>
-                </div>
+                {panelFlujo}
               </>
             )}
 

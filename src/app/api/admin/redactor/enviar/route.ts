@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       estado: "borrador", destacado: false, generadoConIa: nota.generadaConIa, revisado: false, autor: nota.autor ?? (await usuarioActual()) ?? "",
       seoDescripcion: (nota.seoDescripcion || nota.resumen).slice(0, 200), portadaUrl: nota.portadaUrl, portadaAlt: nota.portadaAlt, publicarEn: "", notaRevision: "Enviada desde el Redactor.",
     });
-    await guardarNota(nota.id, { estado: "enviada", portalId: p.data.portalId }, null);
+    await guardarNota(nota.id, { portalId: p.data.portalId }, null);
     return NextResponse.json({ articulo: { id: articulo.id, slug: articulo.slug } }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo enviar al portal." }, { status: 502 });
