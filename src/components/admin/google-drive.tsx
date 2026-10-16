@@ -49,6 +49,7 @@ export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[
   const [clientId, setClientId] = React.useState<string | null | undefined>(undefined);
   const [token, setToken] = React.useState<string | null>(null);
   const [error, setError] = React.useState("");
+  const [idNuevo, setIdNuevo] = React.useState("");
   const [ruta, setRuta] = React.useState<{ id: string; nombre: string }[]>([{ id: "root", nombre: "Mi unidad" }]);
   const [lista, setLista] = React.useState<ArchivoDrive[] | null>(null);
   const [cargando, setCargando] = React.useState(false);
@@ -92,6 +93,14 @@ export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[
     } finally {
       setCargando(false);
     }
+  }
+
+  async function guardarId() {
+    setError("");
+    const r = await fetch("/api/admin/google/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: idNuevo }) });
+    const j = (await r.json().catch(() => ({}))) as { error?: string; clientId?: string };
+    if (!r.ok || !j.clientId) return setError(j.error ?? "No se pudo guardar.");
+    setClientId(j.clientId);
   }
 
   async function conectar() {
@@ -188,15 +197,24 @@ export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[
 
         {clientId === undefined && <p className="p-6 text-sm text-muted-foreground">Preparando…</p>}
         {clientId === null && (
-          <div className="space-y-3 overflow-y-auto p-6 text-sm">
-            <p className="font-semibold">Falta registrar la app de Google (una sola vez).</p>
-            <ol className="list-decimal space-y-1.5 pl-5 text-muted-foreground">
-              <li>En <strong>console.cloud.google.com</strong> crea un proyecto y activa la <strong>Google Drive API</strong>.</li>
-              <li>En «Pantalla de consentimiento» elige «Externo» y agrega tu correo como usuario de prueba.</li>
-              <li>En «Credenciales» crea un <strong>ID de cliente de OAuth</strong> de tipo «Aplicación web», con el origen autorizado <code>https://cabal-wine.vercel.app</code>.</li>
-              <li>Copia el ID de cliente (termina en <code>.apps.googleusercontent.com</code>) y ponlo en Vercel como <code>GOOGLE_CLIENT_ID</code>. Vuelve a desplegar.</li>
-            </ol>
-            <p className="text-xs text-muted-foreground">El ID de cliente no es secreto. El permiso es de solo lectura y no se guarda en ningún servidor.</p>
+          <div className="space-y-4 overflow-y-auto p-6 text-sm">
+            <p className="font-semibold">Un paso previo, una sola vez: registrar la app de Google.</p>
+            <p className="text-muted-foreground">Google exige que toda aplicación tenga su propio «ID de cliente» antes de poder pedirte permiso. No es una clave secreta. Pégalo aquí y desde entonces el botón solo te lleva a elegir tu cuenta.</p>
+            <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void guardarId(); }}>
+              <input value={idNuevo} onChange={(e) => setIdNuevo(e.target.value)} placeholder="123456789-abc….apps.googleusercontent.com" className="min-w-64 flex-1 rounded-xl border border-border bg-surface px-4 py-2.5 font-mono text-xs" />
+              <button type="submit" disabled={!idNuevo.trim()} className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground disabled:opacity-50">Guardar</button>
+            </form>
+            {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+            <details className="rounded-xl bg-surface-muted p-3 text-xs">
+              <summary className="cursor-pointer font-semibold">¿Cómo consigo ese ID? (10 minutos, con tu cuenta de Google)</summary>
+              <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-muted-foreground">
+                <li>Entra a <strong>console.cloud.google.com</strong> y crea un proyecto (el nombre da igual).</li>
+                <li>Menú › APIs y servicios › Biblioteca › busca <strong>Google Drive API</strong> › Habilitar.</li>
+                <li>APIs y servicios › Pantalla de consentimiento de OAuth › «Externo» › pon un nombre y tu correo › en «Usuarios de prueba» agrega tu correo y el de quien vaya a usarlo.</li>
+                <li>APIs y servicios › Credenciales › Crear credenciales › <strong>ID de cliente de OAuth</strong> › «Aplicación web» › en «Orígenes autorizados de JavaScript» pon <code>https://cabal-wine.vercel.app</code>.</li>
+                <li>Copia el ID de cliente que te muestra y pégalo arriba.</li>
+              </ol>
+            </details>
           </div>
         )}
         {clientId && !token && (
