@@ -355,6 +355,11 @@ export function DatosTab() {
                 {profundidad === 5 && "Agrega también zonas, localidades de Bogotá y comunas (las JAL se eligen por comuna). Es muy pesado: úsalo solo si de verdad hace falta."}
                 {profundidad === 6 && "Agrega los puestos de votación (unos 13.000 por elección): sirven para el análisis por puesto y para ver el detalle dentro de cada municipio. Es lo más pesado: úsalo cargo por cargo con el botón «Guardar» de cada fila, no con «Cargar todo»."}
               </p>
+              {profundidad === 6 && faltan > 30_000 && (
+                <p className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                  Con puestos de votación faltan {numero(faltan)} consultas: a unos 2 territorios por segundo son más de {numero(Math.round(faltan / 2 / 3600))} horas seguidas, y la Registraduría no deja ir más rápido (corta a quien pide más de unas 13.000 por hora). Para terminar en horas: deja «Con zonas, localidades y comunas» para todo y carga los puestos solo de los cargos que necesites, uno por uno con «Guardar».
+                </p>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">

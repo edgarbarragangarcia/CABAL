@@ -27,8 +27,9 @@ export const PARES: ParElectoral[] = ELECCIONES.flatMap((e) =>
 export const NIVELES_SINCRONIZACION = [2, 3, 5, 6] as const;
 
 /** Con pocas peticiones a la vez y una pausa entre ellas: el firewall de la Registraduría corta a quien pide más de unas 13.000 por hora. */
-const CONCURRENCIA = 2;
-const PAUSA_MS = 350;
+/** Tres a la vez con 250 ms de pausa: unos 2 territorios por segundo (≈ 7.500 por hora, poco más de la mitad de lo que tolera el firewall). Se afina con CARGA_ELECTORAL_CONCURRENCIA y CARGA_ELECTORAL_PAUSA_MS sin tocar el código. */
+const CONCURRENCIA = Math.max(1, Math.min(6, Number(process.env.CARGA_ELECTORAL_CONCURRENCIA) || 3));
+const PAUSA_MS = Math.max(0, Number(process.env.CARGA_ELECTORAL_PAUSA_MS) || 250);
 /** Vercel corta la función a los 60 s: se deja margen para terminar las peticiones en curso y subir lo último. */
 const PRESUPUESTO_MS = 38_000;
 const FALLOS_PARA_PARAR = 6;
