@@ -399,9 +399,10 @@ function MafeChatInterno() {
   );
 }
 
-/** La comunidad se ve como una app propia y los portales (/p/…) son sitios aparte: allí no va la burbuja del asistente. */
+/** La comunidad, los portales (/p/…) y el panel administrativo no llevan la burbuja del asistente. */
 export function MafeChat() {
   const pathname = usePathname();
-  if (pathname === "/unete" || pathname.startsWith("/comunidad") || pathname.startsWith("/p/")) return null;
+  // El panel administrativo tiene su propio asistente de voz: allí no va el avatar.
+  if (pathname === "/unete" || pathname.startsWith("/comunidad") || pathname.startsWith("/p/") || pathname.startsWith("/admin")) return null;
   return <MafeChatInterno />;
 }
