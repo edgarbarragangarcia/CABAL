@@ -489,6 +489,16 @@
   animation: mafe-talk 0.42s ease-in-out infinite;
 }
 
+/* Con la voz real (Web Audio), la boca y la cabeza siguen la energía del audio. */
+.mafe-avatar--sync .mafe-avatar__mouth {
+  transform: scaleY(calc(0.2 + var(--boca, 0) * 1.1)) scaleX(calc(1.04 - var(--boca, 0) * 0.1));
+}
+
+.mafe-avatar--sync {
+  transform: rotate(calc(var(--gesto, 0) * 1deg)) translateY(calc(var(--bote, 0) * 1px));
+  transform-origin: 50% 85%;
+}
+
 /* Al hablar, MaFe mueve la cabeza y los hombros como quien gesticula. */
 .mafe-avatar--talking {
   animation: mafe-gesto 2.6s ease-in-out infinite;

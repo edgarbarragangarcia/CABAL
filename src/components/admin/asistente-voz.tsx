@@ -31,7 +31,7 @@ function partirEnFrases(texto: string): string[] {
   const trozos: string[] = [];
   for (const f of frases) {
     const ult = trozos[trozos.length - 1];
-    if (ult && ult.length + f.length < 160) trozos[trozos.length - 1] = `${ult} ${f}`;
+    if (trozos.length > 1 && ult && ult.length + f.length < 220) trozos[trozos.length - 1] = `${ult} ${f}`;
     else trozos.push(f);
   }
   return trozos.slice(0, 8);
@@ -78,6 +78,8 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
   const barras = React.useRef<(HTMLSpanElement | null)[]>([]);
   const medidor = React.useRef<{ ctx: AudioContext; flujo: MediaStream; raf: number } | null>(null);
   const lista = React.useRef<HTMLDivElement>(null);
+  const escenario = React.useRef<HTMLDivElement>(null);
+  const [sincro, setSincro] = React.useState(false);
   const continuoRef = React.useRef(continuo);
   const silencioRef = React.useRef(silencio);
   const vaciosRef = React.useRef(0);
@@ -152,10 +154,37 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
       await new Promise<void>((fin) => {
         const fuente = ctx.createBufferSource();
         fuente.buffer = datos;
-        fuente.connect(ctx.destination);
-        fuente.onended = () => { detener.current = null; fin(); };
-        detener.current = () => { fuente.onended = null; try { fuente.stop(); } catch { /* ya terminó */ } fin(); };
+        const an = ctx.createAnalyser();
+        an.fftSize = 512;
+        fuente.connect(an);
+        an.connect(ctx.destination);
+        const onda = new Uint8Array(an.fftSize);
+        let raf = 0;
+        let suave = 0;
+        const t0 = performance.now();
+        // La boca y los gestos siguen la energía real de la voz que está sonando.
+        const paso = () => {
+          an.getByteTimeDomainData(onda);
+          let suma = 0;
+          for (const v of onda) { const d = (v - 128) / 128; suma += d * d; }
+          const nivel = Math.min(1, Math.sqrt(suma / onda.length) * 5);
+          suave = suave * 0.55 + nivel * 0.45;
+          const el = escenario.current;
+          if (el) {
+            const t = (performance.now() - t0) / 1000;
+            el.style.setProperty("--boca", suave.toFixed(3));
+            el.style.setProperty("--gesto", (Math.sin(t * 2.1) * suave * 3.2).toFixed(3));
+            el.style.setProperty("--bote", (-suave * 2.2).toFixed(3));
+          }
+          raf = requestAnimationFrame(paso);
+        };
+        const cerrar = () => { cancelAnimationFrame(raf); setSincro(false); const el = escenario.current; if (el) { el.style.setProperty("--boca", "0"); el.style.setProperty("--gesto", "0"); el.style.setProperty("--bote", "0"); } };
+        fuente.onended = () => { detener.current = null; cerrar(); fin(); };
+        detener.current = () => { fuente.onended = null; try { fuente.stop(); } catch { /* ya terminó */ } cerrar(); fin(); };
+        setFase("hablando");
+        setSincro(true);
         fuente.start();
+        raf = requestAnimationFrame(paso);
       });
       return null;
     } catch (e) {
@@ -171,6 +200,7 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
       const cerrar = (motivo: string | null) => { URL.revokeObjectURL(url); fin(motivo); };
       a.onended = () => cerrar(null);
       a.onerror = () => cerrar(`reproductor: ${a.error?.message || `error ${a.error?.code ?? "?"}`}`);
+      a.onplaying = () => setFase("hablando");
       a.play().catch((e: unknown) => cerrar(`reproductor: ${e instanceof Error ? e.name : "bloqueado"}`));
     });
   }
@@ -196,12 +226,12 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
       fetch("/api/admin/asistente-voz/hablar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto: f }) })
         .then(async (r) => (r.status === 200 ? { blob: await r.blob(), motivo: "" } : { blob: null, motivo: decodeURIComponent(r.headers.get("x-voz-motivo") ?? "") || `respuesta ${r.status}` }))
         .catch(() => ({ blob: null as Blob | null, motivo: "sin conexión con el servidor" }));
-    let precarga = pedir(frases[0]);
+    // Todas las frases se piden a la vez: mientras suena una, las demás ya se están generando.
+    const precargas = frases.map((f) => pedir(f));
     let vozNatural = true;
     for (let i = 0; i < frases.length; i++) {
       if (gen.current !== miGen) return;
-      const r = vozNatural ? await precarga : { blob: null as Blob | null, motivo: "" };
-      if (i + 1 < frases.length && vozNatural) precarga = pedir(frases[i + 1]);
+      const r = vozNatural ? await precargas[i] : { blob: null as Blob | null, motivo: "" };
       if (gen.current !== miGen) return;
       let sono = false;
       if (r.blob) {
@@ -223,6 +253,7 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
         if (!sintesis) { setAviso("Este navegador no puede hablar."); return; }
         const voz = await vozDelSistema();
         if (gen.current !== miGen) return;
+        setFase("hablando");
         const ok = await new Promise<boolean>((fin) => {
           sintesis.cancel();
           const u = new SpeechSynthesisUtterance(frases[i]);
@@ -255,7 +286,6 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
       if (gen.current !== miGen) return;
       if (!r.ok || !j.respuesta) throw new Error(j.error ?? "No pude responder.");
       setTurnos((t) => [...t, { rol: "asistente", texto: j.respuesta!, fuente: j.fuente }]);
-      setFase("hablando");
       await hablar(j.respuesta, miGen);
       if (gen.current !== miGen) return;
       setFase("reposo");
@@ -366,11 +396,14 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
       </div>
 
       <div ref={lista} className="flex flex-col items-center px-5 pt-1">
+        <div ref={escenario}>
         <MafeAvatar
-          talking={fase === "hablando"}
+          talking={fase === "hablando" && !sincro}
+          sync={sincro}
           title="MaFe"
           className={`size-44 rounded-full ring-4 transition duration-300 ${fase === "escuchando" ? "scale-[1.02] ring-red-400/80" : fase === "hablando" ? "ring-[#e0bd7c]" : fase === "pensando" ? "opacity-80 ring-white/20" : "ring-white/15"}`}
         />
+        </div>
         {error && (
           <div role="alert" className="mt-3 rounded-xl bg-red-500/20 px-3 py-2 text-[13px] text-red-100">
             <p>{error}</p>

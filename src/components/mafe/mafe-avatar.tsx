@@ -10,10 +10,13 @@ import { cn } from "@/lib/utils";
  */
 export function MafeAvatar({
   talking = false,
+  sync = false,
   className,
   title = "MaFe",
 }: {
   talking?: boolean;
+  /** La boca y la cabeza siguen las variables CSS --boca, --gesto y --bote del contenedor (voz real). */
+  sync?: boolean;
   className?: string;
   title?: string;
 }) {
@@ -29,7 +32,7 @@ export function MafeAvatar({
   return (
     <svg
       viewBox="0 0 240 240"
-      className={cn("mafe-avatar", talking && "mafe-avatar--talking", className)}
+      className={cn("mafe-avatar", talking && "mafe-avatar--talking", sync && "mafe-avatar--sync", className)}
       role="img"
       aria-label={title}
     >

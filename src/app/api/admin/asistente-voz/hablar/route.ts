@@ -30,9 +30,23 @@ async function modelosDeVoz(clave: string): Promise<string[]> {
 
 type Resultado = { audio: Buffer | null; motivo?: string };
 
+let modeloQueSirve: string | null = null;
+
 async function conGemini(texto: string, clave: string): Promise<Resultado> {
   let motivo = "";
-  const candidatos = [...new Set([...MODELOS_TTS_GEMINI, ...(await modelosDeVoz(clave))])];
+  // Rápido: primero el modelo que ya funcionó o los conocidos; solo si todos fallan se consulta la lista de la clave (tarda).
+  const rapidos = [...new Set([...(modeloQueSirve ? [modeloQueSirve] : []), ...MODELOS_TTS_GEMINI])];
+  for (const fase of [0, 1]) {
+    const candidatos = fase === 0 ? rapidos : (await modelosDeVoz(clave)).filter((m) => !rapidos.includes(m));
+    const r = await intentarModelos(candidatos, texto, clave);
+    if (r.audio) return r;
+    motivo = r.motivo ?? motivo;
+  }
+  return { audio: null, motivo: motivo || "Gemini no ofrece voz con esta clave" };
+}
+
+async function intentarModelos(candidatos: string[], texto: string, clave: string): Promise<Resultado> {
+  let motivo = "";
   for (const modelo of candidatos) {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
@@ -50,13 +64,13 @@ async function conGemini(texto: string, clave: string): Promise<Resultado> {
         continue;
       }
       const b64 = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData?.data;
-      if (b64) return { audio: aWav(Buffer.from(b64, "base64")) };
+      if (b64) { modeloQueSirve = modelo; return { audio: aWav(Buffer.from(b64, "base64")) }; }
       motivo = `${modelo}: respondió sin audio`;
     } catch (e) {
       motivo = `${modelo}: ${e instanceof Error ? e.message : "sin respuesta"}`;
     }
   }
-  return { audio: null, motivo: motivo || "Gemini no ofrece voz con esta clave" };
+  return { audio: null, motivo };
 }
 
 async function conOpenAI(texto: string, clave: string): Promise<Resultado> {
