@@ -9,6 +9,7 @@ import { ConfiguracionRedes } from "./configuracion-redes";
 import { InformeSemanal } from "./informe-semanal";
 import { PilotoPanel } from "./piloto-panel";
 import { UsuariosPanel } from "./usuarios-panel";
+import { VozClonada } from "./voz-clonada";
 import { VozPanel } from "./voz-panel";
 
 const TABS = [
@@ -45,7 +46,7 @@ export function ConfiguracionTabs() {
       </div>
       <div className="mt-6">
         {abiertas.has("ia") && <div role="tabpanel" id="panel-ia" aria-labelledby="tab-ia" hidden={tab !== "ia"} className="mx-auto w-full max-w-3xl"><ConfiguracionIA /><AvatarMafe /></div>}
-        {abiertas.has("voz") && <div role="tabpanel" id="panel-voz" aria-labelledby="tab-voz" hidden={tab !== "voz"}><VozPanel /></div>}
+        {abiertas.has("voz") && <div role="tabpanel" id="panel-voz" aria-labelledby="tab-voz" hidden={tab !== "voz"}><VozPanel /><VozClonada /></div>}
         {abiertas.has("redes") && <div role="tabpanel" id="panel-redes" aria-labelledby="tab-redes" hidden={tab !== "redes"} className="mx-auto w-full max-w-3xl"><ConfiguracionRedes /></div>}
         {abiertas.has("usuarios") && <div role="tabpanel" id="panel-usuarios" aria-labelledby="tab-usuarios" hidden={tab !== "usuarios"} className="mx-auto w-full max-w-3xl"><UsuariosPanel /></div>}
         {abiertas.has("informe") && <div role="tabpanel" id="panel-informe" aria-labelledby="tab-informe" hidden={tab !== "informe"} className="mx-auto w-full max-w-3xl"><InformeSemanal /></div>}

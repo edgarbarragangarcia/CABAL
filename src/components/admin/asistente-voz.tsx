@@ -100,6 +100,7 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
   const escenario = React.useRef<HTMLDivElement>(null);
   const [sincro, setSincro] = React.useState(false);
   const [entregas, setEntregas] = React.useState<Entrega[]>([]);
+  const [clonada, setClonada] = React.useState(false);
   const [adjunto, setAdjunto] = React.useState<Adjunto | null>(null);
   const adjuntoRef = React.useRef<Adjunto | null>(null);
   const [subiendo, setSubiendo] = React.useState(false);
@@ -251,7 +252,7 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
     const frases = partirEnFrases(texto);
     const pedir = (f: string) =>
       fetch("/api/admin/asistente-voz/hablar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto: f }) })
-        .then(async (r) => (r.status === 200 ? { blob: await r.blob(), motivo: "" } : { blob: null, motivo: decodeURIComponent(r.headers.get("x-voz-motivo") ?? "") || `respuesta ${r.status}` }))
+        .then(async (r) => (r.status === 200 ? (r.headers.get("x-voz") === "clonada" && setClonada(true), { blob: await r.blob(), motivo: "" }) : { blob: null, motivo: decodeURIComponent(r.headers.get("x-voz-motivo") ?? "") || `respuesta ${r.status}` }))
         .catch(() => ({ blob: null as Blob | null, motivo: "sin conexión con el servidor" }));
     // Todas las frases se piden a la vez: mientras suena una, las demás ya se están generando.
     const precargas = frases.map((f) => pedir(f));
@@ -524,6 +525,7 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
           className={`size-44 rounded-full ring-4 transition duration-300 ${fase === "escuchando" ? "scale-[1.02] ring-red-400/80" : fase === "hablando" ? "ring-[#e0bd7c]" : fase === "pensando" ? "opacity-80 ring-white/20" : "ring-white/15"}`}
         />
         </div>
+        {clonada && <p className="mt-2 text-center text-[11px] text-[#f4efe2]/60">Voz sintética de MaFe, clonada con autorización de la Dra.</p>}
         {entregas.length > 0 && (
           <ul className="mt-3 w-full space-y-2">
             {entregas.map((e) => (

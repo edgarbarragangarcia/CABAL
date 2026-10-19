@@ -22,7 +22,7 @@ export const PROVEEDORES: Record<Proveedor, { nombre: string; modelo: string }> 
 
 export type Red = "youtube" | "x";
 
-type Guardada = { proveedor: Proveedor; modelo: string; claves: Partial<Record<Proveedor, string>>; redes?: Partial<Record<Red, string>> };
+type Guardada = { proveedor: Proveedor; modelo: string; claves: Partial<Record<Proveedor, string>>; redes?: Partial<Record<Red, string>>; vozClonada?: { clave: string; vozId: string; autorizadaPor: string; autorizadaEn: string } };
 
 const CLAVE_REDIS = "el-admin:ia-config";
 
@@ -150,6 +150,30 @@ export async function guardarRedes(valores: Partial<Record<Red, string>>) {
     if (v.trim()) g.redes[red] = await cifrar(v.trim());
     else delete g.redes[red];
   }
+  await escribir(g);
+}
+
+/** Voz clonada de la Dra. (ElevenLabs): solo existe si alguien confirmó, con su nombre, que ella la autorizó. */
+export async function leerVozClonada(): Promise<{ clave: string; vozId: string; autorizadaPor: string; autorizadaEn: string } | null> {
+  try {
+    const v = (await leer())?.vozClonada;
+    if (!v?.clave || !v.vozId || !v.autorizadaPor) return null;
+    return { clave: await descifrar(v.clave), vozId: v.vozId, autorizadaPor: v.autorizadaPor, autorizadaEn: v.autorizadaEn };
+  } catch {
+    return null;
+  }
+}
+
+export async function guardarVozClonada(d: { clave: string; vozId: string; autorizadaPor: string }) {
+  const g: Guardada = (await leer()) ?? { proveedor: "anthropic", modelo: PROVEEDORES.anthropic.modelo, claves: {} };
+  g.vozClonada = { clave: await cifrar(d.clave.trim()), vozId: d.vozId.trim(), autorizadaPor: d.autorizadaPor.trim(), autorizadaEn: new Date().toISOString() };
+  await escribir(g);
+}
+
+export async function quitarVozClonada() {
+  const g = await leer();
+  if (!g) return;
+  delete g.vozClonada;
   await escribir(g);
 }
 

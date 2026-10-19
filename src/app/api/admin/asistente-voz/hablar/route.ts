@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { claveParaVectores } from "@/lib/ia-config";
+import { claveParaVectores, leerVozClonada } from "@/lib/ia-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -88,6 +88,22 @@ async function conOpenAI(texto: string, clave: string): Promise<Resultado> {
   }
 }
 
+/** La voz clonada de la Dra. (ElevenLabs), solo si alguien confirmó su autorización en Configuración. */
+async function conVozClonada(texto: string, v: { clave: string; vozId: string }): Promise<Resultado> {
+  try {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(v.vozId)}?output_format=mp3_44100_128`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "xi-api-key": v.clave },
+      body: JSON.stringify({ text: texto, model_id: "eleven_multilingual_v2", voice_settings: { stability: 0.35, similarity_boost: 0.85, style: 0.55, use_speaker_boost: true } }),
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!r.ok) return { audio: null, motivo: `ElevenLabs ${r.status}` };
+    return { audio: Buffer.from(await r.arrayBuffer()) };
+  } catch (e) {
+    return { audio: null, motivo: `ElevenLabs: ${e instanceof Error ? e.message : "sin respuesta"}` };
+  }
+}
+
 /**
  * POST { texto } → audio con una voz natural, con la clave de Gemini u OpenAI de Configuración. Sin clave o si falla: 204, y el
  * navegador habla con la voz del sistema.
@@ -96,6 +112,12 @@ export async function POST(req: Request) {
   const p = z.object({ texto: z.string().trim().min(1).max(700) }).safeParse(await req.json().catch(() => null));
   if (!p.success) return new Response(null, { status: 422 });
   const motivos: string[] = [];
+  const clonada = await leerVozClonada();
+  if (clonada) {
+    const r = await conVozClonada(p.data.texto, clonada);
+    if (r.audio) return new Response(new Uint8Array(r.audio), { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "private, no-store", "X-Voz": "clonada" } });
+    if (r.motivo) motivos.push(r.motivo);
+  }
   for (const proveedor of ["gemini", "openai"] as const) {
     const k = await claveParaVectores(proveedor).catch(() => null);
     if (!k) { motivos.push(`sin clave de ${proveedor}`); continue; }
