@@ -232,7 +232,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
     }
   }
 
-  function agregar(archivos: FileList | File[], conVersion?: string) {
+  function agregar(archivos: FileList | File[], conVersion?: string, carpetaIds?: (string | null)[]) {
     setAviso(null);
     const permitidas = (datos?.limites?.extensiones ?? []).map((e) => e.toLowerCase());
     const maximo = datos?.limites?.maxBytes ?? 40 * 1024 * 1024;
@@ -240,15 +240,54 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
     const carpetaId = vista.tipo === "carpeta" ? vista.id : null;
     const validos: Item[] = [];
     const rechazados: string[] = [];
-    for (const archivo of Array.from(archivos)) {
+    for (const [indice, archivo] of Array.from(archivos).entries()) {
       const ext = archivo.name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
       if (permitidas.length && !permitidas.includes(ext)) rechazados.push(`${archivo.name}: formato .${ext || "desconocido"} no admitido`);
       else if (archivo.size > maximo) rechazados.push(`${archivo.name}: pesa más de ${tamano(maximo)}`);
       else if (archivo.size === 0) rechazados.push(`${archivo.name}: está vacío`);
-      else validos.push({ clave: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${archivo.name}`, archivo, titulo: archivo.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim() || archivo.name, etiquetas: tags, carpetaId, versionDe: conVersion, fase: "espera", progreso: 0, detalle: "En cola" });
+      else validos.push({ clave: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${archivo.name}`, archivo, titulo: archivo.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim() || archivo.name, etiquetas: tags, carpetaId: carpetaIds ? (carpetaIds[indice] ?? null) : carpetaId, versionDe: conVersion, fase: "espera", progreso: 0, detalle: "En cola" });
     }
     if (rechazados.length) setAviso({ ok: false, texto: rechazados.join(" · ") });
     if (validos.length) void atender(validos);
+  }
+
+  /**
+   * Lo que llega de Google Drive: cada archivo trae su ruta de carpetas de Drive y aquí se recrean (o se reutilizan si ya existen) para
+   * que lo importado quede ordenado igual. Después sigue el mismo camino que cualquier subida: texto, fragmentos y vectores.
+   */
+  const carpetasLocales = React.useRef<Carpeta[]>([]);
+  const rutasResueltas = React.useRef<Map<string, string | null>>(new Map());
+  React.useEffect(() => { carpetasLocales.current = carpetas; }, [carpetas]);
+
+  async function carpetaDeRuta(ruta: string[]): Promise<string | null> {
+    if (!ruta.length) return null;
+    const clave = ruta.join("\u0001");
+    if (rutasResueltas.current.has(clave)) return rutasResueltas.current.get(clave)!;
+    let padre: string | null = null;
+    for (const nombre of ruta) {
+      const limpio = nombre.trim().slice(0, 80) || "Sin nombre";
+      const buscado: string | null = padre;
+      let encontrada: Carpeta | undefined = carpetasLocales.current.find((x) => x.padreId === buscado && x.nombre.toLowerCase() === limpio.toLowerCase());
+      if (!encontrada) {
+        const creada: { carpeta: Carpeta } = await pedir<{ carpeta: Carpeta }>("/api/admin/documentos/carpetas", "POST", { nombre: limpio, padreId: buscado });
+        encontrada = creada.carpeta;
+        carpetasLocales.current = [...carpetasLocales.current, encontrada];
+      }
+      padre = encontrada.id;
+    }
+    rutasResueltas.current.set(clave, padre);
+    return padre;
+  }
+
+  async function agregarDeDrive(archivos: File[], rutas: string[][]) {
+    try {
+      const ids: (string | null)[] = [];
+      for (const r of rutas) ids.push(await carpetaDeRuta(r));
+      agregar(archivos, undefined, ids);
+      await recargar();
+    } catch (e) {
+      setAviso({ ok: false, texto: e instanceof Error ? e.message : "No fue posible crear las carpetas de Drive." });
+    }
   }
 
   /* ---------------------------------------------------------- acciones ---- */
@@ -450,7 +489,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
           </div>
           <button type="button" onClick={() => entrada.current?.click()} disabled={!datos?.tabla} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-50"><UploadCloud className="size-4" /> Subir documentos</button>
           <button type="button" onClick={() => setDrive(true)} disabled={!datos?.tabla} className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-5 py-2 text-sm font-semibold hover:bg-surface-muted disabled:opacity-50">Google Drive</button>
-          {drive && <GoogleDrive alCerrar={() => setDrive(false)} alElegir={(f) => agregar(f)} />}
+          {drive && <GoogleDrive alCerrar={() => setDrive(false)} alElegir={(f, r) => agregarDeDrive(f, r)} />}
           <button type="button" onClick={() => void recargar()} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-surface-muted">Actualizar</button>
           <input ref={entrada} type="file" multiple accept={FORMATOS} className="hidden" onChange={(e) => { if (e.target.files) agregar(e.target.files); e.target.value = ""; }} />
           <input ref={entradaVersion} type="file" accept={FORMATOS} className="hidden" onChange={(e) => { if (e.target.files?.length && versionDe.current) agregar(e.target.files, versionDe.current); e.target.value = ""; }} />

@@ -9,13 +9,13 @@ import { ChevronRight, File as ArchivoIcono, Folder, Loader2, LogOut, Search, X 
  * se entregan, ya como archivos, a quien los use (los mismos que si los hubieras elegido del computador).
  */
 
-type ArchivoDrive = { id: string; name: string; mimeType: string; size?: string; modifiedTime?: string };
+type ArchivoDrive = { id: string; name: string; mimeType: string; size?: string; modifiedTime?: string; /** Carpetas de Drive en las que está, desde la que se eligió (para recrearlas en el Gestor). */ ruta?: string[] };
 type ClienteToken = { requestAccessToken: (o?: { prompt?: string }) => void };
 type GoogleGlobal = { accounts: { oauth2: { initTokenClient: (c: { client_id: string; scope: string; callback: (r: { access_token?: string; error?: string; error_description?: string }) => void; error_callback?: (e: { type?: string; message?: string }) => void }) => ClienteToken; revoke: (t: string, cb?: () => void) => void } } };
 
 const MIME_DOC = "application/vnd.google-apps.document";
 const MIME_CARPETA = "application/vnd.google-apps.folder";
-const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_BYTES = 40 * 1024 * 1024;
 const EXT_OK = ["pdf", "docx", "txt", "md", "markdown", "csv", "tsv", "html", "htm", "json", "xml"];
 const extDe = (n: string) => n.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
 
@@ -25,7 +25,7 @@ function importable(f: ArchivoDrive): { ok: boolean; motivo?: string } {
   if (f.mimeType === MIME_DOC) return { ok: true };
   if (f.mimeType.startsWith("application/vnd.google-apps.")) return { ok: false, motivo: "Tipo de Google no compatible" };
   if (!EXT_OK.includes(extDe(f.name))) return { ok: false, motivo: "Tipo no compatible" };
-  if (Number(f.size ?? 0) > MAX_BYTES) return { ok: false, motivo: "Pesa más de 4 MB" };
+  if (Number(f.size ?? 0) > MAX_BYTES) return { ok: false, motivo: "Pesa más de 40 MB" };
   return { ok: true };
 }
 
@@ -45,7 +45,7 @@ function cargarGoogle(): Promise<GoogleGlobal> {
 const API = "https://www.googleapis.com/drive/v3";
 const CAMPOS = "nextPageToken,files(id,name,mimeType,size,modifiedTime)";
 
-export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[]) => void | Promise<void>; alCerrar: () => void }) {
+export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[], rutas: string[][]) => void | Promise<void>; alCerrar: () => void }) {
   const [clientId, setClientId] = React.useState<string | null | undefined>(undefined);
   const [token, setToken] = React.useState<string | null>(null);
   const [error, setError] = React.useState("");
@@ -127,19 +127,22 @@ export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[
   };
 
   /** Todo lo importable dentro de una carpeta, incluidas sus subcarpetas (hasta 500 archivos). */
-  async function dentroDe(id: string, acumulado: ArchivoDrive[] = []): Promise<ArchivoDrive[]> {
+  async function dentroDe(id: string, base: string[], acumulado: ArchivoDrive[] = []): Promise<ArchivoDrive[]> {
     for (const f of await listar(`'${id}' in parents and trashed = false`)) {
-      if (acumulado.length >= 500) break;
-      if (f.mimeType === MIME_CARPETA) await dentroDe(f.id, acumulado);
-      else if (importable(f).ok) acumulado.push(f);
+      if (acumulado.length >= 1000) break;
+      if (f.mimeType === MIME_CARPETA) await dentroDe(f.id, [...base, f.name], acumulado);
+      else if (importable(f).ok) acumulado.push({ ...f, ruta: base });
     }
     return acumulado;
   }
 
+  /** Las carpetas por las que se llegó a esta pantalla (sin «Mi unidad»): así lo importado conserva su estructura. */
+  const rutaActual = () => (modo === "carpeta" ? ruta.slice(1).map((r) => r.nombre) : []);
+
   async function marcarCarpeta(f: ArchivoDrive) {
     setCargando(true);
     try {
-      const dentro = await dentroDe(f.id);
+      const dentro = await dentroDe(f.id, [...rutaActual(), f.name]);
       setMarcados((m) => { const n = new Map(m); dentro.forEach((x) => n.set(x.id, x)); return n; });
       if (dentro.length === 0) setError("Esa carpeta no tiene archivos que se puedan importar.");
     } catch (e) {
@@ -152,8 +155,18 @@ export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[
   async function importar() {
     const todos = [...marcados.values()];
     if (!todos.length || !token) return;
-    const archivos: File[] = [];
     const fallos: string[] = [];
+    let entregados = 0;
+    let lote: File[] = [];
+    let rutasLote: string[][] = [];
+    // Se baja y se entrega de a diez archivos: así la memoria no se llena y el Gestor empieza a subir y vectorizar de inmediato.
+    const entregar = async () => {
+      if (!lote.length) return;
+      await alElegir(lote, rutasLote);
+      entregados += lote.length;
+      lote = [];
+      rutasLote = [];
+    };
     for (let i = 0; i < todos.length; i++) {
       const f = todos[i];
       setProgreso({ hecho: i, total: todos.length, texto: f.name });
@@ -161,15 +174,17 @@ export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[
         const esDoc = f.mimeType === MIME_DOC;
         const r = await pedir(esDoc ? `${API}/files/${f.id}/export?mimeType=text%2Fplain` : `${API}/files/${f.id}?alt=media&supportsAllDrives=true`);
         const blob = await r.blob();
-        archivos.push(new File([blob], esDoc ? `${f.name.replace(/\.[a-z0-9]+$/i, "")}.txt` : f.name, { type: blob.type }));
+        lote.push(new File([blob], esDoc ? `${f.name.replace(/\.[a-z0-9]+$/i, "")}.txt` : f.name, { type: blob.type }));
+        rutasLote.push(f.ruta ?? []);
+        if (lote.length >= 10) await entregar();
       } catch (e) {
         fallos.push(`${f.name}: ${e instanceof Error ? e.message : "no se pudo bajar"}`);
       }
     }
     setProgreso({ hecho: todos.length, total: todos.length, texto: "Entregando los archivos…" });
-    if (archivos.length) await alElegir(archivos);
+    await entregar();
     setProgreso(null);
-    if (fallos.length) setError(`${fallos.length} archivo(s) no se pudieron bajar: ${fallos.slice(0, 3).join(" · ")}`);
+    if (fallos.length) setError(`${entregados} entregados; ${fallos.length} no se pudieron bajar: ${fallos.slice(0, 3).join(" · ")}`);
     else alCerrar();
   }
 
@@ -182,7 +197,7 @@ export function GoogleDrive({ alElegir, alCerrar }: { alElegir: (archivos: File[
   }
 
   const nMarcados = marcados.size;
-  const alternar = (f: ArchivoDrive) => setMarcados((m) => { const n = new Map(m); if (n.has(f.id)) n.delete(f.id); else n.set(f.id, f); return n; });
+  const alternar = (f: ArchivoDrive) => setMarcados((m) => { const n = new Map(m); if (n.has(f.id)) n.delete(f.id); else n.set(f.id, { ...f, ruta: rutaActual() }); return n; });
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Importar desde Google Drive">
