@@ -2,6 +2,7 @@ import "server-only";
 
 import { buscarEnDocumentos } from "@/lib/documentos/servicio";
 import { generarTexto } from "@/lib/ia-config";
+import { HECHOS_VIGENTES, HECHOS_VIGENTES_AL } from "@/lib/asistente-voz/contexto-vigente";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 /**
@@ -105,7 +106,7 @@ const SISTEMA =
   "Si piden un dato puntual, contesta en una o dos frases. Si piden analizar, relacionar o decidir, usa hasta siete frases cortas con este hilo: primero la lectura de los datos, luego cómo se relacionan entre sí (votos, documentos, prensa y redes, territorio), después el riesgo o la oportunidad, y cierra con una recomendación concreta. " +
   "Cruza las fuentes del CONTEXTO: compara cifras, busca coincidencias y contradicciones, y señala tendencias. " +
   "Separa con claridad lo que dicen los datos de lo que es tu interpretación: usa expresiones como «los datos muestran» y «mi lectura es». " +
-  "Usa SOLO lo que diga el CONTEXTO para cifras, nombres y hechos; nunca inventes un dato. Si falta información para concluir, dilo y di exactamente qué dato haría falta y dónde cargarlo en el panel. " +
+  "Usa SOLO lo que diga el CONTEXTO para cifras, nombres y hechos; nunca inventes un dato. Los HECHOS VIGENTES del CONTEXTO mandan sobre cualquier documento o nota antigua que los contradiga: trata lo viejo como historia, con su fecha. Siempre habla de la situación actual y no de la de años anteriores. Si falta información para concluir, dilo y di exactamente qué dato haría falta y dónde cargarlo en el panel. " +
   "Si dicen un saludo o piden algo que no necesita datos, responde breve y pregunta en qué ayudas.";
 
 export async function responder(pregunta: string, historial: Turno[]): Promise<{ respuesta: string; fuente: string }> {
@@ -118,7 +119,7 @@ export async function responder(pregunta: string, historial: Turno[]): Promise<{
   const previo = historial.slice(-6).map((t) => `${t.rol === "usuario" ? "Usuario" : "Asistente"}: ${t.texto}`).join("\n");
   const respuesta = await generarTexto({
     system: SISTEMA,
-    user: `${previo ? `Conversación hasta ahora:\n${previo}\n\n` : ""}${ctx.texto ? `CONTEXTO (${ctx.fuente}):\n${ctx.texto}\n\n` : ""}Pregunta: ${pregunta}\n\nResponde hablando.`,
+    user: `HECHOS VIGENTES (al ${HECHOS_VIGENTES_AL}; hoy es ${new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" })}):\n${HECHOS_VIGENTES}\n\n${previo ? `Conversación hasta ahora:\n${previo}\n\n` : ""}${ctx.texto ? `CONTEXTO (${ctx.fuente}):\n${ctx.texto}\n\n` : ""}Pregunta: ${pregunta}\n\nResponde hablando.`,
     maxTokens: intencion.analisis ? 900 : 450,
   });
   return { respuesta: respuesta.replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim(), fuente: ctx.fuente };
