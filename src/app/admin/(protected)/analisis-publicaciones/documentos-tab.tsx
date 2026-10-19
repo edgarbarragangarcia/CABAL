@@ -119,6 +119,9 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
   const [categoriaF, setCategoriaF] = React.useState("");
   const [drive, setDrive] = React.useState(false);
   const [sobreCarpeta, setSobreCarpeta] = React.useState<string | null>(null);
+  /** Las fuentes de datos también se pueden marcar (una por una); las acciones de mover o borrar solo valen para documentos. */
+  const [selFuentes, setSelFuentes] = React.useState<ReadonlySet<string>>(new Set());
+  const ultimoMarcado = React.useRef<number | null>(null);
   const [ambitoF, setAmbitoF] = React.useState("");
   const [orden, setOrden] = React.useState<"reciente" | "titulo" | "tamano">("reciente");
   const [conVersiones, setConVersiones] = React.useState(false);
@@ -424,6 +427,15 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
   const enCola = cola.filter((i) => i.fase !== "listo" && i.fase !== "error").length;
   const conteo = (f: (d: Documento) => boolean) => todos.filter((d) => d.vigente && f(d)).length;
   const alternar = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  /** Marca o desmarca un documento; con Mayús, todo el tramo entre el último marcado y este. */
+  const marcar = (id: string, indice: number, mayus: boolean) => {
+    if (mayus && ultimoMarcado.current !== null) {
+      const [a, b] = [Math.min(ultimoMarcado.current, indice), Math.max(ultimoMarcado.current, indice)];
+      setSel((s) => { const n = new Set(s); lista.slice(a, b + 1).forEach((d) => n.add(d.id)); return n; });
+    } else alternar(id);
+    ultimoMarcado.current = indice;
+  };
+  const alternarFuente = (id: string) => setSelFuentes((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   function Carpetas({ padre, nivel }: { padre: string | null; nivel: number }) {
     return (
@@ -596,10 +608,11 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                 {gestor && <label className="flex items-center gap-1.5 text-xs font-semibold"><input type="checkbox" checked={conVersiones} onChange={(e) => setConVersiones(e.target.checked)} /> Ver versiones anteriores</label>}
               </div>
 
-              {sel.size > 0 && (
+              {(sel.size > 0 || selFuentes.size > 0) && (
                 <div className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-soft p-2 text-xs font-semibold">
-                  <span>{sel.size} seleccionado{sel.size === 1 ? "" : "s"}</span>
-                  {vista.tipo === "papelera" ? (
+                  <span>{sel.size + selFuentes.size} seleccionado{sel.size + selFuentes.size === 1 ? "" : "s"}{selFuentes.size > 0 ? ` (${sel.size} documento${sel.size === 1 ? "" : "s"} y ${selFuentes.size} fuente${selFuentes.size === 1 ? "" : "s"} de datos)` : ""}</span>
+                  {sel.size === 0 && <span className="font-normal text-muted-foreground">Las fuentes de datos no se mueven ni se borran: se abren con un clic.</span>}
+                  {sel.size === 0 ? null : vista.tipo === "papelera" ? (
                     <>
                       <button type="button" onClick={() => void aplicar([...sel], { accion: "restaurar" }, "Se restauraron.")} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1"><ArchiveRestore className="size-3.5" /> Restaurar</button>
                       <button type="button" onClick={() => void eliminarDefinitivo([...sel])} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1 text-red-700"><Trash2 className="size-3.5" /> Eliminar definitivamente</button>
@@ -616,7 +629,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                       <button type="button" onClick={() => void aplicar([...sel], { accion: "papelera" }, "Pasaron a la papelera.")} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1"><Archive className="size-3.5" /> A la papelera</button>
                     </>
                   )}
-                  <button type="button" onClick={() => setSel(new Set())} className="ml-auto">Quitar selección</button>
+                  <button type="button" onClick={() => { setSel(new Set()); setSelFuentes(new Set()); }} className="ml-auto">Quitar selección</button>
                 </div>
               )}
 
@@ -630,7 +643,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                   <table className="w-full min-w-[46rem] text-left text-sm">
                     <thead className="border-b border-border bg-surface-muted/60 text-[11px] tracking-wide text-muted-foreground uppercase">
                       <tr>
-                        <th className="w-8 px-3 py-2.5"><input type="checkbox" aria-label="Seleccionar todos" checked={lista.length > 0 && lista.every((d) => sel.has(d.id))} onChange={(e) => setSel(e.target.checked ? new Set(lista.map((d) => d.id)) : new Set())} /></th>
+                        <th className="w-8 px-3 py-2.5"><input type="checkbox" aria-label="Seleccionar todos" checked={(lista.length > 0 || filasFuente.length > 0) && lista.every((d) => sel.has(d.id)) && filasFuente.every((f) => selFuentes.has(f.id))} onChange={(e) => { setSel(e.target.checked ? new Set(lista.map((d) => d.id)) : new Set()); setSelFuentes(e.target.checked ? new Set(filasFuente.map((f) => f.id)) : new Set()); }} /></th>
                         <th className="px-3 py-2.5 font-semibold">Documento</th>
                         {gestor && <th className="px-3 py-2.5 font-semibold">Carpeta</th>}
                         <th className="px-3 py-2.5 font-semibold">Tipo</th>
@@ -642,9 +655,9 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                     <tbody>
                       {filasFuente.map((f) => (
                         <tr key={f.id} onClick={() => abrirFuente(f.id)} className="cursor-pointer border-b border-border/60 hover:bg-surface-muted/60">
-                          <td className="px-3 py-2.5"><Database className="size-4 text-brand" aria-hidden="true" /></td>
+                          <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${f.nombre}`} checked={selFuentes.has(f.id)} onChange={() => alternarFuente(f.id)} /></td>
                           <td className="max-w-[22rem] px-3 py-2.5">
-                            <p className="truncate font-semibold">{f.nombre}</p>
+                            <p className="flex items-center gap-1.5 truncate font-semibold"><Database className="size-4 shrink-0 text-brand" aria-hidden="true" />{f.nombre}</p>
                             <p className="truncate text-xs text-muted-foreground">{f.detalle}</p>
                           </td>
                           {gestor && <td className="px-3 py-2.5 text-xs text-muted-foreground">Fuentes de datos</td>}
@@ -654,9 +667,9 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                           <td className="px-3 py-2.5 text-xs text-muted-foreground">{fecha(f.fecha ?? null)}</td>
                         </tr>
                       ))}
-                      {lista.map((d) => (
+                      {lista.map((d, indiceFila) => (
                         <tr key={d.id} draggable onDragStart={(e) => { const ids = sel.has(d.id) ? [...sel] : [d.id]; e.dataTransfer.setData("application/x-documentos", JSON.stringify(ids)); e.dataTransfer.effectAllowed = "move"; }} onClick={() => setAbierto(d.id)} className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-muted/60 ${abierto === d.id ? "bg-brand-soft/60" : ""}`}>
-                          <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${d.titulo}`} checked={sel.has(d.id)} onChange={() => alternar(d.id)} /></td>
+                          <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${d.titulo}`} checked={sel.has(d.id)} onChange={() => undefined} onClick={(e) => marcar(d.id, indiceFila, e.shiftKey)} /></td>
                           <td className="max-w-[22rem] px-3 py-2.5">
                             <p className="truncate font-semibold">{d.titulo}{d.version > 1 && <span className="ml-1.5 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">v{d.version}</span>}{(d.ambito ?? "alianza") !== "alianza" && <span className="ml-1.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:text-sky-300">{AMBITOS[d.ambito ?? ""] ?? d.ambito}</span>}{d.confidencial && <span className="ml-1.5 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300">CONFIDENCIAL</span>}{!d.vigente && <span className="ml-1.5 rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">anterior</span>}</p>
                             <p className="truncate text-xs text-muted-foreground">{[d.categoria, d.autor, ...d.etiquetas.slice(0, 3).map((t) => `#${t}`)].filter(Boolean).join(" · ") || d.archivo}</p>
