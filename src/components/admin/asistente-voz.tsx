@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Loader2, Mic, Send, Square, Volume2, VolumeX, X } from "lucide-react";
 
+import { MafeAvatar } from "@/components/mafe/mafe-avatar";
+
 /**
  * Asistente de voz del panel: le hablas, te transcribe (reconocimiento de voz del navegador), consulta lo que el panel guarda y te
  * responde hablando (voz natural con la clave de Gemini u OpenAI de Configuración; si falla, la voz del sistema). Se puede interrumpir
@@ -340,7 +342,10 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
   return (
     <div className="fixed inset-x-3 bottom-3 z-[70] flex max-h-[80dvh] flex-col overflow-hidden rounded-3xl bg-[#06281c] text-[#f4efe2] shadow-2xl ring-1 ring-white/10 sm:inset-x-auto sm:bottom-5 sm:left-[7rem] sm:w-[26rem]" role="dialog" aria-label="Asistente de voz">
       <div className="flex items-center justify-between px-5 pt-4">
-        <p className="text-lg"><span className="font-light">Asistente </span><span className="font-bold">de voz</span></p>
+        <div className="flex items-center gap-3">
+          <MafeAvatar talking={fase === "hablando"} title="MaFe" className={`size-14 rounded-full ring-2 transition ${fase === "escuchando" ? "ring-red-400" : fase === "hablando" ? "ring-[#e0bd7c]" : "ring-white/15"}`} />
+          <p className="text-lg leading-tight"><span className="font-bold">MaFe</span><br /><span className="text-xs font-normal text-[#f4efe2]/60">Asistente de voz</span></p>
+        </div>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => { setSilencio((s) => !s); if (!silencio) { audio.current?.pause(); window.speechSynthesis?.cancel(); } }} aria-pressed={silencio} aria-label={silencio ? "Activar la voz" : "Silenciar la voz"} className="rounded-full p-2 hover:bg-white/10">{silencio ? <VolumeX className="size-4" aria-hidden="true" /> : <Volume2 className="size-4" aria-hidden="true" />}</button>
           <button type="button" onClick={() => { pararTodo(); alCerrar(); }} aria-label="Cerrar" className="rounded-full p-2 hover:bg-white/10"><X className="size-4" aria-hidden="true" /></button>
@@ -400,8 +405,8 @@ export function BotonAsistenteVoz() {
     <>
       {abierto && <AsistenteVoz alCerrar={() => setAbierto(false)} />}
       {!abierto && (
-        <button type="button" onClick={() => setAbierto(true)} className="fixed bottom-5 left-[7rem] z-[60] hidden items-center gap-2 rounded-full bg-[#06281c] px-5 py-3 text-sm font-semibold text-[#f4efe2] shadow-xl ring-1 ring-white/10 transition hover:brightness-110 md:inline-flex" aria-label="Hablar con el asistente">
-          <Mic className="size-4 text-[#e0bd7c]" aria-hidden="true" />Hablar
+        <button type="button" onClick={() => setAbierto(true)} className="fixed bottom-5 left-[7rem] z-[60] hidden items-center gap-2 rounded-full bg-[#06281c] py-1.5 pr-5 pl-1.5 text-sm font-semibold text-[#f4efe2] shadow-xl ring-1 ring-white/10 transition hover:brightness-110 md:inline-flex" aria-label="Hablar con MaFe">
+          <MafeAvatar title="MaFe" className="size-11 rounded-full" />Hablar con MaFe
         </button>
       )}
     </>
