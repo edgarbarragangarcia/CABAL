@@ -13,7 +13,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 export type Turno = { rol: "usuario" | "asistente"; texto: string };
 
 type Fuente = "documentos" | "candidatos" | "monitoreo" | "datos";
-type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | null; partido: string; lugar: string; tambien: Fuente[]; analisis: boolean };
+type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | null; partido: string; lugar: string; tambien: Fuente[]; analisis: boolean; personaje: string; dias: number };
 
 const NIVEL_CARGO: Record<string, number> = { CO: 3, JA: 5, AL: 3, AS: 2, GO: 2 };
 
@@ -32,7 +32,7 @@ async function entender(pregunta: string, historial: Turno[]): Promise<Intencion
   const salida = await generarTexto({
     system:
       "Clasificas lo que pregunta una persona al asistente del panel de una organización política colombiana. Responde SOLO un objeto JSON: " +
-      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "CO" | "JA" | "AL" | "AS" | "GO" | null, "partido": nombre del partido o movimiento si lo mencionan (si no, ""), "lugar": ciudad, municipio o departamento si lo mencionan (si no, ""), "tambien": lista con OTRAS fuentes que ayudarían a relacionar y contrastar la respuesta (de «documentos», «candidatos», «monitoreo», «datos»), "analisis": true si piden analizar, relacionar, comparar, interpretar, opinar, estrategia, riesgos, qué significa, por qué o qué conviene hacer (análisis político), false si solo piden un dato}. ' +
+      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "CO" | "JA" | "AL" | "AS" | "GO" | null, "partido": nombre del partido o movimiento si lo mencionan (si no, ""), "lugar": ciudad, municipio o departamento si lo mencionan (si no, ""), "tambien": lista con OTRAS fuentes que ayudarían a relacionar y contrastar la respuesta (de «documentos», «candidatos», «monitoreo», «datos»), "personaje": de quién piden la prensa: «mafe» (por defecto), «espriella» (Abelardo de la Espriella, el presidente), «uribe», «petro», «cepeda», «paloma» (Paloma Valencia) o «fajardo», "dias": ventana de tiempo en días para prensa y redes (1 si dicen hoy, 7 esta semana, 30 por defecto, hasta 365), "analisis": true si piden analizar, relacionar, comparar, interpretar, opinar, estrategia, riesgos, qué significa, por qué o qué conviene hacer (análisis político), false si solo piden un dato}. ' +
       "«documentos»: preguntas sobre el contenido de los documentos subidos: boletines, discursos, intervenciones, declaraciones y columnas de la Dra. María Fernanda Cabal, actas, programas, estudios; también «qué dijo o qué habló la Dra. sobre un tema» (en «busqueda» pon solo el tema). «candidatos»: votos de candidatos o concejales, ediles, alcaldes, diputados, gobernadores en las elecciones 2023 (en «busqueda» pon SOLO el nombre de la persona si lo dicen, nunca el partido ni el lugar; en «cargo»: CO concejo, JA ediles, AL alcaldía, AS asamblea, GO gobernación). " +
       "«monitoreo»: qué dicen la prensa y las redes de María Fernanda Cabal (menciones, medios, tono), NO lo que ella dijo. «datos»: cuántos datos o registros hay guardados en el panel. «charla»: saludos o cualquier cosa que no necesite datos.",
     user: `${previo ? `Conversación reciente:\n${previo}\n\n` : ""}Pregunta: ${pregunta}`,
@@ -40,7 +40,7 @@ async function entender(pregunta: string, historial: Turno[]): Promise<Intencion
   });
   const j = leerJson<Partial<Intencion>>(salida);
   const fuente = j?.fuente && ["documentos", "candidatos", "monitoreo", "datos", "charla"].includes(j.fuente) ? j.fuente : "documentos";
-  return { fuente, busqueda: String(j?.busqueda ?? pregunta).slice(0, 120), cargo: j?.cargo && j.cargo in NIVEL_CARGO ? j.cargo : null, partido: String(j?.partido ?? "").slice(0, 80), lugar: String(j?.lugar ?? "").slice(0, 80), tambien: Array.isArray(j?.tambien) ? (j.tambien as string[]).filter((x): x is Fuente => ["documentos", "candidatos", "monitoreo", "datos"].includes(x)) : [], analisis: j?.analisis === true };
+  return { fuente, busqueda: String(j?.busqueda ?? pregunta).slice(0, 120), cargo: j?.cargo && j.cargo in NIVEL_CARGO ? j.cargo : null, partido: String(j?.partido ?? "").slice(0, 80), lugar: String(j?.lugar ?? "").slice(0, 80), tambien: Array.isArray(j?.tambien) ? (j.tambien as string[]).filter((x): x is Fuente => ["documentos", "candidatos", "monitoreo", "datos"].includes(x)) : [], analisis: j?.analisis === true, personaje: ["mafe", "espriella", "uribe", "petro", "cepeda", "paloma", "fajardo"].includes(String(j?.personaje)) ? String(j?.personaje) : "mafe", dias: Math.min(365, Math.max(1, Math.round(Number(j?.dias) || 30))) };
 }
 
 const CARGO_NOMBRE: Record<string, string> = { CO: "concejo", JA: "juntas administradoras locales", AL: "alcaldía", AS: "asamblea", GO: "gobernación" };
@@ -83,14 +83,30 @@ async function contextoDe(i: Intencion, pregunta: string): Promise<{ texto: stri
   }
 
   if (i.fuente === "monitoreo") {
-    const desde = new Date(Date.now() - 31 * 86_400_000).toISOString();
-    const { data } = await c.from("monitoreo_items").select("titulo, medio, fecha, tono").eq("personaje", "mafe").gte("fecha", desde).order("fecha", { ascending: false }).limit(300);
-    const filas = (data ?? []) as { titulo: string; medio: string | null; fecha: string; tono: string | null }[];
-    if (!filas.length) return { texto: "No hay menciones guardadas en el último mes.", fuente: "Monitoreo" };
-    const porRed = new Map<string, number>();
-    for (const f of filas) porRed.set((f.medio ?? "web").split("|")[0], (porRed.get((f.medio ?? "web").split("|")[0]) ?? 0) + 1);
+    const NOMBRE: Record<string, string> = { mafe: "María Fernanda Cabal", espriella: "Abelardo de la Espriella", uribe: "Álvaro Uribe", petro: "Gustavo Petro", cepeda: "Iván Cepeda", paloma: "Paloma Valencia", fajardo: "Sergio Fajardo" };
+    const quien = NOMBRE[i.personaje] ?? NOMBRE.mafe;
+    const desde = new Date(Date.now() - i.dias * 86_400_000).toISOString();
+    const columnas = "titulo, medio, fecha, tono, vistas, contexto";
+    type Fila = { titulo: string; medio: string | null; fecha: string; tono: string | null; vistas: number | null; contexto: string | null };
+    const base = () => c.from("monitoreo_items").select(columnas).eq("personaje", i.personaje).gte("fecha", desde);
+    const { data } = await base().order("fecha", { ascending: false }).limit(1500);
+    const filas = (data ?? []) as Fila[];
+    if (!filas.length) return { texto: `No hay menciones de ${quien} guardadas en los últimos ${i.dias} días.`, fuente: "Monitoreo" };
+    const red = (f: Fila) => (f.medio ?? "web").split("|")[0];
+    const tabla = (clave: (f: Fila) => string) => { const m = new Map<string, number>(); for (const f of filas) m.set(clave(f), (m.get(clave(f)) ?? 0) + 1); return [...m].sort((a, b) => b[1] - a[1]); };
+    const porRed = tabla(red).map(([r, n]) => `${r} ${n}`).join(", ");
+    const porTono = tabla((f) => f.tono ?? "sin medir").map(([t, n]) => `${t} ${n}`).join(", ");
+    const porDia = tabla((f) => f.fecha.slice(0, 10)).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 10).map(([d, n]) => `${d}: ${n}`).join("; ");
+    const vistas = filas.reduce((acc, f) => acc + (f.vistas ?? 0), 0);
+    // Titulares: los que contienen el tema pedido (si lo hay), si no los más recientes.
+    const tema = i.busqueda.trim().toLowerCase();
+    const palabras = tema.split(/\s+/).filter((w) => w.length >= 4);
+    const coincide = (f: Fila) => palabras.length > 0 && palabras.some((w) => `${f.titulo} ${f.contexto ?? ""}`.toLowerCase().includes(w));
+    const elegidas = (palabras.length ? filas.filter(coincide) : filas).slice(0, 14);
+    const vistos = new Set<string>();
+    const titulares = elegidas.filter((f) => { const k = f.titulo.slice(0, 60); if (vistos.has(k)) return false; vistos.add(k); return true; }).slice(0, 10);
     return {
-      texto: `Menciones de María Fernanda Cabal en el último mes (muestra de ${filas.length}): ${[...porRed].sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r} ${n}`).join(", ")}.\nLas más recientes:\n${filas.slice(0, 8).map((f) => `- ${f.titulo} (${(f.medio ?? "").split("|")[1] ?? "web"}, ${f.fecha.slice(0, 10)})`).join("\n")}`,
+      texto: `Prensa y redes sobre ${quien}, últimos ${i.dias} día(s), hasta hoy (${filas.length} menciones guardadas; fecha de la más reciente ${filas[0].fecha.slice(0, 10)}${vistas ? `; ${fmt(vistas)} vistas medibles` : ""}).\nPor red o medio: ${porRed}.\nTono: ${porTono}.\nMenciones por día: ${porDia}.\n${palabras.length ? `Titulares que tratan «${i.busqueda}»${titulares.length ? "" : ": ninguno en ese periodo"}` : "Titulares más recientes"}:\n${titulares.map((f) => `- ${f.titulo.slice(0, 220)} (${(f.medio ?? "").split("|")[1] ?? red(f)}, ${f.fecha.slice(0, 10)}${f.tono ? `, ${f.tono}` : ""})`).join("\n")}`,
       fuente: "Monitoreo",
     };
   }
@@ -110,7 +126,7 @@ const SISTEMA =
   "Si dicen un saludo o piden algo que no necesita datos, responde breve y pregunta en qué ayudas.";
 
 export async function responder(pregunta: string, historial: Turno[]): Promise<{ respuesta: string; fuente: string }> {
-  const intencion = await entender(pregunta, historial).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null, partido: "", lugar: "", tambien: [], analisis: false }));
+  const intencion = await entender(pregunta, historial).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null, partido: "", lugar: "", tambien: [], analisis: false, personaje: "mafe", dias: 30 }));
   // Para un análisis se cruzan varias fuentes a la vez; para un dato puntual, la principal y las que el clasificador sugiera.
   const extra = intencion.analisis ? (["documentos", "candidatos", "monitoreo"] as Fuente[]) : intencion.tambien;
   const fuentes = [...new Set<Intencion["fuente"]>([intencion.fuente, ...extra])].filter((f) => f !== "charla").slice(0, 4);
