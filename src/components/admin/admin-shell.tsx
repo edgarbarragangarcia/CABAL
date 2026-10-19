@@ -9,6 +9,7 @@ import { BarChart3, GraduationCap, LayoutTemplate, Library, LogOut, Menu, Newspa
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { BotonAsistenteVoz } from "@/components/admin/asistente-voz";
 
 const NAV_TODAS = [
   { href: "/admin/analisis-publicaciones", label: "Análisis", icon: BarChart3 },
@@ -188,6 +189,7 @@ export function AdminShell({
         )}
 
         <main className="min-w-0 flex-1 p-3 sm:p-6 lg:p-8">{children}</main>
+        <BotonAsistenteVoz />
       </div>
     </div>
   );

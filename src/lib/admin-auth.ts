@@ -106,7 +106,7 @@ export function rutaPermitida(rol: string | undefined, pathname: string): boolea
   }
   if (pathname.startsWith("/api/admin/")) {
     const seccion = pathname.split("/")[3] ?? "";
-    if (["login", "logout", "asistente"].includes(seccion)) return true;
+    if (["login", "logout", "asistente", "asistente-voz"].includes(seccion)) return true;
     return (def.apis as readonly string[]).includes(seccion);
   }
   return true;

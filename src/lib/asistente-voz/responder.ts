@@ -1,0 +1,100 @@
+import "server-only";
+
+import { buscarEnDocumentos } from "@/lib/documentos/servicio";
+import { generarTexto } from "@/lib/ia-config";
+import { getSupabaseServerClient } from "@/lib/supabase-server";
+
+/**
+ * El cerebro del asistente de voz: entiende la pregunta, busca en lo que el panel guarda (documentos, resultados electorales, Monitoreo,
+ * cifras generales) y responde corto y natural, para ser hablado. Solo lectura: nunca modifica nada.
+ */
+
+export type Turno = { rol: "usuario" | "asistente"; texto: string };
+
+type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | null };
+
+const NIVEL_CARGO: Record<string, number> = { CO: 3, JA: 5, AL: 3, AS: 2, GO: 2 };
+
+function leerJson<T>(texto: string): T | null {
+  const m = texto.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[0]) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function entender(pregunta: string, historial: Turno[]): Promise<Intencion> {
+  const previo = historial.slice(-4).map((t) => `${t.rol === "usuario" ? "Usuario" : "Asistente"}: ${t.texto}`).join("\n");
+  const salida = await generarTexto({
+    system:
+      "Clasificas lo que pregunta una persona al asistente del panel de una organización política colombiana. Responde SOLO un objeto JSON: " +
+      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "CO" | "JA" | "AL" | "AS" | "GO" | null}. ' +
+      "«documentos»: preguntas sobre el contenido de documentos subidos, actas, programas, estudios. «candidatos»: votos de candidatos o concejales, ediles, alcaldes, diputados, gobernadores en las elecciones 2023 (en «busqueda» pon el nombre si lo dicen; en «cargo»: CO concejo, JA ediles, AL alcaldía, AS asamblea, GO gobernación). " +
+      "«monitoreo»: qué se dice de María Fernanda Cabal en prensa y redes. «datos»: cuántos datos o registros hay guardados en el panel. «charla»: saludos o cualquier cosa que no necesite datos.",
+    user: `${previo ? `Conversación reciente:\n${previo}\n\n` : ""}Pregunta: ${pregunta}`,
+    maxTokens: 200,
+  });
+  const j = leerJson<Partial<Intencion>>(salida);
+  const fuente = j?.fuente && ["documentos", "candidatos", "monitoreo", "datos", "charla"].includes(j.fuente) ? j.fuente : "documentos";
+  return { fuente, busqueda: String(j?.busqueda ?? pregunta).slice(0, 120), cargo: j?.cargo && j.cargo in NIVEL_CARGO ? j.cargo : null };
+}
+
+const fmt = (n: number) => n.toLocaleString("es-CO");
+
+async function contextoDe(i: Intencion, pregunta: string): Promise<{ texto: string; fuente: string }> {
+  const c = getSupabaseServerClient();
+  if (i.fuente === "charla") return { texto: "", fuente: "" };
+  if (!c) return { texto: "Supabase no está conectado: no hay datos para consultar.", fuente: "sin conexión" };
+
+  if (i.fuente === "documentos") {
+    const r = await buscarEnDocumentos(pregunta, 6).catch(() => null);
+    const hallazgos = (r?.resultados ?? []).filter((h) => h.similitud > 0.35);
+    if (!hallazgos.length) return { texto: "No hay documentos con información sobre esto (la biblioteca puede estar vacía).", fuente: "documentos" };
+    return { texto: hallazgos.map((h, k) => `[${k + 1}] Documento «${h.titulo}»${h.pagina ? `, página ${h.pagina}` : ""}: ${h.contenido}`).join("\n\n"), fuente: "documentos" };
+  }
+
+  if (i.fuente === "candidatos") {
+    const cargo = i.cargo ?? "CO";
+    const { data, error } = await c.rpc("candidatos_mas_votados", { p_eleccion: "territoriales-2023", p_corporacion: cargo, p_nivel: NIVEL_CARGO[cargo], p_prefijo: "", p_busqueda: i.busqueda.replace(/[%_\\]/g, ""), p_limite: 10 });
+    if (error || !data?.length) return { texto: "No encontré candidatos con ese nombre en los resultados guardados de 2023.", fuente: "resultados 2023" };
+    const filas = data as { ambito_nombre: string; partido: string; candidato: string; votos: number }[];
+    return { texto: `Candidatos (${cargo}, elecciones territoriales 2023, preconteo; no indica quién salió elegido):\n${filas.map((f) => `- ${f.candidato}, ${f.partido}, ${f.ambito_nombre}: ${fmt(f.votos)} votos`).join("\n")}`, fuente: "resultados electorales 2023" };
+  }
+
+  if (i.fuente === "monitoreo") {
+    const desde = new Date(Date.now() - 31 * 86_400_000).toISOString();
+    const { data } = await c.from("monitoreo_items").select("titulo, medio, fecha, tono").eq("personaje", "mafe").gte("fecha", desde).order("fecha", { ascending: false }).limit(300);
+    const filas = (data ?? []) as { titulo: string; medio: string | null; fecha: string; tono: string | null }[];
+    if (!filas.length) return { texto: "No hay menciones guardadas en el último mes.", fuente: "Monitoreo" };
+    const porRed = new Map<string, number>();
+    for (const f of filas) porRed.set((f.medio ?? "web").split("|")[0], (porRed.get((f.medio ?? "web").split("|")[0]) ?? 0) + 1);
+    return {
+      texto: `Menciones de María Fernanda Cabal en el último mes (muestra de ${filas.length}): ${[...porRed].sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r} ${n}`).join(", ")}.\nLas más recientes:\n${filas.slice(0, 8).map((f) => `- ${f.titulo} (${(f.medio ?? "").split("|")[1] ?? "web"}, ${f.fecha.slice(0, 10)})`).join("\n")}`,
+      fuente: "Monitoreo",
+    };
+  }
+
+  const cuenta = async (t: string) => (await c.from(t).select("*", { count: "estimated", head: true })).count ?? 0;
+  const [res, mon, terr, cam, mie, doc] = await Promise.all(["resultados_electorales", "monitoreo_items", "indicadores_territoriales", "camaras_comercio", "miembros", "documentos"].map(cuenta));
+  return { texto: `Datos guardados en el panel: ${fmt(res)} resultados electorales (territorios), ${fmt(mon)} menciones de Monitoreo, ${fmt(terr)} indicadores territoriales (DANE y datos abiertos), ${fmt(cam)} cámaras de comercio, ${fmt(mie)} afiliados de la comunidad y ${fmt(doc)} documentos.`, fuente: "datos del panel" };
+}
+
+const SISTEMA =
+  "Eres el asistente de voz del panel del equipo de María Fernanda Cabal. Hablas en español de Colombia, natural y cercano, como una persona que conversa. " +
+  "Tus respuestas se LEEN EN VOZ ALTA: máximo cuatro frases cortas, sin markdown, sin listas, sin asteriscos, sin paréntesis, sin enlaces ni símbolos; di las cifras como se hablan. " +
+  "Usa SOLO lo que diga el CONTEXTO para los datos. Si el contexto no alcanza, dilo con franqueza y sugiere dónde mirar en el panel; nunca inventes. " +
+  "Si dicen un saludo o piden algo que no necesita datos, responde breve y pregunta en qué ayudas.";
+
+export async function responder(pregunta: string, historial: Turno[]): Promise<{ respuesta: string; fuente: string }> {
+  const intencion = await entender(pregunta, historial).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null }));
+  const ctx = await contextoDe(intencion, pregunta);
+  const previo = historial.slice(-6).map((t) => `${t.rol === "usuario" ? "Usuario" : "Asistente"}: ${t.texto}`).join("\n");
+  const respuesta = await generarTexto({
+    system: SISTEMA,
+    user: `${previo ? `Conversación hasta ahora:\n${previo}\n\n` : ""}${ctx.texto ? `CONTEXTO (${ctx.fuente}):\n${ctx.texto}\n\n` : ""}Pregunta: ${pregunta}\n\nResponde hablando.`,
+    maxTokens: 400,
+  });
+  return { respuesta: respuesta.replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim(), fuente: ctx.fuente };
+}
