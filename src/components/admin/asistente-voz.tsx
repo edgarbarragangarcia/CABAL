@@ -48,6 +48,8 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
 
   const rec = React.useRef<Reconocimiento | null>(null);
   const audio = React.useRef<HTMLAudioElement | null>(null);
+  const ctxVoz = React.useRef<AudioContext | null>(null);
+  const detener = React.useRef<(() => void) | null>(null);
   const gen = React.useRef(0);
   const turnosRef = React.useRef<Turno[]>(turnos);
   const barras = React.useRef<(HTMLSpanElement | null)[]>([]);
@@ -77,6 +79,8 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
     rec.current = null;
     audio.current?.pause();
     audio.current = null;
+    detener.current?.();
+    detener.current = null;
     window.speechSynthesis?.cancel();
     pararMedidor();
   }, [pararMedidor]);
@@ -102,6 +106,50 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
     } catch {
       /* sin medidor: las barras quedan quietas, el reconocimiento sigue */
     }
+  }
+
+  /** El contexto de audio se abre (y se «despierta») con un toque de la persona: así el navegador deja sonar lo que llegue después. */
+  function desbloquearAudio() {
+    try {
+      if (!ctxVoz.current) ctxVoz.current = new AudioContext();
+      if (ctxVoz.current.state === "suspended") void ctxVoz.current.resume();
+    } catch {
+      /* sin Web Audio: se usa el reproductor normal */
+    }
+  }
+
+  /** Reproduce el audio con Web Audio (no depende de la política de medios ni de URL temporales). Devuelve el motivo si falla. */
+  async function sonarConWebAudio(blob: Blob): Promise<string | null> {
+    try {
+      desbloquearAudio();
+      const ctx = ctxVoz.current;
+      if (!ctx) return "sin Web Audio";
+      if (ctx.state === "suspended") await ctx.resume();
+      const datos = await ctx.decodeAudioData(await blob.arrayBuffer());
+      await new Promise<void>((fin) => {
+        const fuente = ctx.createBufferSource();
+        fuente.buffer = datos;
+        fuente.connect(ctx.destination);
+        fuente.onended = () => { detener.current = null; fin(); };
+        detener.current = () => { fuente.onended = null; try { fuente.stop(); } catch { /* ya terminó */ } fin(); };
+        fuente.start();
+      });
+      return null;
+    } catch (e) {
+      return e instanceof Error ? `${e.name}: ${e.message}` : "falló Web Audio";
+    }
+  }
+
+  async function sonarConReproductor(blob: Blob): Promise<string | null> {
+    return new Promise<string | null>((fin) => {
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      audio.current = a;
+      const cerrar = (motivo: string | null) => { URL.revokeObjectURL(url); fin(motivo); };
+      a.onended = () => cerrar(null);
+      a.onerror = () => cerrar(`reproductor: ${a.error?.message || `error ${a.error?.code ?? "?"}`}`);
+      a.play().catch((e: unknown) => cerrar(`reproductor: ${e instanceof Error ? e.name : "bloqueado"}`));
+    });
   }
 
   /** La voz del sistema en español (es-CO, es-MX…), esperando a que el navegador cargue la lista. */
@@ -132,21 +180,22 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
       const r = vozNatural ? await precarga : { blob: null as Blob | null, motivo: "" };
       if (i + 1 < frases.length && vozNatural) precarga = pedir(frases[i + 1]);
       if (gen.current !== miGen) return;
+      let sono = false;
       if (r.blob) {
         setAviso("");
-        const ok = await new Promise<boolean>((fin) => {
-          const url = URL.createObjectURL(r.blob!);
-          const a = new Audio(url);
-          audio.current = a;
-          const cerrar = (bien: boolean) => { URL.revokeObjectURL(url); fin(bien); };
-          a.onended = () => cerrar(true);
-          a.onerror = () => cerrar(false);
-          a.play().catch(() => cerrar(false));
-        });
-        if (!ok) { setAviso("El navegador no dejó reproducir el audio: toca «Escuchar» en la respuesta."); return; }
-      } else {
+        // Primero Web Audio; si falla, el reproductor normal. Si ambos fallan se dice por qué y se habla con la voz del sistema.
+        const f1 = await sonarConWebAudio(r.blob);
+        if (f1 === null) sono = true;
+        else {
+          const f2 = await sonarConReproductor(r.blob);
+          if (f2 === null) sono = true;
+          else setAviso(`La voz natural llegó pero no se pudo reproducir (${f1}; ${f2}). Se usa la voz del sistema.`);
+        }
+        if (gen.current !== miGen) return;
+      }
+      if (!sono) {
         vozNatural = false;
-        if (i === 0) setAviso(`Hablando con la voz del sistema${r.motivo ? ` (la voz natural no está disponible: ${r.motivo})` : ""}.`);
+        if (i === 0 && !r.blob) setAviso(`Hablando con la voz del sistema${r.motivo ? ` (la voz natural no está disponible: ${r.motivo})` : ""}.`);
         const sintesis = window.speechSynthesis;
         if (!sintesis) { setAviso("Este navegador no puede hablar."); return; }
         const voz = await vozDelSistema();
@@ -161,12 +210,13 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
           u.onerror = (e) => fin(e.error === "canceled" || e.error === "interrupted");
           sintesis.speak(u);
         });
-        if (!ok) { setAviso("El navegador no pudo hablar. Revisa el volumen o toca «Escuchar» en la respuesta."); return; }
+        if (!ok) { setAviso("El navegador no pudo hablar. Revisa el volumen del computador y de la pestaña, o toca «Escuchar» en la respuesta."); return; }
       }
     }
   }
 
   async function reproducir(texto: string) {
+    desbloquearAudio();
     pararTodo();
     const miGen = ++gen.current;
     setFase("hablando");
@@ -177,6 +227,7 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
   async function enviar(pregunta: string) {
     const texto = pregunta.trim();
     if (!texto) return;
+    desbloquearAudio();
     pararTodo();
     const miGen = ++gen.current;
     setParcial("");
@@ -279,6 +330,7 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
   }
 
   const principal = () => {
+    desbloquearAudio();
     if (fase === "reposo") { vaciosRef.current = 0; void escuchar(); }
     else { pararTodo(); setFase("reposo"); setParcial(""); }
   };
