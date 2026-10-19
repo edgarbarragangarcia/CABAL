@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Copy, Download, FileText, Loader2, Mic, Paperclip, Square, Volume2, VolumeX, X } from "lucide-react";
+import { Copy, Download, FileText, Link2, Loader2, Mic, Paperclip, Square, Volume2, VolumeX, X } from "lucide-react";
 
 import { MafeAvatar } from "@/components/mafe/mafe-avatar";
 
@@ -103,6 +103,8 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
   const [adjunto, setAdjunto] = React.useState<Adjunto | null>(null);
   const adjuntoRef = React.useRef<Adjunto | null>(null);
   const [subiendo, setSubiendo] = React.useState(false);
+  const [verEnlace, setVerEnlace] = React.useState(false);
+  const [enlace, setEnlace] = React.useState("");
   const entradaArchivo = React.useRef<HTMLInputElement>(null);
   const [bajando, setBajando] = React.useState<string | null>(null);
   const continuoRef = React.useRef(continuo);
@@ -310,6 +312,27 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
       void enviar(`Analiza el archivo ${a.nombre}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No fue posible leer el archivo.");
+    } finally {
+      setSubiendo(false);
+    }
+  }
+
+  /** Lee un enlace (noticia, PDF o video de YouTube) y le pide al asistente un análisis a fondo. */
+  async function leerEnlace(url: string) {
+    setError("");
+    setSubiendo(true);
+    try {
+      const r = await fetch("/api/admin/asistente-voz/enlace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+      const j = (await r.json().catch(() => ({}))) as { nombre?: string; texto?: string; error?: string };
+      if (!r.ok || !j.texto) throw new Error(j.error ?? "No fue posible leer el enlace.");
+      const a = { nombre: j.nombre ?? url, texto: j.texto };
+      adjuntoRef.current = a;
+      setAdjunto(a);
+      setVerEnlace(false);
+      setEnlace("");
+      void enviar(`Haz un análisis profundo de este enlace: ${a.nombre}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No fue posible leer el enlace.");
     } finally {
       setSubiendo(false);
     }
@@ -537,13 +560,19 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
             <button type="button" aria-label="Quitar el archivo" onClick={() => { adjuntoRef.current = null; setAdjunto(null); }} className="rounded-full p-1 hover:bg-white/10"><X className="size-3" aria-hidden="true" /></button>
           </p>
         )}
+        {verEnlace && (
+          <form className="mt-2 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (enlace.trim()) void leerEnlace(enlace.trim()); }}>
+            <input autoFocus value={enlace} onChange={(e) => setEnlace(e.target.value)} placeholder="Pega aquí el enlace (https://…)" aria-label="Enlace para analizar" className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2 text-sm text-[#f4efe2] placeholder:text-[#f4efe2]/40 outline-none focus:ring-2 focus:ring-[#e0bd7c]/60" />
+            <button type="submit" disabled={!enlace.trim() || subiendo} className="rounded-full bg-[#e0bd7c] px-3.5 py-2 text-xs font-semibold text-[#2b1f06] disabled:opacity-40">Analizar</button>
+          </form>
+        )}
         <input ref={entradaArchivo} type="file" hidden accept=".pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.xml,.html,.htm,.log" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void adjuntar(f); }} />
         <div className="mt-3 flex items-center justify-center gap-3">
           <button type="button" onClick={() => entradaArchivo.current?.click()} disabled={subiendo || fase === "pensando"} aria-label="Adjuntar un archivo para analizarlo" title="Adjuntar un archivo para analizarlo o escribir a partir de él" className="grid size-11 place-items-center rounded-full bg-white/10 transition hover:bg-white/20 disabled:opacity-40">{subiendo ? <Loader2 className="size-5 animate-spin" aria-hidden="true" /> : <Paperclip className="size-5" aria-hidden="true" />}</button>
           <button type="button" onClick={principal} disabled={!soporte && fase === "reposo"} aria-label={fase === "reposo" ? "Hablar" : "Detener"} className={`grid size-14 place-items-center rounded-full transition disabled:opacity-40 ${fase === "escuchando" ? "bg-red-500 text-white" : "bg-[#e0bd7c] text-[#2b1f06] hover:brightness-105"}`}>
             {fase === "reposo" ? <Mic className="size-6" aria-hidden="true" /> : fase === "pensando" ? <Loader2 className="size-6 animate-spin" aria-hidden="true" /> : <Square className="size-5" aria-hidden="true" />}
           </button>
-          <span className="size-11" aria-hidden="true" />
+          <button type="button" onClick={() => setVerEnlace((v) => !v)} disabled={subiendo || fase === "pensando"} aria-label="Pegar un enlace para analizarlo" aria-pressed={verEnlace} title="Pegar un enlace (noticia, PDF o video de YouTube) para analizarlo" className={`grid size-11 place-items-center rounded-full transition hover:bg-white/20 disabled:opacity-40 ${verEnlace ? "bg-[#e0bd7c] text-[#2b1f06]" : "bg-white/10"}`}><Link2 className="size-5" aria-hidden="true" /></button>
         </div>
         <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 text-xs text-[#f4efe2]/70"><input type="checkbox" className="size-3.5 accent-[#e0bd7c]" checked={continuo} onChange={(e) => setContinuo(e.target.checked)} />Conversación continua (vuelve a escucharte solo)</label>
       </div>

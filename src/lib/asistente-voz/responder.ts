@@ -265,7 +265,7 @@ export async function responder(pregunta: string, historial: Turno[], adjunto?: 
   if (adjunto && intencion.analisis) {
     const salida = await generarTexto({
       system: SISTEMA_REDACTOR,
-      user: `HECHOS VIGENTES (al ${HECHOS_VIGENTES_AL}; hoy es ${hoy0}):\n${HECHOS_VIGENTES}\n\n${ctx.texto ? `CONTEXTO DE LAS BASES (${ctx.fuente}):\n${ctx.texto}\n\n` : ""}${bloqueArchivo}\n\nEncargo: ${pregunta}. Haz un análisis político del ARCHIVO con estas secciones: «## Resumen ejecutivo», «## Hallazgos clave», «## Cifras y datos», «## Contraste con lo que dicen nuestras bases» (votos, documentos, prensa y redes, solo si el CONTEXTO aporta algo), «## Riesgos y oportunidades» y «## Recomendaciones».`,
+      user: `HECHOS VIGENTES (al ${HECHOS_VIGENTES_AL}; hoy es ${hoy0}):\n${HECHOS_VIGENTES}\n\n${ctx.texto ? `CONTEXTO DE LAS BASES (${ctx.fuente}):\n${ctx.texto}\n\n` : ""}${bloqueArchivo}\n\nEncargo: ${pregunta}. Haz un análisis político del ARCHIVO con estas secciones: «## Resumen ejecutivo», «## Hallazgos clave», «## Cifras y datos», «## Contraste con lo que dicen nuestras bases» (votos, documentos, prensa y redes, solo si el CONTEXTO aporta algo), «## Actores y posiciones» (quién dice qué y con qué intereses), «## Lo que no dice el texto» (vacíos, sesgos, afirmaciones sin sustento), «## Riesgos y oportunidades» y «## Recomendaciones» (qué hacer, quién, cuándo). Si es una noticia o una columna, evalúa cómo afecta a la Dra. María Fernanda Cabal y a su organización. Sé profundo y concreto: cada hallazgo con su evidencia del archivo.`,
       maxTokens: 4000,
     });
     const d = leerDocumento(salida);
