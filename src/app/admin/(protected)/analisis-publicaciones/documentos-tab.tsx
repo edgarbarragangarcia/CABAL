@@ -3,7 +3,7 @@
 import { GoogleDrive } from "@/components/admin/google-drive";
 import * as React from "react";
 import {
-  Archive, ArchiveRestore, Check, Copy, Database, Download, FileText, Folder, FolderOpen, FolderPlus, History, Inbox, Library, Loader2, MessageSquareText,
+  Archive, ArchiveRestore, Check, ChevronDown, ChevronRight, Copy, Database, Download, FileText, Folder, FolderOpen, FolderPlus, History, Inbox, Library, Loader2, MessageSquareText,
   Pencil, Play, Search, Sparkles, Trash2, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 
@@ -131,6 +131,8 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
   const [aviso, setAviso] = React.useState<{ ok: boolean; texto: string } | null>(null);
   const [etiquetasSubida, setEtiquetasSubida] = React.useState("");
   const [nuevaCarpeta, setNuevaCarpeta] = React.useState<string | null>(null);
+  const [plegadas, setPlegadas] = React.useState<Set<string>>(new Set());
+  const alternarPlegada = (id: string) => setPlegadas((x) => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [nombreCarpeta, setNombreCarpeta] = React.useState("");
   const [copiado, setCopiado] = React.useState(false);
   const [vectorizando, setVectorizando] = React.useState<string | null>(null);
@@ -442,6 +444,8 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
       <ul>
         {hijosDe(padre).map((c) => {
           const activa = vista.tipo === "carpeta" && vista.id === c.id;
+          const tieneHijas = hijosDe(c.id).length > 0;
+          const plegada = plegadas.has(c.id);
           return (
             <li key={c.id}>
               <div
@@ -451,6 +455,11 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                 onDragLeave={() => setSobreCarpeta((x) => (x === c.id ? null : x))}
                 onDrop={(e) => { const crudo = e.dataTransfer.getData("application/x-documentos"); setSobreCarpeta(null); if (!crudo) return; e.preventDefault(); const ids = JSON.parse(crudo) as string[]; void aplicar(ids, { carpetaId: c.id }, `Se movieron a «${c.nombre}».`); }}
               >
+                {tieneHijas ? (
+                  <button type="button" aria-label={plegada ? `Desplegar ${c.nombre}` : `Plegar ${c.nombre}`} aria-expanded={!plegada} onClick={() => alternarPlegada(c.id)} className="shrink-0 rounded p-0.5 hover:bg-surface">
+                    {plegada ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+                  </button>
+                ) : <span className="w-5 shrink-0" />}
                 <button type="button" onClick={() => setVista({ tipo: "carpeta", id: c.id })} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left text-sm">
                   {activa ? <FolderOpen className="size-4 shrink-0 text-brand" /> : <Folder className="size-4 shrink-0 text-muted-foreground" />}
                   <span className={`truncate ${activa ? "font-semibold" : ""}`}>{c.nombre}</span>
@@ -463,7 +472,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                 </span>
               </div>
               {nuevaCarpeta === c.id && <NuevaCarpeta padre={c.id} nivel={nivel + 1} />}
-              <Carpetas padre={c.id} nivel={nivel + 1} />
+              {!plegada && <Carpetas padre={c.id} nivel={nivel + 1} />}
             </li>
           );
         })}
@@ -569,6 +578,10 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                   <div className="my-2 border-t border-border" />
                   <div className="flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Carpetas</div>
                   <button type="button" onClick={() => { setNuevaCarpeta("raiz"); setNombreCarpeta(""); }} className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-2 py-1.5 text-sm font-semibold text-brand hover:border-brand hover:bg-brand-soft"><FolderPlus className="size-4" /> Nueva carpeta</button>
+                  <div className="flex justify-end gap-3 px-1 text-[11px] text-muted-foreground">
+                    <button type="button" onClick={() => setPlegadas(new Set(carpetas.filter((c) => hijosDe(c.id).length > 0).map((c) => c.id)))} className="hover:text-foreground hover:underline">Plegar todo</button>
+                    <button type="button" onClick={() => setPlegadas(new Set())} className="hover:text-foreground hover:underline">Desplegar todo</button>
+                  </div>
                   {nuevaCarpeta === "raiz" && <NuevaCarpeta padre={null} nivel={0} />}
                   <Carpetas padre={null} nivel={0} />
                   {carpetas.length === 0 && nuevaCarpeta !== "raiz" && <p className="px-2 py-1 text-xs text-muted-foreground">Crea carpetas para ordenar tus documentos.</p>}
