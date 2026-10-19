@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Copy, Download, FileText, Loader2, Mic, Square, Volume2, VolumeX, X } from "lucide-react";
+import { Copy, Download, FileText, Loader2, Mic, Paperclip, Square, Volume2, VolumeX, X } from "lucide-react";
 
 import { MafeAvatar } from "@/components/mafe/mafe-avatar";
 
@@ -37,7 +37,8 @@ function partirEnFrases(texto: string): string[] {
   return trozos.slice(0, 8);
 }
 
-type Entrega = { tipo: "gestor"; id: string; nombre: string } | { tipo: "texto"; nombre: string; contenido: string };
+type Entrega = { tipo: "gestor"; id: string; nombre: string } | { tipo: "texto"; nombre: string; contenido: string; detalle?: string };
+type Adjunto = { nombre: string; texto: string };
 
 const escapar = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -99,6 +100,10 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
   const escenario = React.useRef<HTMLDivElement>(null);
   const [sincro, setSincro] = React.useState(false);
   const [entregas, setEntregas] = React.useState<Entrega[]>([]);
+  const [adjunto, setAdjunto] = React.useState<Adjunto | null>(null);
+  const adjuntoRef = React.useRef<Adjunto | null>(null);
+  const [subiendo, setSubiendo] = React.useState(false);
+  const entradaArchivo = React.useRef<HTMLInputElement>(null);
   const [bajando, setBajando] = React.useState<string | null>(null);
   const continuoRef = React.useRef(continuo);
   const silencioRef = React.useRef(silencio);
@@ -289,6 +294,27 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
     }
   }
 
+  /** Sube el archivo, lee su texto y le pide al asistente que lo analice; las preguntas siguientes (y «escríbeme un artículo») parten de él. */
+  async function adjuntar(f: File) {
+    setError("");
+    setSubiendo(true);
+    try {
+      const fd = new FormData();
+      fd.append("archivo", f);
+      const r = await fetch("/api/admin/asistente-voz/archivo", { method: "POST", body: fd });
+      const j = (await r.json().catch(() => ({}))) as { nombre?: string; texto?: string; error?: string };
+      if (!r.ok || !j.texto) throw new Error(j.error ?? "No fue posible leer el archivo.");
+      const a = { nombre: j.nombre ?? f.name, texto: j.texto };
+      adjuntoRef.current = a;
+      setAdjunto(a);
+      void enviar(`Analiza el archivo ${a.nombre}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No fue posible leer el archivo.");
+    } finally {
+      setSubiendo(false);
+    }
+  }
+
   async function bajar(e: Entrega) {
     setBajando(e.nombre);
     try {
@@ -351,7 +377,7 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
     setTurnos((t) => [...t, { rol: "usuario", texto }]);
     setFase("pensando");
     try {
-      const r = await fetch("/api/admin/asistente-voz", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pregunta: texto, historial: previo.map(({ rol, texto: x }) => ({ rol, texto: x })) }) });
+      const r = await fetch("/api/admin/asistente-voz", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pregunta: texto, historial: previo.map(({ rol, texto: x }) => ({ rol, texto: x })), adjunto: adjuntoRef.current ?? undefined }) });
       const j = (await r.json().catch(() => ({}))) as { respuesta?: string; fuente?: string; error?: string; entregas?: Entrega[] };
       if (gen.current !== miGen) return;
       if (!r.ok || !j.respuesta) throw new Error(j.error ?? "No pude responder.");
@@ -480,7 +506,7 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
             {entregas.map((e) => (
               <li key={`${e.tipo}-${e.nombre}`} className="flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2">
                 <FileText className="size-5 shrink-0 text-[#e0bd7c]" aria-hidden="true" />
-                <span className="min-w-0 flex-1 text-[13px] leading-tight"><b className="line-clamp-2">{e.nombre}</b><span className="text-[11px] text-[#f4efe2]/60">{e.tipo === "gestor" ? "Del Gestor documental" : "Redactado por MaFe · Word"}</span></span>
+                <span className="min-w-0 flex-1 text-[13px] leading-tight"><b className="line-clamp-2">{e.nombre}</b><span className="text-[11px] text-[#f4efe2]/60">{e.tipo === "gestor" ? "Del Gestor documental" : `${e.detalle ?? "Redactado por MaFe"} · Word`}</span></span>
                 {e.tipo === "texto" && <button type="button" aria-label="Copiar el texto" onClick={() => void navigator.clipboard?.writeText(e.contenido)} className="rounded-full p-2 hover:bg-white/10"><Copy className="size-4" aria-hidden="true" /></button>}
                 <button type="button" onClick={() => void bajar(e)} disabled={bajando === e.nombre} className="inline-flex items-center gap-1 rounded-full bg-[#e0bd7c] px-3 py-1.5 text-xs font-semibold text-[#2b1f06] hover:brightness-105 disabled:opacity-60">{bajando === e.nombre ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Download className="size-3.5" aria-hidden="true" />}Descargar</button>
               </li>
@@ -504,10 +530,20 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
         </div>
         {aviso && <p className="mt-1 rounded-lg bg-white/10 px-3 py-1.5 text-center text-[11px] text-[#f4efe2]/80">{aviso}</p>}
         <p className="mt-1 text-center text-xs text-[#f4efe2]/70" aria-live="polite">{soporte ? etiqueta : "Este navegador no reconoce la voz: usa Chrome o Edge."}</p>
+        {adjunto && (
+          <p className="mt-2 flex items-center justify-center gap-2 text-xs text-[#f4efe2]/80">
+            <FileText className="size-3.5 shrink-0 text-[#e0bd7c]" aria-hidden="true" />
+            <span className="min-w-0 truncate">{adjunto.nombre}</span>
+            <button type="button" aria-label="Quitar el archivo" onClick={() => { adjuntoRef.current = null; setAdjunto(null); }} className="rounded-full p-1 hover:bg-white/10"><X className="size-3" aria-hidden="true" /></button>
+          </p>
+        )}
+        <input ref={entradaArchivo} type="file" hidden accept=".pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.xml,.html,.htm,.log" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void adjuntar(f); }} />
         <div className="mt-3 flex items-center justify-center gap-3">
+          <button type="button" onClick={() => entradaArchivo.current?.click()} disabled={subiendo || fase === "pensando"} aria-label="Adjuntar un archivo para analizarlo" title="Adjuntar un archivo para analizarlo o escribir a partir de él" className="grid size-11 place-items-center rounded-full bg-white/10 transition hover:bg-white/20 disabled:opacity-40">{subiendo ? <Loader2 className="size-5 animate-spin" aria-hidden="true" /> : <Paperclip className="size-5" aria-hidden="true" />}</button>
           <button type="button" onClick={principal} disabled={!soporte && fase === "reposo"} aria-label={fase === "reposo" ? "Hablar" : "Detener"} className={`grid size-14 place-items-center rounded-full transition disabled:opacity-40 ${fase === "escuchando" ? "bg-red-500 text-white" : "bg-[#e0bd7c] text-[#2b1f06] hover:brightness-105"}`}>
             {fase === "reposo" ? <Mic className="size-6" aria-hidden="true" /> : fase === "pensando" ? <Loader2 className="size-6 animate-spin" aria-hidden="true" /> : <Square className="size-5" aria-hidden="true" />}
           </button>
+          <span className="size-11" aria-hidden="true" />
         </div>
         <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 text-xs text-[#f4efe2]/70"><input type="checkbox" className="size-3.5 accent-[#e0bd7c]" checked={continuo} onChange={(e) => setContinuo(e.target.checked)} />Conversación continua (vuelve a escucharte solo)</label>
       </div>
