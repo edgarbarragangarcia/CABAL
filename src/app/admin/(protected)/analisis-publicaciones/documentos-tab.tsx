@@ -118,6 +118,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
   const [estadoF, setEstadoF] = React.useState("");
   const [categoriaF, setCategoriaF] = React.useState("");
   const [drive, setDrive] = React.useState(false);
+  const [sobreCarpeta, setSobreCarpeta] = React.useState<string | null>(null);
   const [ambitoF, setAmbitoF] = React.useState("");
   const [orden, setOrden] = React.useState<"reciente" | "titulo" | "tamano">("reciente");
   const [conVersiones, setConVersiones] = React.useState(false);
@@ -431,7 +432,13 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
           const activa = vista.tipo === "carpeta" && vista.id === c.id;
           return (
             <li key={c.id}>
-              <div className={`group flex items-center gap-1 rounded-lg pr-1 ${activa ? "bg-brand-soft" : "hover:bg-surface-muted"}`} style={{ paddingLeft: 8 + nivel * 14 }}>
+              <div
+                className={`group flex items-center gap-1 rounded-lg pr-1 ${activa ? "bg-brand-soft" : "hover:bg-surface-muted"} ${sobreCarpeta === c.id ? "ring-2 ring-brand" : ""}`}
+                style={{ paddingLeft: 8 + nivel * 14 }}
+                onDragOver={(e) => { if (e.dataTransfer.types.includes("application/x-documentos")) { e.preventDefault(); setSobreCarpeta(c.id); } }}
+                onDragLeave={() => setSobreCarpeta((x) => (x === c.id ? null : x))}
+                onDrop={(e) => { const crudo = e.dataTransfer.getData("application/x-documentos"); setSobreCarpeta(null); if (!crudo) return; e.preventDefault(); const ids = JSON.parse(crudo) as string[]; void aplicar(ids, { carpetaId: c.id }, `Se movieron a «${c.nombre}».`); }}
+              >
                 <button type="button" onClick={() => setVista({ tipo: "carpeta", id: c.id })} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left text-sm">
                   {activa ? <FolderOpen className="size-4 shrink-0 text-brand" /> : <Folder className="size-4 shrink-0 text-muted-foreground" />}
                   <span className={`truncate ${activa ? "font-semibold" : ""}`}>{c.nombre}</span>
@@ -468,6 +475,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
     return (
       <select aria-label={etiqueta} value={valor} onChange={(e) => alElegir(e.target.value)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold outline-none focus:border-brand">
         <option value="">{etiqueta}</option>
+        <option value="__nueva">＋ Nueva carpeta…</option>
         <option value="__sin">Sin carpeta</option>
         {opciones.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
@@ -574,9 +582,9 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
 
             <section
               className={`${tarjeta} min-w-0 space-y-3 p-4 ${arrastrando ? "ring-2 ring-brand" : ""} ${vista.tipo === "fuente" ? "hidden" : ""}`}
-              onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+              onDragOver={(e) => { if (!e.dataTransfer.types.includes("Files")) return; e.preventDefault(); setArrastrando(true); }}
               onDragLeave={() => setArrastrando(false)}
-              onDrop={(e) => { e.preventDefault(); setArrastrando(false); if (e.dataTransfer.files.length) agregar(e.dataTransfer.files); }}
+              onDrop={(e) => { if (!e.dataTransfer.types.includes("Files")) return; e.preventDefault(); setArrastrando(false); if (e.dataTransfer.files.length) agregar(e.dataTransfer.files); }}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <label className="flex min-w-[12rem] flex-1 items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 focus-within:border-brand"><Search className="size-4 text-muted-foreground" /><input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Filtrar por título, autor, etiqueta…" aria-label="Filtrar documentos" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
@@ -598,7 +606,12 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                     </>
                   ) : (
                     <>
-                      <SelectorCarpeta valor="" etiqueta="Mover a…" alElegir={(v) => v && void aplicar([...sel], { carpetaId: v === "__sin" ? null : v }, "Se movieron.")} />
+                      <SelectorCarpeta valor="" etiqueta="Mover a una carpeta…" alElegir={(v) => {
+                        if (!v) return;
+                        if (v !== "__nueva") return void aplicar([...sel], { carpetaId: v === "__sin" ? null : v }, "Se movieron.");
+                        const nombre = window.prompt("Nombre de la carpeta nueva")?.trim();
+                        if (nombre) void crearYDevolver(nombre).then((id) => { if (id) void aplicar([...sel], { carpetaId: id }, `Se movieron a «${nombre}».`); });
+                      }} />
                       <button type="button" onClick={() => { const t = window.prompt("Etiquetas a agregar, separadas por coma")?.split(",").map((x) => x.trim()).filter(Boolean); if (t?.length) void aplicar([...sel], { agregarEtiquetas: t }, "Etiquetas agregadas."); }} className="rounded-full bg-surface px-3 py-1">Etiquetar</button>
                       <button type="button" onClick={() => void aplicar([...sel], { accion: "papelera" }, "Pasaron a la papelera.")} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1"><Archive className="size-3.5" /> A la papelera</button>
                     </>
@@ -642,7 +655,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                         </tr>
                       ))}
                       {lista.map((d) => (
-                        <tr key={d.id} onClick={() => setAbierto(d.id)} className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-muted/60 ${abierto === d.id ? "bg-brand-soft/60" : ""}`}>
+                        <tr key={d.id} draggable onDragStart={(e) => { const ids = sel.has(d.id) ? [...sel] : [d.id]; e.dataTransfer.setData("application/x-documentos", JSON.stringify(ids)); e.dataTransfer.effectAllowed = "move"; }} onClick={() => setAbierto(d.id)} className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-muted/60 ${abierto === d.id ? "bg-brand-soft/60" : ""}`}>
                           <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${d.titulo}`} checked={sel.has(d.id)} onChange={() => alternar(d.id)} /></td>
                           <td className="max-w-[22rem] px-3 py-2.5">
                             <p className="truncate font-semibold">{d.titulo}{d.version > 1 && <span className="ml-1.5 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">v{d.version}</span>}{(d.ambito ?? "alianza") !== "alianza" && <span className="ml-1.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:text-sky-300">{AMBITOS[d.ambito ?? ""] ?? d.ambito}</span>}{d.confidencial && <span className="ml-1.5 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300">CONFIDENCIAL</span>}{!d.vigente && <span className="ml-1.5 rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">anterior</span>}</p>
