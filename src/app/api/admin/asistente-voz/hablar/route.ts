@@ -14,10 +14,26 @@ function aWav(pcm: Buffer, hz = 24_000): Buffer {
   return Buffer.concat([cab, pcm]);
 }
 
-const MODELOS_TTS_GEMINI = ["gemini-2.5-flash-preview-tts", "gemini-2.5-flash-tts"];
+const MODELOS_TTS_GEMINI = ["gemini-2.5-flash-preview-tts", "gemini-2.5-flash-tts", "gemini-2.5-pro-preview-tts"];
 
-async function conGemini(texto: string, clave: string): Promise<Buffer | null> {
-  for (const modelo of MODELOS_TTS_GEMINI) {
+/** Los modelos de voz que ofrece esta clave (por si el nombre cambió): los que tienen «tts» y generan contenido. */
+async function modelosDeVoz(clave: string): Promise<string[]> {
+  try {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", { headers: { "x-goog-api-key": clave }, signal: AbortSignal.timeout(10_000) });
+    if (!r.ok) return [];
+    const j = (await r.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[] };
+    return (j.models ?? []).filter((m) => /tts/i.test(m.name) && (m.supportedGenerationMethods ?? []).includes("generateContent")).map((m) => m.name.replace(/^models\//, ""));
+  } catch {
+    return [];
+  }
+}
+
+type Resultado = { audio: Buffer | null; motivo?: string };
+
+async function conGemini(texto: string, clave: string): Promise<Resultado> {
+  let motivo = "";
+  const candidatos = [...new Set([...MODELOS_TTS_GEMINI, ...(await modelosDeVoz(clave))])];
+  for (const modelo of candidatos) {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
         method: "POST",
@@ -28,18 +44,22 @@ async function conGemini(texto: string, clave: string): Promise<Buffer | null> {
         }),
         signal: AbortSignal.timeout(25_000),
       });
-      if (!r.ok) continue;
-      const j = (await r.json()) as { candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[] };
+      const j = (await r.json().catch(() => ({}))) as { error?: { message?: string }; candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[] };
+      if (!r.ok) {
+        motivo = `${modelo}: ${j.error?.message ?? r.status}`;
+        continue;
+      }
       const b64 = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData?.data;
-      if (b64) return aWav(Buffer.from(b64, "base64"));
-    } catch {
-      /* se prueba el siguiente modelo */
+      if (b64) return { audio: aWav(Buffer.from(b64, "base64")) };
+      motivo = `${modelo}: respondió sin audio`;
+    } catch (e) {
+      motivo = `${modelo}: ${e instanceof Error ? e.message : "sin respuesta"}`;
     }
   }
-  return null;
+  return { audio: null, motivo: motivo || "Gemini no ofrece voz con esta clave" };
 }
 
-async function conOpenAI(texto: string, clave: string): Promise<Buffer | null> {
+async function conOpenAI(texto: string, clave: string): Promise<Resultado> {
   try {
     const r = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
@@ -47,9 +67,10 @@ async function conOpenAI(texto: string, clave: string): Promise<Buffer | null> {
       body: JSON.stringify({ model: "gpt-4o-mini-tts", voice: "nova", input: texto, instructions: "Español de Colombia, tono cálido, sereno y natural.", response_format: "mp3" }),
       signal: AbortSignal.timeout(25_000),
     });
-    return r.ok ? Buffer.from(await r.arrayBuffer()) : null;
-  } catch {
-    return null;
+    if (!r.ok) return { audio: null, motivo: `OpenAI ${r.status}` };
+    return { audio: Buffer.from(await r.arrayBuffer()) };
+  } catch (e) {
+    return { audio: null, motivo: `OpenAI: ${e instanceof Error ? e.message : "sin respuesta"}` };
   }
 }
 
@@ -60,11 +81,14 @@ async function conOpenAI(texto: string, clave: string): Promise<Buffer | null> {
 export async function POST(req: Request) {
   const p = z.object({ texto: z.string().trim().min(1).max(700) }).safeParse(await req.json().catch(() => null));
   if (!p.success) return new Response(null, { status: 422 });
+  const motivos: string[] = [];
   for (const proveedor of ["gemini", "openai"] as const) {
     const k = await claveParaVectores(proveedor).catch(() => null);
-    if (!k) continue;
-    const audio = proveedor === "gemini" ? await conGemini(p.data.texto, k.clave) : await conOpenAI(p.data.texto, k.clave);
-    if (audio) return new Response(new Uint8Array(audio), { headers: { "Content-Type": proveedor === "gemini" ? "audio/wav" : "audio/mpeg", "Cache-Control": "private, no-store" } });
+    if (!k) { motivos.push(`sin clave de ${proveedor}`); continue; }
+    const r = proveedor === "gemini" ? await conGemini(p.data.texto, k.clave) : await conOpenAI(p.data.texto, k.clave);
+    if (r.audio) return new Response(new Uint8Array(r.audio), { headers: { "Content-Type": proveedor === "gemini" ? "audio/wav" : "audio/mpeg", "Cache-Control": "private, no-store", "X-Voz": proveedor } });
+    if (r.motivo) motivos.push(r.motivo);
   }
-  return new Response(null, { status: 204 });
+  // Sin voz natural: el navegador habla con la voz del sistema. El motivo viaja en una cabecera para mostrarlo.
+  return new Response(null, { status: 204, headers: { "X-Voz-Motivo": encodeURIComponent(motivos.join(" · ").slice(0, 300)) } });
 }

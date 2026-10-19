@@ -43,6 +43,7 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
   const [silencio, setSilencio] = React.useState(false);
   const [error, setError] = React.useState("");
   const [escrito, setEscrito] = React.useState("");
+  const [aviso, setAviso] = React.useState("");
   const [soporte] = React.useState(() => typeof window !== "undefined" && !!((window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition));
 
   const rec = React.useRef<Reconocimiento | null>(null);
@@ -103,39 +104,74 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
     }
   }
 
+  /** La voz del sistema en español (es-CO, es-MX…), esperando a que el navegador cargue la lista. */
+  async function vozDelSistema(): Promise<SpeechSynthesisVoice | undefined> {
+    const sintesis = window.speechSynthesis;
+    if (!sintesis) return undefined;
+    let voces = sintesis.getVoices();
+    if (!voces.length) await new Promise<void>((ok) => { const t = window.setTimeout(ok, 600); sintesis.addEventListener("voiceschanged", () => { window.clearTimeout(t); ok(); }, { once: true }); });
+    voces = sintesis.getVoices();
+    for (const pref of ["es-CO", "es-MX", "es-US", "es-419", "es-ES", "es"]) {
+      const v = voces.find((x) => x.lang.replace("_", "-").toLowerCase().startsWith(pref.toLowerCase()));
+      if (v) return v;
+    }
+    return undefined;
+  }
+
   async function hablar(texto: string, miGen: number): Promise<void> {
     if (silencioRef.current) return;
     const frases = partirEnFrases(texto);
-    const pedir = (f: string) => fetch("/api/admin/asistente-voz/hablar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto: f }) }).then(async (r) => (r.status === 200 ? await r.blob() : null)).catch(() => null);
+    const pedir = (f: string) =>
+      fetch("/api/admin/asistente-voz/hablar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto: f }) })
+        .then(async (r) => (r.status === 200 ? { blob: await r.blob(), motivo: "" } : { blob: null, motivo: decodeURIComponent(r.headers.get("x-voz-motivo") ?? "") || `respuesta ${r.status}` }))
+        .catch(() => ({ blob: null as Blob | null, motivo: "sin conexión con el servidor" }));
     let precarga = pedir(frases[0]);
     let vozNatural = true;
     for (let i = 0; i < frases.length; i++) {
       if (gen.current !== miGen) return;
-      const blob = vozNatural ? await precarga : null;
+      const r = vozNatural ? await precarga : { blob: null as Blob | null, motivo: "" };
       if (i + 1 < frases.length && vozNatural) precarga = pedir(frases[i + 1]);
       if (gen.current !== miGen) return;
-      if (blob) {
-        await new Promise<void>((ok) => {
-          const url = URL.createObjectURL(blob);
+      if (r.blob) {
+        setAviso("");
+        const ok = await new Promise<boolean>((fin) => {
+          const url = URL.createObjectURL(r.blob!);
           const a = new Audio(url);
           audio.current = a;
-          const fin = () => { URL.revokeObjectURL(url); ok(); };
-          a.onended = fin;
-          a.onerror = fin;
-          void a.play().catch(fin);
+          const cerrar = (bien: boolean) => { URL.revokeObjectURL(url); fin(bien); };
+          a.onended = () => cerrar(true);
+          a.onerror = () => cerrar(false);
+          a.play().catch(() => cerrar(false));
         });
+        if (!ok) { setAviso("El navegador no dejó reproducir el audio: toca «Escuchar» en la respuesta."); return; }
       } else {
         vozNatural = false;
-        await new Promise<void>((ok) => {
+        if (i === 0) setAviso(`Hablando con la voz del sistema${r.motivo ? ` (la voz natural no está disponible: ${r.motivo})` : ""}.`);
+        const sintesis = window.speechSynthesis;
+        if (!sintesis) { setAviso("Este navegador no puede hablar."); return; }
+        const voz = await vozDelSistema();
+        if (gen.current !== miGen) return;
+        const ok = await new Promise<boolean>((fin) => {
+          sintesis.cancel();
           const u = new SpeechSynthesisUtterance(frases[i]);
-          u.lang = "es-CO";
+          if (voz) { u.voice = voz; u.lang = voz.lang; } else u.lang = "es-CO";
+          u.volume = 1;
           u.rate = 1.02;
-          u.onend = () => ok();
-          u.onerror = () => ok();
-          window.speechSynthesis.speak(u);
+          u.onend = () => fin(true);
+          u.onerror = (e) => fin(e.error === "canceled" || e.error === "interrupted");
+          sintesis.speak(u);
         });
+        if (!ok) { setAviso("El navegador no pudo hablar. Revisa el volumen o toca «Escuchar» en la respuesta."); return; }
       }
     }
+  }
+
+  async function reproducir(texto: string) {
+    pararTodo();
+    const miGen = ++gen.current;
+    setFase("hablando");
+    await hablar(texto, miGen);
+    if (gen.current === miGen) setFase("reposo");
   }
 
   async function enviar(pregunta: string) {
@@ -263,7 +299,12 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
         {turnos.map((t, i) => (
           <div key={i} className={t.rol === "usuario" ? "ml-8 rounded-2xl rounded-br-md bg-[#e0bd7c] px-3.5 py-2 text-[#2b1f06]" : "mr-4"}>
             {t.texto}
-            {t.fuente && <span className="mt-1 block text-[11px] text-[#f4efe2]/50">Fuente: {t.fuente}</span>}
+            {t.rol === "asistente" && t.texto !== SALUDO && (
+              <span className="mt-1 flex items-center gap-3 text-[11px] text-[#f4efe2]/50">
+                {t.fuente && <span>Fuente: {t.fuente}</span>}
+                <button type="button" onClick={() => void reproducir(t.texto)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[#e0bd7c] hover:bg-white/10"><Volume2 className="size-3" aria-hidden="true" />Escuchar</button>
+              </span>
+            )}
           </div>
         ))}
         {parcial && <div className="ml-8 rounded-2xl rounded-br-md bg-[#e0bd7c]/60 px-3.5 py-2 text-[#2b1f06] italic">{parcial}</div>}
@@ -283,6 +324,7 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
             <span key={i} ref={(el) => { barras.current[i] = el; }} className={`h-full w-1 origin-center rounded-full bg-[#e0bd7c] transition-transform duration-75 ${fase === "hablando" ? "animate-pulse" : ""}`} style={{ transform: "scaleY(0.15)", animationDelay: `${i * 70}ms` }} />
           ))}
         </div>
+        {aviso && <p className="mt-1 rounded-lg bg-white/10 px-3 py-1.5 text-center text-[11px] text-[#f4efe2]/80">{aviso}</p>}
         <p className="mt-1 text-center text-xs text-[#f4efe2]/70" aria-live="polite">{soporte ? etiqueta : "Tu navegador no reconoce voz: escribe abajo."}</p>
         <div className="mt-3 flex items-center justify-center gap-3">
           <button type="button" onClick={principal} disabled={!soporte && fase === "reposo"} aria-label={fase === "reposo" ? "Hablar" : "Detener"} className={`grid size-14 place-items-center rounded-full transition disabled:opacity-40 ${fase === "escuchando" ? "bg-red-500 text-white" : "bg-[#e0bd7c] text-[#2b1f06] hover:brightness-105"}`}>
