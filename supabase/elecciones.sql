@@ -186,7 +186,8 @@ revoke all on function cobertura_electoral() from public, anon, authenticated;
 
 -- Candidatos más votados de un cargo (p. ej. concejales): recorre los resultados guardados en el nivel donde se elige el cargo y devuelve
 -- los de más votos, de todo el país o de un departamento (p_prefijo = código del ámbito), con búsqueda por nombre.
-create or replace function candidatos_mas_votados(p_eleccion text, p_corporacion text, p_nivel integer default 3, p_prefijo text default '', p_busqueda text default '', p_limite integer default 100)
+drop function if exists candidatos_mas_votados(text, text, integer, text, text, integer);
+create or replace function candidatos_mas_votados(p_eleccion text, p_corporacion text, p_nivel integer default 3, p_prefijo text default '', p_busqueda text default '', p_limite integer default 100, p_partido text default '', p_lugar text default '')
 returns table (ambito text, ambito_nombre text, partido text, candidato text, cedula text, votos integer, pct text)
 language sql stable security invoker set search_path = public as $$
   select r.ambito, r.ambito_nombre, p.valor ->> 'nombre', c.valor ->> 'nombre', c.valor ->> 'cedula', (c.valor ->> 'votos')::integer, c.valor ->> 'pct'
@@ -200,8 +201,10 @@ language sql stable security invoker set search_path = public as $$
     and r.ambito like coalesce(p_prefijo, '') || '%'
     and coalesce((c.valor ->> 'soloLista')::boolean, false) = false
     and (coalesce(p_busqueda, '') = '' or lower(c.valor ->> 'nombre') like '%' || lower(p_busqueda) || '%')
+    and (coalesce(p_partido, '') = '' or translate(lower(p.valor ->> 'nombre'), 'áéíóúü', 'aeiouu') like '%' || translate(lower(p_partido), 'áéíóúü', 'aeiouu') || '%')
+    and (coalesce(p_lugar, '') = '' or translate(lower(r.ambito_nombre), 'áéíóúü', 'aeiouu') like '%' || translate(lower(p_lugar), 'áéíóúü', 'aeiouu') || '%')
   order by (c.valor ->> 'votos')::integer desc nulls last
   limit greatest(1, least(coalesce(p_limite, 100), 500))
 $$;
-revoke all on function candidatos_mas_votados(text, text, integer, text, text, integer) from public, anon, authenticated;
-grant execute on function candidatos_mas_votados(text, text, integer, text, text, integer) to service_role;
+revoke all on function candidatos_mas_votados(text, text, integer, text, text, integer, text, text) from public, anon, authenticated;
+grant execute on function candidatos_mas_votados(text, text, integer, text, text, integer, text, text) to service_role;

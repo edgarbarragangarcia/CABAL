@@ -11,7 +11,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export type Turno = { rol: "usuario" | "asistente"; texto: string };
 
-type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | null };
+type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | null; partido: string; lugar: string };
 
 const NIVEL_CARGO: Record<string, number> = { CO: 3, JA: 5, AL: 3, AS: 2, GO: 2 };
 
@@ -30,17 +30,18 @@ async function entender(pregunta: string, historial: Turno[]): Promise<Intencion
   const salida = await generarTexto({
     system:
       "Clasificas lo que pregunta una persona al asistente del panel de una organización política colombiana. Responde SOLO un objeto JSON: " +
-      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "CO" | "JA" | "AL" | "AS" | "GO" | null}. ' +
-      "«documentos»: preguntas sobre el contenido de los documentos subidos: boletines, discursos, intervenciones, declaraciones y columnas de la Dra. María Fernanda Cabal, actas, programas, estudios; también «qué dijo o qué habló la Dra. sobre un tema» (en «busqueda» pon solo el tema). «candidatos»: votos de candidatos o concejales, ediles, alcaldes, diputados, gobernadores en las elecciones 2023 (en «busqueda» pon el nombre si lo dicen; en «cargo»: CO concejo, JA ediles, AL alcaldía, AS asamblea, GO gobernación). " +
+      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "CO" | "JA" | "AL" | "AS" | "GO" | null, "partido": nombre del partido o movimiento si lo mencionan (si no, ""), "lugar": ciudad, municipio o departamento si lo mencionan (si no, "")}. ' +
+      "«documentos»: preguntas sobre el contenido de los documentos subidos: boletines, discursos, intervenciones, declaraciones y columnas de la Dra. María Fernanda Cabal, actas, programas, estudios; también «qué dijo o qué habló la Dra. sobre un tema» (en «busqueda» pon solo el tema). «candidatos»: votos de candidatos o concejales, ediles, alcaldes, diputados, gobernadores en las elecciones 2023 (en «busqueda» pon SOLO el nombre de la persona si lo dicen, nunca el partido ni el lugar; en «cargo»: CO concejo, JA ediles, AL alcaldía, AS asamblea, GO gobernación). " +
       "«monitoreo»: qué dicen la prensa y las redes de María Fernanda Cabal (menciones, medios, tono), NO lo que ella dijo. «datos»: cuántos datos o registros hay guardados en el panel. «charla»: saludos o cualquier cosa que no necesite datos.",
     user: `${previo ? `Conversación reciente:\n${previo}\n\n` : ""}Pregunta: ${pregunta}`,
     maxTokens: 200,
   });
   const j = leerJson<Partial<Intencion>>(salida);
   const fuente = j?.fuente && ["documentos", "candidatos", "monitoreo", "datos", "charla"].includes(j.fuente) ? j.fuente : "documentos";
-  return { fuente, busqueda: String(j?.busqueda ?? pregunta).slice(0, 120), cargo: j?.cargo && j.cargo in NIVEL_CARGO ? j.cargo : null };
+  return { fuente, busqueda: String(j?.busqueda ?? pregunta).slice(0, 120), cargo: j?.cargo && j.cargo in NIVEL_CARGO ? j.cargo : null, partido: String(j?.partido ?? "").slice(0, 80), lugar: String(j?.lugar ?? "").slice(0, 80) };
 }
 
+const CARGO_NOMBRE: Record<string, string> = { CO: "concejo", JA: "juntas administradoras locales", AL: "alcaldía", AS: "asamblea", GO: "gobernación" };
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
 async function contextoDe(i: Intencion, pregunta: string): Promise<{ texto: string; fuente: string }> {
@@ -71,10 +72,12 @@ async function contextoDe(i: Intencion, pregunta: string): Promise<{ texto: stri
 
   if (i.fuente === "candidatos") {
     const cargo = i.cargo ?? "CO";
-    const { data, error } = await c.rpc("candidatos_mas_votados", { p_eleccion: "territoriales-2023", p_corporacion: cargo, p_nivel: NIVEL_CARGO[cargo], p_prefijo: "", p_busqueda: i.busqueda.replace(/[%_\\]/g, ""), p_limite: 10 });
-    if (error || !data?.length) return { texto: "No encontré candidatos con ese nombre en los resultados guardados de 2023.", fuente: "resultados 2023" };
+    const { data, error } = await c.rpc("candidatos_mas_votados", { p_eleccion: "territoriales-2023", p_corporacion: cargo, p_nivel: NIVEL_CARGO[cargo], p_prefijo: "", p_busqueda: i.busqueda.replace(/[%_\\]/g, ""), p_limite: 10, p_partido: i.partido.replace(/[%_\\]/g, ""), p_lugar: i.lugar.replace(/[%_\\]/g, "") });
+    const filtros = [i.busqueda && `nombre «${i.busqueda}»`, i.partido && `partido «${i.partido}»`, i.lugar && `lugar «${i.lugar}»`].filter(Boolean).join(", ") || "sin filtros";
+    if (error) return { texto: `No pude consultar los resultados de 2023 en este momento (${error.message}).`, fuente: "resultados 2023" };
+    if (!data?.length) return { texto: `Busqué en los resultados guardados de 2023 (${CARGO_NOMBRE[cargo]}) con ${filtros} y no apareció ningún candidato. Puede que el nombre del partido o del lugar esté escrito distinto.`, fuente: "resultados 2023" };
     const filas = data as { ambito_nombre: string; partido: string; candidato: string; votos: number }[];
-    return { texto: `Candidatos (${cargo}, elecciones territoriales 2023, preconteo; no indica quién salió elegido):\n${filas.map((f) => `- ${f.candidato}, ${f.partido}, ${f.ambito_nombre}: ${fmt(f.votos)} votos`).join("\n")}`, fuente: "resultados electorales 2023" };
+    return { texto: `Candidatos más votados (${CARGO_NOMBRE[cargo]}, elecciones territoriales 2023, preconteo oficial de la Registraduría; filtros: ${filtros}; ordenados de más a menos votos; no indica quién salió elegido):\n${filas.map((f) => `- ${f.candidato}, ${f.partido}, ${f.ambito_nombre}: ${fmt(f.votos)} votos`).join("\n")}`, fuente: "resultados electorales 2023" };
   }
 
   if (i.fuente === "monitoreo") {
@@ -102,7 +105,7 @@ const SISTEMA =
   "Si dicen un saludo o piden algo que no necesita datos, responde breve y pregunta en qué ayudas.";
 
 export async function responder(pregunta: string, historial: Turno[]): Promise<{ respuesta: string; fuente: string }> {
-  const intencion = await entender(pregunta, historial).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null }));
+  const intencion = await entender(pregunta, historial).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null, partido: "", lugar: "" }));
   const ctx = await contextoDe(intencion, pregunta);
   const previo = historial.slice(-6).map((t) => `${t.rol === "usuario" ? "Usuario" : "Asistente"}: ${t.texto}`).join("\n");
   const respuesta = await generarTexto({
