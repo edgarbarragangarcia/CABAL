@@ -135,7 +135,7 @@ async function documentosParaEntregar(pregunta: string, busqueda: string): Promi
   const palabras = (busqueda || pregunta).split(/\s+/).map((w) => w.replace(/[%_\\,().]/g, "")).filter((w) => w.length >= 3).slice(0, 6);
   const encontrados = new Map<string, { id: string; titulo: string; puntos: number }>();
   if (palabras.length) {
-    const { data } = await c.from("documentos").select("id, titulo, archivo").eq("es_vigente", true).eq("estado", "listo").not("archivo", "is", null).or(palabras.map((w) => `titulo.ilike.%${w}%`).join(",")).limit(30);
+    const { data } = await c.from("documentos").select("id, titulo, ruta").eq("es_vigente", true).eq("estado", "listo").not("ruta", "is", null).or(palabras.map((w) => `titulo.ilike.%${w}%`).join(",")).limit(30);
     for (const d of (data ?? []) as { id: string; titulo: string }[]) {
       const t = d.titulo.toLowerCase();
       encontrados.set(d.id, { id: d.id, titulo: d.titulo, puntos: palabras.filter((w) => t.includes(w.toLowerCase())).length * 10 });
@@ -150,7 +150,7 @@ async function documentosParaEntregar(pregunta: string, busqueda: string): Promi
   }
   const candidatos = [...encontrados.values()].sort((x, y) => y.puntos - x.puntos).slice(0, 6);
   if (!candidatos.length) return [];
-  const { data: conArchivo } = await c.from("documentos").select("id").in("id", candidatos.map((d) => d.id)).not("archivo", "is", null);
+  const { data: conArchivo } = await c.from("documentos").select("id").in("id", candidatos.map((d) => d.id)).not("ruta", "is", null);
   const ok = new Set(((conArchivo ?? []) as { id: string }[]).map((d) => d.id));
   return candidatos.filter((d) => ok.has(d.id)).slice(0, 3).map(({ id, titulo }) => ({ id, titulo }));
 }
@@ -170,6 +170,13 @@ function leerDocumento(salida: string): { titulo: string; resumen: string; cuerp
 
 export async function responder(pregunta: string, historial: Turno[]): Promise<{ respuesta: string; fuente: string; entregas?: Entrega[] }> {
   const intencion = await entender(pregunta, historial).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null, partido: "", lugar: "", tambien: [], analisis: false, personaje: "mafe", dias: 30, entrega: "ninguna" }));
+  // Si el clasificador no lo notó, las palabras de la petición mandan: pedir un documento siempre entrega un archivo.
+  if (intencion.entrega === "ninguna") {
+    const q = pregunta.toLowerCase();
+    const objeto = /(document|bolet[ií]n|discurso|informe|columna|archivo|pdf|comunicado|minuta|resumen|carta|an[aá]lisis)/;
+    if (/(redact|prepar|gener|escrib|elabor|arm[ae]|hazme|crea)/.test(q) && objeto.test(q)) intencion.entrega = "nuevo";
+    else if (/(dame|d[aá]me|p[aá]same|env[ií]ame|m[uú]estrame|descarg|abre|necesito|quiero)/.test(q) && objeto.test(q)) intencion.entrega = "existente";
+  }
   // «Dame el documento…»: se ubica en el Gestor y se deja en pantalla para descargarlo.
   if (intencion.entrega === "existente") {
     const docs = await documentosParaEntregar(pregunta, intencion.busqueda);

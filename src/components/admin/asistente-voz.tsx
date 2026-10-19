@@ -296,13 +296,39 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
         const r = await fetch(`/api/admin/documentos?descargar=${e.id}`);
         const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
         if (!j.url) throw new Error(j.error ?? "No fue posible obtener el archivo.");
-        window.open(j.url, "_blank", "noopener");
+        // Se baja el archivo a la computadora; si el navegador no deja leerlo, se abre el enlace directo.
+        try {
+          const f = await fetch(j.url);
+          if (!f.ok) throw new Error(String(f.status));
+          const tipo = f.headers.get("content-type") ?? "";
+          const ext = /pdf/i.test(tipo) ? ".pdf" : /wordprocessingml/i.test(tipo) ? ".docx" : /msword/i.test(tipo) ? ".doc" : "";
+          const blob = await f.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = /\.\w{2,4}$/.test(e.nombre) ? e.nombre : `${e.nombre}${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+        } catch {
+          const a = document.createElement("a");
+          a.href = j.url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.download = e.nombre;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
       } else {
         const url = URL.createObjectURL(new Blob(["\ufeff", aHtml(e.nombre, e.contenido)], { type: "application/msword" }));
         const a = document.createElement("a");
         a.href = url;
         a.download = `${e.nombre || "Documento de MaFe"}.doc`;
+        document.body.appendChild(a);
         a.click();
+        a.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 4000);
       }
     } catch (err) {
