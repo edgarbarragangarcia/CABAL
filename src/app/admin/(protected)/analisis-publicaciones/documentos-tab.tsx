@@ -142,8 +142,13 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
     try { window.localStorage.setItem("cabal-fuentes-carpeta", JSON.stringify(n)); } catch { /* sin almacenamiento */ }
     return n;
   });
-  const [plegadas, setPlegadas] = React.useState<Set<string>>(new Set());
-  const alternarPlegada = (id: string) => setPlegadas((x) => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  /** Carpetas abiertas: por defecto todas están cerradas, y lo que la persona abre se recuerda en este navegador. */
+  const [abiertas, setAbiertas] = React.useState<Set<string>>(new Set());
+  React.useEffect(() => {
+    try { const g = window.localStorage.getItem("cabal-gestor-abiertas"); if (g) setAbiertas(new Set(JSON.parse(g) as string[])); } catch { /* sin almacenamiento */ }
+  }, []);
+  const fijarAbiertas = (n: Set<string>) => { setAbiertas(n); try { window.localStorage.setItem("cabal-gestor-abiertas", JSON.stringify([...n])); } catch { /* sin almacenamiento */ } };
+  const alternarPlegada = (id: string) => { const n = new Set(abiertas); if (n.has(id)) n.delete(id); else n.add(id); fijarAbiertas(n); };
   const [nombreCarpeta, setNombreCarpeta] = React.useState("");
   const [copiado, setCopiado] = React.useState(false);
   const [vectorizando, setVectorizando] = React.useState<string | null>(null);
@@ -466,7 +471,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
         {hijosDe(padre).map((c) => {
           const activa = vista.tipo === "carpeta" && vista.id === c.id;
           const tieneHijas = hijosDe(c.id).length > 0;
-          const plegada = plegadas.has(c.id);
+          const plegada = !abiertas.has(c.id);
           return (
             <li key={c.id}>
               <div
@@ -600,8 +605,8 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                   <div className="flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Carpetas</div>
                   <button type="button" onClick={() => { setNuevaCarpeta("raiz"); setNombreCarpeta(""); }} className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-2 py-1.5 text-sm font-semibold text-brand hover:border-brand hover:bg-brand-soft"><FolderPlus className="size-4" /> Nueva carpeta</button>
                   <div className="flex justify-end gap-3 px-1 text-[11px] text-muted-foreground">
-                    <button type="button" onClick={() => setPlegadas(new Set(carpetas.filter((c) => hijosDe(c.id).length > 0).map((c) => c.id)))} className="hover:text-foreground hover:underline">Plegar todo</button>
-                    <button type="button" onClick={() => setPlegadas(new Set())} className="hover:text-foreground hover:underline">Desplegar todo</button>
+                    <button type="button" onClick={() => fijarAbiertas(new Set())} className="hover:text-foreground hover:underline">Plegar todo</button>
+                    <button type="button" onClick={() => fijarAbiertas(new Set(carpetas.filter((c) => hijosDe(c.id).length > 0).map((c) => c.id)))} className="hover:text-foreground hover:underline">Desplegar todo</button>
                   </div>
                   {nuevaCarpeta === "raiz" && <NuevaCarpeta padre={null} nivel={0} />}
                   <Carpetas padre={null} nivel={0} />
