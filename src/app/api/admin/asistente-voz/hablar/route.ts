@@ -53,7 +53,7 @@ async function intentarModelos(candidatos: string[], texto: string, clave: strin
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": clave },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Di con naturalidad, en español de Colombia, con un tono cálido y sereno: ${texto}` }] }],
+          contents: [{ parts: [{ text: `Habla como una dirigente política colombiana apasionada, en español de Colombia: con firmeza, convicción y calidez, con sentimiento real. Pon énfasis en las palabras clave, haz pausas con intención y deja que la entonación suba y baje según la emoción de lo que dices (indignación, orgullo, cariño). Jamás suenes monótona ni como locutora de noticias. Texto: ${texto}` }] }],
           generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
         }),
         signal: AbortSignal.timeout(25_000),
@@ -78,7 +78,7 @@ async function conOpenAI(texto: string, clave: string): Promise<Resultado> {
     const r = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${clave}` },
-      body: JSON.stringify({ model: "gpt-4o-mini-tts", voice: "nova", input: texto, instructions: "Español de Colombia, tono cálido, sereno y natural.", response_format: "mp3" }),
+      body: JSON.stringify({ model: "gpt-4o-mini-tts", voice: "nova", input: texto, instructions: "Español de Colombia. Dirigente política apasionada: firme, cálida, con énfasis y emoción real en lo que dice; nada monótona ni de locutora.", response_format: "mp3" }),
       signal: AbortSignal.timeout(25_000),
     });
     if (!r.ok) return { audio: null, motivo: `OpenAI ${r.status}` };

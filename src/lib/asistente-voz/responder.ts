@@ -213,6 +213,12 @@ function leerDocumento(salida: string): { titulo: string; resumen: string; cuerp
   return { titulo, resumen: resumen.replace(/[*_#`>]/g, ""), cuerpo };
 }
 
+/** El sentimiento de su forma de hablar y de escribir: se suma a la voz medida con sus textos para que no suene a locutora ni a IA. */
+const SENTIMIENTO =
+  "\n\nSENTIMIENTO: habla y escribe como habla María Fernanda Cabal, con su sentimiento: firmeza y convicción, pasión por Colombia y por la libertad, indignación ante la injusticia y el abuso del poder, calidez con su gente y carácter directo, sin rodeos ni tecnicismos fríos. " +
+  "Que se note que le importa lo que dice: frases con fuerza, énfasis en lo esencial, trato cercano. Nada de neutralidad de comunicado ni de tono de máquina. " +
+  "La emoción nunca te autoriza a inventar: los hechos y las cifras salen solo del CONTEXTO; y si la pregunta pide una posición suya que no consta en los documentos del CONTEXTO, dilo con franqueza en vez de atribuirle algo que no dijo.";
+
 export async function responder(pregunta: string, historial: Turno[], adjunto?: Adjunto): Promise<{ respuesta: string; fuente: string; entregas?: Entrega[] }> {
   const intencion = await entender(pregunta, historial, adjunto).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null, anios: [], partido: "", lugar: "", tambien: [], analisis: false, personaje: "mafe", dias: 30, entrega: "ninguna", articulo: false, formato: "columna" }));
   // «Dame el documento…»: se ubica en el Gestor y se deja en pantalla para descargarlo.
@@ -248,7 +254,7 @@ export async function responder(pregunta: string, historial: Turno[], adjunto?: 
     const voz = await vozParaRedactar(formato, `${pregunta} ${adjunto?.nombre ?? ""}`).catch(() => ({ bloque: "", huella: null }));
     const guia = await leerGuia().then(({ guia: g }) => [g.voz && `VOZ Y TONO: ${g.voz}`, g.mensajes && `MENSAJES CLAVE (para el enfoque, no como hechos): ${g.mensajes}`, g.lineasRojas && `LÍNEAS ROJAS, NUNCA DECIR NI INSINUAR: ${g.lineasRojas}`].filter(Boolean).join("\n")).catch(() => "");
     const salida = await generarTexto({
-      system: SISTEMA_REDACTOR.replace("Redactas documentos completos, claros y bien estructurados", "Escribes artículos y piezas con la voz exacta de la Dra. María Fernanda Cabal, como ella los escribiría y firmaría") + (guia ? `\n\nGUÍA DE VOZ DEL EQUIPO (obligatoria para el estilo; NO es fuente de hechos):\n${guia}` : "") + voz.bloque + "\n\nEl artículo es ÚNICAMENTE texto corrido en su voz (sin viñetas ni encabezados que ella no usaría); respeta el formato pedido y, si no dicen la extensión, escribe unas 500 palabras.",
+      system: SISTEMA_REDACTOR.replace("Redactas documentos completos, claros y bien estructurados", "Escribes artículos y piezas con la voz exacta de la Dra. María Fernanda Cabal, como ella los escribiría y firmaría") + (guia ? `\n\nGUÍA DE VOZ DEL EQUIPO (obligatoria para el estilo; NO es fuente de hechos):\n${guia}` : "") + voz.bloque + SENTIMIENTO + "\n\nEl artículo es ÚNICAMENTE texto corrido en su voz (sin viñetas ni encabezados que ella no usaría); respeta el formato pedido y, si no dicen la extensión, escribe unas 500 palabras.",
       user: `HECHOS VIGENTES (al ${HECHOS_VIGENTES_AL}; hoy es ${hoy0}):\n${HECHOS_VIGENTES}\n\n${ctx.texto ? `CONTEXTO (${ctx.fuente}):\n${ctx.texto}${bloqueArchivo}\n\n` : bloqueArchivo ? `${bloqueArchivo}\n\n` : ""}Encargo: ${pregunta}`,
       maxTokens: 4000,
     });
@@ -292,8 +298,9 @@ export async function responder(pregunta: string, historial: Turno[], adjunto?: 
       entregas: [{ tipo: "texto", nombre, contenido: `${d.titulo}\n\n${d.cuerpo}` }],
     };
   }
+  const voz = await vozParaRedactar("general", pregunta).catch(() => ({ bloque: "", huella: null }));
   const respuesta = await generarTexto({
-    system: SISTEMA,
+    system: SISTEMA + SENTIMIENTO + voz.bloque,
     user: `HECHOS VIGENTES (al ${HECHOS_VIGENTES_AL}; hoy es ${new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" })}):\n${HECHOS_VIGENTES}\n\n${previo ? `Conversación hasta ahora:\n${previo}\n\n` : ""}${ctx.texto ? `CONTEXTO (${ctx.fuente}):\n${ctx.texto}\n\n` : ""}${adjunto ? `${bloqueArchivo.slice(0, 40_000)}\n\n` : ""}Pregunta: ${pregunta}\n\nResponde hablando.`,
     maxTokens: intencion.analisis ? 900 : 450,
   });
