@@ -31,8 +31,8 @@ async function entender(pregunta: string, historial: Turno[]): Promise<Intencion
     system:
       "Clasificas lo que pregunta una persona al asistente del panel de una organización política colombiana. Responde SOLO un objeto JSON: " +
       '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "CO" | "JA" | "AL" | "AS" | "GO" | null}. ' +
-      "«documentos»: preguntas sobre el contenido de documentos subidos, actas, programas, estudios. «candidatos»: votos de candidatos o concejales, ediles, alcaldes, diputados, gobernadores en las elecciones 2023 (en «busqueda» pon el nombre si lo dicen; en «cargo»: CO concejo, JA ediles, AL alcaldía, AS asamblea, GO gobernación). " +
-      "«monitoreo»: qué se dice de María Fernanda Cabal en prensa y redes. «datos»: cuántos datos o registros hay guardados en el panel. «charla»: saludos o cualquier cosa que no necesite datos.",
+      "«documentos»: preguntas sobre el contenido de los documentos subidos: boletines, discursos, intervenciones, declaraciones y columnas de la Dra. María Fernanda Cabal, actas, programas, estudios; también «qué dijo o qué habló la Dra. sobre un tema» (en «busqueda» pon solo el tema). «candidatos»: votos de candidatos o concejales, ediles, alcaldes, diputados, gobernadores en las elecciones 2023 (en «busqueda» pon el nombre si lo dicen; en «cargo»: CO concejo, JA ediles, AL alcaldía, AS asamblea, GO gobernación). " +
+      "«monitoreo»: qué dicen la prensa y las redes de María Fernanda Cabal (menciones, medios, tono), NO lo que ella dijo. «datos»: cuántos datos o registros hay guardados en el panel. «charla»: saludos o cualquier cosa que no necesite datos.",
     user: `${previo ? `Conversación reciente:\n${previo}\n\n` : ""}Pregunta: ${pregunta}`,
     maxTokens: 200,
   });
@@ -49,9 +49,23 @@ async function contextoDe(i: Intencion, pregunta: string): Promise<{ texto: stri
   if (!c) return { texto: "Supabase no está conectado: no hay datos para consultar.", fuente: "sin conexión" };
 
   if (i.fuente === "documentos") {
-    const r = await buscarEnDocumentos(pregunta, 6).catch(() => null);
-    const hallazgos = (r?.resultados ?? []).filter((h) => h.similitud > 0.35);
-    if (!hallazgos.length) return { texto: "No hay documentos con información sobre esto (la biblioteca puede estar vacía).", fuente: "documentos" };
+    const [r1, r2] = await Promise.all([buscarEnDocumentos(pregunta, 8).catch(() => null), i.busqueda && i.busqueda !== pregunta ? buscarEnDocumentos(i.busqueda, 8).catch(() => null) : Promise.resolve(null)]);
+    const vistos = new Set<string>();
+    const hallazgos = [...(r1?.resultados ?? []), ...(r2?.resultados ?? [])]
+      .filter((h) => h.similitud > 0.25)
+      .sort((x, y) => y.similitud - x.similitud)
+      .filter((h) => { const k = `${h.documentoId}:${h.pagina}:${h.contenido.slice(0, 40)}`; if (vistos.has(k)) return false; vistos.add(k); return true; })
+      .slice(0, 8);
+    if (!hallazgos.length) {
+      // Quizá el documento existe pero no terminó de procesarse: se avisa en vez de decir que no hay nada.
+      const palabras = i.busqueda.split(/\s+/).map((w) => w.replace(/[%_\\,().]/g, "")).filter((w) => w.length >= 4).slice(0, 4);
+      if (palabras.length) {
+        const { data } = await c.from("documentos").select("titulo, estado").neq("estado", "listo").eq("es_vigente", true).or(palabras.map((w) => `titulo.ilike.%${w}%`).join(",")).limit(3);
+        const sin = (data ?? []) as { titulo: string; estado: string }[];
+        if (sin.length) return { texto: `Hay documentos con ese tema que no terminaron de procesarse y por eso no se pueden consultar: ${sin.map((d) => `«${d.titulo}» (${d.estado})`).join(", ")}. Hay que volver a subirlos o procesarlos en el Gestor documental.`, fuente: "documentos" };
+      }
+      return { texto: "No hay documentos con información sobre esto (la biblioteca puede estar vacía).", fuente: "documentos" };
+    }
     return { texto: hallazgos.map((h, k) => `[${k + 1}] Documento «${h.titulo}»${h.pagina ? `, página ${h.pagina}` : ""}: ${h.contenido}`).join("\n\n"), fuente: "documentos" };
   }
 

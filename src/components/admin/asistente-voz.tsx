@@ -37,7 +37,29 @@ function partirEnFrases(texto: string): string[] {
   return trozos.slice(0, 8);
 }
 
-export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
+type Pos = { x: number; y: number };
+const CLAVE_POS = "cabal-asistente-pos";
+
+/** Arrastra un elemento fijo con el puntero; avisa la posición (esquina superior izquierda) y, al soltar, si se movió. */
+function arrastrar(e: React.PointerEvent<HTMLElement>, el: HTMLElement, alMover: (p: Pos) => void, alSoltar: (movido: boolean) => void) {
+  if (e.button !== 0) return;
+  const r = el.getBoundingClientRect();
+  const dx = e.clientX - r.left;
+  const dy = e.clientY - r.top;
+  const x0 = e.clientX;
+  const y0 = e.clientY;
+  let movido = false;
+  const mover = (m: PointerEvent) => {
+    if (!movido && Math.hypot(m.clientX - x0, m.clientY - y0) < 5) return;
+    movido = true;
+    alMover({ x: Math.min(Math.max(0, m.clientX - dx), window.innerWidth - 60), y: Math.min(Math.max(0, m.clientY - dy), window.innerHeight - 60) });
+  };
+  const soltar = () => { window.removeEventListener("pointermove", mover); window.removeEventListener("pointerup", soltar); alSoltar(movido); };
+  window.addEventListener("pointermove", mover);
+  window.addEventListener("pointerup", soltar);
+}
+
+export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void; pos?: Pos | null; alMover?: (p: Pos, fin: boolean) => void }) {
   const [turnos, setTurnos] = React.useState<Turno[]>([{ rol: "asistente", texto: SALUDO }]);
   const [fase, setFase] = React.useState<Fase>("reposo");
   const [parcial, setParcial] = React.useState("");
@@ -340,8 +362,12 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
   const etiqueta = { reposo: "Toca el micrófono y habla", escuchando: "Te escucho…", pensando: "Pensando…", hablando: "Hablando… toca para interrumpir" }[fase];
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-[70] flex max-h-[80dvh] flex-col overflow-hidden rounded-3xl bg-[#06281c] text-[#f4efe2] shadow-2xl ring-1 ring-white/10 sm:inset-x-auto sm:bottom-5 sm:left-[7rem] sm:w-[26rem]" role="dialog" aria-label="Asistente de voz">
-      <div className="flex items-center justify-between px-5 pt-4">
+    <div style={pos && typeof window !== "undefined" && window.innerWidth >= 640 ? { left: pos.x, top: pos.y, bottom: "auto" } : undefined} className="fixed inset-x-3 bottom-3 z-[70] flex max-h-[80dvh] flex-col overflow-hidden rounded-3xl bg-[#06281c] text-[#f4efe2] shadow-2xl ring-1 ring-white/10 sm:inset-x-auto sm:bottom-5 sm:left-[7rem] sm:w-[26rem]" role="dialog" aria-label="Asistente de voz">
+      <div
+        className="flex cursor-grab items-center justify-between px-5 pt-4 active:cursor-grabbing sm:touch-none"
+        onPointerDown={(e) => { if ((e.target as HTMLElement).closest("button") || !alMover || window.innerWidth < 640) return; const panel = e.currentTarget.parentElement as HTMLElement; arrastrar(e, panel, (p) => alMover(p, false), (m) => { if (m) alMover({ x: panel.getBoundingClientRect().left, y: panel.getBoundingClientRect().top }, true); }); }}
+        title="Arrastra para mover"
+      >
         <div className="flex items-center gap-3">
           <MafeAvatar talking={fase === "hablando"} title="MaFe" className={`size-14 rounded-full ring-2 transition ${fase === "escuchando" ? "ring-red-400" : fase === "hablando" ? "ring-[#e0bd7c]" : "ring-white/15"}`} />
           <p className="text-lg leading-tight"><span className="font-bold">MaFe</span><br /><span className="text-xs font-normal text-[#f4efe2]/60">Asistente de voz</span></p>
@@ -401,11 +427,29 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
 /** El botón que abre el asistente de voz, siempre a mano en el panel. */
 export function BotonAsistenteVoz() {
   const [abierto, setAbierto] = React.useState(false);
+  const [pos, setPos] = React.useState<Pos | null>(null);
+  const movido = React.useRef(false);
+  /* eslint-disable react-hooks/set-state-in-effect -- se lee del navegador al montar (en el servidor no existe) */
+  React.useEffect(() => {
+    try { const g = window.localStorage.getItem(CLAVE_POS); if (g) setPos(JSON.parse(g) as Pos); } catch { /* sin almacenamiento */ }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+  const mover = (p: Pos, fin: boolean) => {
+    setPos(p);
+    if (fin) try { window.localStorage.setItem(CLAVE_POS, JSON.stringify(p)); } catch { /* sin almacenamiento */ }
+  };
   return (
     <>
-      {abierto && <AsistenteVoz alCerrar={() => setAbierto(false)} />}
+      {abierto && <AsistenteVoz alCerrar={() => setAbierto(false)} pos={pos} alMover={mover} />}
       {!abierto && (
-        <button type="button" onClick={() => setAbierto(true)} className="fixed bottom-5 left-[7rem] z-[60] hidden items-center gap-2 rounded-full bg-[#06281c] py-1.5 pr-5 pl-1.5 text-sm font-semibold text-[#f4efe2] shadow-xl ring-1 ring-white/10 transition hover:brightness-110 md:inline-flex" aria-label="Hablar con MaFe">
+        <button
+          type="button"
+          style={pos ? { left: pos.x, top: pos.y, bottom: "auto" } : undefined}
+          onPointerDown={(e) => { movido.current = false; arrastrar(e, e.currentTarget, (p) => { movido.current = true; setPos(p); }, (m) => { if (m) { movido.current = true; const r = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect(); if (r) mover({ x: r.left, y: r.top }, true); } }); }}
+          onClick={() => { if (movido.current) { movido.current = false; return; } setAbierto(true); }}
+          className="fixed bottom-5 left-[7rem] z-[60] hidden cursor-grab touch-none items-center gap-2 rounded-full bg-[#06281c] py-1.5 pr-5 pl-1.5 text-sm font-semibold text-[#f4efe2] shadow-xl ring-1 ring-white/10 transition hover:brightness-110 active:cursor-grabbing md:inline-flex"
+          aria-label="Hablar con MaFe (arrastra para mover)"
+        >
           <MafeAvatar title="MaFe" className="size-11 rounded-full" />Hablar con MaFe
         </button>
       )}
