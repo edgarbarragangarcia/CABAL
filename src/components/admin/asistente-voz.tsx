@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Mic, Square, Volume2, VolumeX, X } from "lucide-react";
+import { Copy, Download, FileText, Loader2, Mic, Square, Volume2, VolumeX, X } from "lucide-react";
 
 import { MafeAvatar } from "@/components/mafe/mafe-avatar";
 
@@ -35,6 +35,24 @@ function partirEnFrases(texto: string): string[] {
     else trozos.push(f);
   }
   return trozos.slice(0, 8);
+}
+
+type Entrega = { tipo: "gestor"; id: string; nombre: string } | { tipo: "texto"; nombre: string; contenido: string };
+
+const escapar = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** El texto con «## » y «- » pasa a HTML sencillo: Word abre ese archivo como un documento con títulos y viñetas. */
+function aHtml(titulo: string, contenido: string): string {
+  const cuerpo = contenido.split("\n").map((l) => {
+    const t = l.trim();
+    if (!t) return "";
+    if (t.startsWith("### ")) return `<h3>${escapar(t.slice(4))}</h3>`;
+    if (t.startsWith("## ")) return `<h2>${escapar(t.slice(3))}</h2>`;
+    if (t.startsWith("# ")) return `<h1>${escapar(t.slice(2))}</h1>`;
+    if (/^[-•]\s/.test(t)) return `<p style="margin-left:18pt">• ${escapar(t.slice(2).replace(/\*\*/g, ""))}</p>`;
+    return `<p>${escapar(t.replace(/\*\*/g, ""))}</p>`;
+  }).join("\n");
+  return `<html><head><meta charset="utf-8"><title>${escapar(titulo)}</title></head><body style="font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.4">${cuerpo}</body></html>`;
 }
 
 type Pos = { x: number; y: number };
@@ -80,6 +98,8 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
   const lista = React.useRef<HTMLDivElement>(null);
   const escenario = React.useRef<HTMLDivElement>(null);
   const [sincro, setSincro] = React.useState(false);
+  const [entregas, setEntregas] = React.useState<Entrega[]>([]);
+  const [bajando, setBajando] = React.useState<string | null>(null);
   const continuoRef = React.useRef(continuo);
   const silencioRef = React.useRef(silencio);
   const vaciosRef = React.useRef(0);
@@ -269,6 +289,29 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
     }
   }
 
+  async function bajar(e: Entrega) {
+    setBajando(e.nombre);
+    try {
+      if (e.tipo === "gestor") {
+        const r = await fetch(`/api/admin/documentos?descargar=${e.id}`);
+        const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
+        if (!j.url) throw new Error(j.error ?? "No fue posible obtener el archivo.");
+        window.open(j.url, "_blank", "noopener");
+      } else {
+        const url = URL.createObjectURL(new Blob(["\ufeff", aHtml(e.nombre, e.contenido)], { type: "application/msword" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${e.nombre || "Documento de MaFe"}.doc`;
+        a.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No fue posible descargar.");
+    } finally {
+      setBajando(null);
+    }
+  }
+
   async function enviar(pregunta: string) {
     const texto = pregunta.trim();
     if (!texto) return;
@@ -277,15 +320,17 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
     const miGen = ++gen.current;
     setParcial("");
     setError("");
+    setEntregas([]);
     const previo = turnosRef.current.filter((t) => t.texto !== SALUDO);
     setTurnos((t) => [...t, { rol: "usuario", texto }]);
     setFase("pensando");
     try {
       const r = await fetch("/api/admin/asistente-voz", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pregunta: texto, historial: previo.map(({ rol, texto: x }) => ({ rol, texto: x })) }) });
-      const j = (await r.json().catch(() => ({}))) as { respuesta?: string; fuente?: string; error?: string };
+      const j = (await r.json().catch(() => ({}))) as { respuesta?: string; fuente?: string; error?: string; entregas?: Entrega[] };
       if (gen.current !== miGen) return;
       if (!r.ok || !j.respuesta) throw new Error(j.error ?? "No pude responder.");
       setTurnos((t) => [...t, { rol: "asistente", texto: j.respuesta!, fuente: j.fuente }]);
+      if (j.entregas?.length) setEntregas(j.entregas);
       await hablar(j.respuesta, miGen);
       if (gen.current !== miGen) return;
       setFase("reposo");
@@ -404,6 +449,18 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
           className={`size-44 rounded-full ring-4 transition duration-300 ${fase === "escuchando" ? "scale-[1.02] ring-red-400/80" : fase === "hablando" ? "ring-[#e0bd7c]" : fase === "pensando" ? "opacity-80 ring-white/20" : "ring-white/15"}`}
         />
         </div>
+        {entregas.length > 0 && (
+          <ul className="mt-3 w-full space-y-2">
+            {entregas.map((e) => (
+              <li key={`${e.tipo}-${e.nombre}`} className="flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2">
+                <FileText className="size-5 shrink-0 text-[#e0bd7c]" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[13px] leading-tight"><b className="line-clamp-2">{e.nombre}</b><span className="text-[11px] text-[#f4efe2]/60">{e.tipo === "gestor" ? "Del Gestor documental" : "Redactado por MaFe · Word"}</span></span>
+                {e.tipo === "texto" && <button type="button" aria-label="Copiar el texto" onClick={() => void navigator.clipboard?.writeText(e.contenido)} className="rounded-full p-2 hover:bg-white/10"><Copy className="size-4" aria-hidden="true" /></button>}
+                <button type="button" onClick={() => void bajar(e)} disabled={bajando === e.nombre} className="inline-flex items-center gap-1 rounded-full bg-[#e0bd7c] px-3 py-1.5 text-xs font-semibold text-[#2b1f06] hover:brightness-105 disabled:opacity-60">{bajando === e.nombre ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Download className="size-3.5" aria-hidden="true" />}Descargar</button>
+              </li>
+            ))}
+          </ul>
+        )}
         {error && (
           <div role="alert" className="mt-3 rounded-xl bg-red-500/20 px-3 py-2 text-[13px] text-red-100">
             <p>{error}</p>
