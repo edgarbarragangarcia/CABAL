@@ -166,10 +166,34 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
     }
   }
 
+  /** Pide el micrófono con el cuadro de permiso del navegador (hace falta un toque de la persona). Dice con claridad por qué falla. */
+  async function pedirMicrofono(): Promise<boolean> {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("Este navegador no deja usar el micrófono aquí (hace falta una conexión segura en Chrome o Edge).");
+      return false;
+    }
+    try {
+      const flujo = await navigator.mediaDevices.getUserMedia({ audio: true });
+      flujo.getTracks().forEach((t) => t.stop());
+      setError("");
+      return true;
+    } catch (e) {
+      const nombre = e instanceof DOMException ? e.name : "";
+      const detalle = e instanceof Error ? e.message : "";
+      if (/permissions policy|feature policy|disallowed/i.test(detalle)) setError("El sitio todavía tiene el micrófono bloqueado por su política de seguridad: se está actualizando. Espera unos minutos, recarga con Ctrl/Cmd + Shift + R y vuelve a intentarlo.");
+      else if (nombre === "NotAllowedError" || nombre === "SecurityError") setError("Chrome bloqueó el micrófono para este sitio. Pulsa el ícono de ajustes a la izquierda de la dirección (las dos rayas), activa «Micrófono» y recarga la página.");
+      else if (nombre === "NotFoundError") setError("No encuentro un micrófono conectado.");
+      else setError(`No se pudo activar el micrófono${detalle ? `: ${detalle}` : "."}`);
+      return false;
+    }
+  }
+
   async function escuchar() {
     const Ctor = ((window as unknown as Record<string, unknown>).SpeechRecognition ?? (window as unknown as Record<string, unknown>).webkitSpeechRecognition) as ConstructorReconocimiento | undefined;
     if (!Ctor) return setError("Tu navegador no reconoce voz. Usa Chrome o Edge, o escribe tu pregunta abajo.");
     pararTodo();
+    // Primero el permiso: así el navegador muestra su cuadro «Permitir» y, si algo lo impide, se explica el motivo.
+    if (!(await pedirMicrofono())) return setFase("reposo");
     const miGen = ++gen.current;
     setError("");
     setParcial("");
@@ -244,7 +268,12 @@ export function AsistenteVoz({ alCerrar }: { alCerrar: () => void }) {
         ))}
         {parcial && <div className="ml-8 rounded-2xl rounded-br-md bg-[#e0bd7c]/60 px-3.5 py-2 text-[#2b1f06] italic">{parcial}</div>}
         {fase === "pensando" && <div className="flex items-center gap-2 text-[#f4efe2]/60"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Consultando…</div>}
-        {error && <p role="alert" className="rounded-xl bg-red-500/20 px-3 py-2 text-[13px] text-red-100">{error}</p>}
+        {error && (
+          <div role="alert" className="rounded-xl bg-red-500/20 px-3 py-2 text-[13px] text-red-100">
+            <p>{error}</p>
+            {/micr[oó]fono/i.test(error) && <button type="button" onClick={() => void pedirMicrofono()} className="mt-2 rounded-full bg-[#e0bd7c] px-3.5 py-1.5 text-xs font-semibold text-[#2b1f06]">Dar permiso del micrófono</button>}
+          </div>
+        )}
       </div>
 
       <div className="px-5 pt-1 pb-4">
