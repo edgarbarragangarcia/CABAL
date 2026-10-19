@@ -131,6 +131,17 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
   const [aviso, setAviso] = React.useState<{ ok: boolean; texto: string } | null>(null);
   const [etiquetasSubida, setEtiquetasSubida] = React.useState("");
   const [nuevaCarpeta, setNuevaCarpeta] = React.useState<string | null>(null);
+  /** Carpeta visual de cada fuente de datos (solo orden en pantalla; se recuerda en este navegador). */
+  const [carpetaFuente, setCarpetaFuente] = React.useState<Record<string, string>>({});
+  React.useEffect(() => {
+    try { const g = window.localStorage.getItem("cabal-fuentes-carpeta"); if (g) setCarpetaFuente(JSON.parse(g) as Record<string, string>); } catch { /* sin almacenamiento */ }
+  }, []);
+  const moverFuentes = (ids: string[], carpetaId: string | null) => setCarpetaFuente((m) => {
+    const n = { ...m };
+    for (const id of ids) { if (carpetaId) n[id] = carpetaId; else delete n[id]; }
+    try { window.localStorage.setItem("cabal-fuentes-carpeta", JSON.stringify(n)); } catch { /* sin almacenamiento */ }
+    return n;
+  });
   const [plegadas, setPlegadas] = React.useState<Set<string>>(new Set());
   const alternarPlegada = (id: string) => setPlegadas((x) => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [nombreCarpeta, setNombreCarpeta] = React.useState("");
@@ -421,7 +432,17 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
     return [...base].sort((a, b) => (orden === "titulo" ? a.titulo.localeCompare(b.titulo, "es") : orden === "tamano" ? (b.bytes ?? 0) - (a.bytes ?? 0) : b.creadoEn.localeCompare(a.creadoEn)));
   }, [vista, todos, papelera, conVersiones, texto, tipo, estadoF, categoriaF, ambitoF, orden, descendientes]);
   /** Las fuentes de datos se ven en la lista general, como un documento más (sin filtros de texto activos). */
-  const filasFuente = vista.tipo === "todos" && !texto && !tipo && !estadoF && !categoriaF && !ambitoF ? fuentes : [];
+  const carpetaDeFuente = (id: string) => { const c = carpetaFuente[id]; return c && carpetas.some((x) => x.id === c) ? c : null; };
+  const filasFuente = React.useMemo(() => {
+    if (texto || tipo || estadoF || categoriaF || ambitoF) return [];
+    if (vista.tipo === "todos") return fuentes;
+    if (vista.tipo === "sin") return fuentes.filter((f) => !carpetaDeFuente(f.id));
+    if (vista.tipo === "carpeta") { const ids = new Set(descendientes(vista.id)); return fuentes.filter((f) => { const c = carpetaDeFuente(f.id); return !!c && ids.has(c); }); }
+    return [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, fuentes, carpetaFuente, carpetas, texto, tipo, estadoF, categoriaF, ambitoF, descendientes]);
+  /** Mueve documentos y fuentes de datos a una carpeta (o fuera de ellas). */
+  const moverSeleccion = (carpetaId: string | null, ok: string) => { if (selFuentes.size) { moverFuentes([...selFuentes], carpetaId); setSelFuentes(new Set()); if (!sel.size) setAviso({ ok: true, texto: ok }); } if (sel.size) void aplicar([...sel], { carpetaId }, ok); };
 
   const categorias = React.useMemo(() => [...new Set([...todos, ...papelera].map((d) => d.categoria?.trim()).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "es")), [todos, papelera]);
   const tipos = React.useMemo(() => [...new Set(todos.map((d) => d.tipo).filter((t): t is string => !!t))].sort(), [todos]);
@@ -453,7 +474,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                 style={{ paddingLeft: 8 + nivel * 14 }}
                 onDragOver={(e) => { if (e.dataTransfer.types.includes("application/x-documentos")) { e.preventDefault(); setSobreCarpeta(c.id); } }}
                 onDragLeave={() => setSobreCarpeta((x) => (x === c.id ? null : x))}
-                onDrop={(e) => { const crudo = e.dataTransfer.getData("application/x-documentos"); setSobreCarpeta(null); if (!crudo) return; e.preventDefault(); const ids = JSON.parse(crudo) as string[]; void aplicar(ids, { carpetaId: c.id }, `Se movieron a «${c.nombre}».`); }}
+                onDrop={(e) => { const crudo = e.dataTransfer.getData("application/x-documentos"); setSobreCarpeta(null); if (!crudo) return; e.preventDefault(); const todosIds = JSON.parse(crudo) as string[]; const fs = todosIds.filter((i) => i.startsWith("fuente:")).map((i) => i.slice(7)); const ids = todosIds.filter((i) => !i.startsWith("fuente:")); if (fs.length) { moverFuentes(fs, c.id); if (!ids.length) setAviso({ ok: true, texto: `Se movió a «${c.nombre}».` }); } if (ids.length) void aplicar(ids, { carpetaId: c.id }, `Se movieron a «${c.nombre}».`); }}
               >
                 {tieneHijas ? (
                   <button type="button" aria-label={plegada ? `Desplegar ${c.nombre}` : `Plegar ${c.nombre}`} aria-expanded={!plegada} onClick={() => alternarPlegada(c.id)} className="shrink-0 rounded p-0.5 hover:bg-surface">
@@ -624,8 +645,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
               {(sel.size > 0 || selFuentes.size > 0) && (
                 <div className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-soft p-2 text-xs font-semibold">
                   <span>{sel.size + selFuentes.size} seleccionado{sel.size + selFuentes.size === 1 ? "" : "s"}{selFuentes.size > 0 ? ` (${sel.size} documento${sel.size === 1 ? "" : "s"} y ${selFuentes.size} fuente${selFuentes.size === 1 ? "" : "s"} de datos)` : ""}</span>
-                  {sel.size === 0 && <span className="font-normal text-muted-foreground">Las fuentes de datos no se mueven ni se borran: se abren con un clic.</span>}
-                  {sel.size === 0 ? null : vista.tipo === "papelera" ? (
+                  {vista.tipo === "papelera" ? (
                     <>
                       <button type="button" onClick={() => void aplicar([...sel], { accion: "restaurar" }, "Se restauraron.")} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1"><ArchiveRestore className="size-3.5" /> Restaurar</button>
                       <button type="button" onClick={() => void eliminarDefinitivo([...sel])} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1 text-red-700"><Trash2 className="size-3.5" /> Eliminar definitivamente</button>
@@ -634,12 +654,12 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                     <>
                       <SelectorCarpeta valor="" etiqueta="Mover a una carpeta…" alElegir={(v) => {
                         if (!v) return;
-                        if (v !== "__nueva") return void aplicar([...sel], { carpetaId: v === "__sin" ? null : v }, "Se movieron.");
+                        if (v !== "__nueva") return void moverSeleccion(v === "__sin" ? null : v, "Se movieron.");
                         const nombre = window.prompt("Nombre de la carpeta nueva")?.trim();
-                        if (nombre) void crearYDevolver(nombre).then((id) => { if (id) void aplicar([...sel], { carpetaId: id }, `Se movieron a «${nombre}».`); });
+                        if (nombre) void crearYDevolver(nombre).then((id) => { if (id) moverSeleccion(id, `Se movieron a «${nombre}».`); });
                       }} />
-                      <button type="button" onClick={() => { const t = window.prompt("Etiquetas a agregar, separadas por coma")?.split(",").map((x) => x.trim()).filter(Boolean); if (t?.length) void aplicar([...sel], { agregarEtiquetas: t }, "Etiquetas agregadas."); }} className="rounded-full bg-surface px-3 py-1">Etiquetar</button>
-                      <button type="button" onClick={() => void aplicar([...sel], { accion: "papelera" }, "Pasaron a la papelera.")} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1"><Archive className="size-3.5" /> A la papelera</button>
+                      {sel.size > 0 && <><button type="button" onClick={() => { const t = window.prompt("Etiquetas a agregar, separadas por coma")?.split(",").map((x) => x.trim()).filter(Boolean); if (t?.length) void aplicar([...sel], { agregarEtiquetas: t }, "Etiquetas agregadas."); }} className="rounded-full bg-surface px-3 py-1">Etiquetar</button>
+                      <button type="button" onClick={() => void aplicar([...sel], { accion: "papelera" }, "Pasaron a la papelera.")} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1"><Archive className="size-3.5" /> A la papelera</button></>}
                     </>
                   )}
                   <button type="button" onClick={() => { setSel(new Set()); setSelFuentes(new Set()); }} className="ml-auto">Quitar selección</button>
@@ -667,13 +687,13 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                     </thead>
                     <tbody>
                       {filasFuente.map((f) => (
-                        <tr key={f.id} onClick={() => abrirFuente(f.id)} className="cursor-pointer border-b border-border/60 hover:bg-surface-muted/60">
+                        <tr key={f.id} draggable onDragStart={(e) => { const ids = selFuentes.has(f.id) ? [...selFuentes].map((x) => `fuente:${x}`) : [`fuente:${f.id}`]; e.dataTransfer.setData("application/x-documentos", JSON.stringify(ids)); e.dataTransfer.effectAllowed = "move"; }} onClick={() => abrirFuente(f.id)} className="cursor-pointer border-b border-border/60 hover:bg-surface-muted/60">
                           <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${f.nombre}`} checked={selFuentes.has(f.id)} onChange={() => alternarFuente(f.id)} /></td>
                           <td className="max-w-[22rem] px-3 py-2.5">
                             <p className="flex items-center gap-1.5 truncate font-semibold"><Database className="size-4 shrink-0 text-brand" aria-hidden="true" />{f.nombre}</p>
                             <p className="truncate text-xs text-muted-foreground">{f.detalle}</p>
                           </td>
-                          {gestor && <td className="px-3 py-2.5 text-xs text-muted-foreground">Fuentes de datos</td>}
+                          {gestor && <td className="px-3 py-2.5 text-xs text-muted-foreground">{carpetas.find((c) => c.id === carpetaDeFuente(f.id))?.nombre ?? "Fuentes de datos"}</td>}
                           <td className="px-3 py-2.5 text-xs font-semibold uppercase text-muted-foreground">Datos</td>
                           <td className="px-3 py-2.5 text-right text-xs tabular-nums text-muted-foreground">{f.resumen}</td>
                           <td className="px-3 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONO_FUENTE[f.tono]}`}>{f.estado}</span></td>
