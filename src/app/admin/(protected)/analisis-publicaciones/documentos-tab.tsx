@@ -463,7 +463,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                 <button type="button" onClick={() => setVista({ tipo: "carpeta", id: c.id })} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left text-sm">
                   {activa ? <FolderOpen className="size-4 shrink-0 text-brand" /> : <Folder className="size-4 shrink-0 text-muted-foreground" />}
                   <span className={`truncate ${activa ? "font-semibold" : ""}`}>{c.nombre}</span>
-                  <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{conteo((d) => d.carpetaId === c.id)}</span>
+                  <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{conteo((d) => !!d.carpetaId && descendientes(c.id).includes(d.carpetaId))}</span>
                 </button>
                 <span className="hidden items-center group-hover:flex">
                   <button type="button" aria-label={`Subcarpeta en ${c.nombre}`} onClick={() => setNuevaCarpeta(c.id)} className="rounded p-1 hover:bg-surface"><FolderPlus className="size-3.5" /></button>
@@ -698,7 +698,7 @@ export function DocumentosTab({ fuentes = [] }: { fuentes?: FuenteDatos[] }) {
                   </table>
                 </div>
               )}
-              <p className="text-[11px] text-muted-foreground">{lista.length} documento{lista.length === 1 ? "" : "s"}. Arrastra archivos sobre esta zona para subirlos{vista.tipo === "carpeta" ? " a la carpeta abierta" : ""}. Etiquetas de subida:{" "}
+              <p className="text-[11px] text-muted-foreground">{vista.tipo === "carpeta" ? <b>Carpeta «{carpetas.find((c) => c.id === vista.id)?.nombre}» (con sus subcarpetas): </b> : vista.tipo === "sin" ? <b>Sin carpeta: </b> : null}{lista.length} documento{lista.length === 1 ? "" : "s"}. Arrastra archivos sobre esta zona para subirlos{vista.tipo === "carpeta" ? " a la carpeta abierta" : ""}. Etiquetas de subida:{" "}
                 <input value={etiquetasSubida} onChange={(e) => setEtiquetasSubida(e.target.value)} placeholder="plan de gobierno, Bolívar" aria-label="Etiquetas para lo que subas" className="ml-1 w-56 rounded-full border border-border bg-surface px-2 py-0.5 text-[11px]" /></p>
             </section>
             {fuentes.map((f) => (
