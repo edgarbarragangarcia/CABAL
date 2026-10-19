@@ -10,6 +10,7 @@
 // Refresh, stack traces): se permite 'unsafe-eval' solo fuera de
 // producción para no debilitar la política del sitio desplegado.
 // Ajusta connect-src si agregas Supabase / Sanity / pasarelas de pago.
+// El micrófono se permite solo para el propio sitio (el asistente de voz del panel): ninguna página incrustada de terceros puede usarlo.
 const isDev = process.env.NODE_ENV !== "production";
 
 const contentSecurityPolicy = `
@@ -54,7 +55,7 @@ export const securityHeaders = [
   {
     key: "Permissions-Policy",
     value:
-      "camera=(), microphone=(), geolocation=(), interest-cohort=(), browsing-topics=()",
+      "camera=(), microphone=(self), geolocation=(), interest-cohort=(), browsing-topics=()",
   },
   {
     key: "X-DNS-Prefetch-Control",
