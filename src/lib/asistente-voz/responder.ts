@@ -11,7 +11,8 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export type Turno = { rol: "usuario" | "asistente"; texto: string };
 
-type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | null; partido: string; lugar: string };
+type Fuente = "documentos" | "candidatos" | "monitoreo" | "datos";
+type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | null; partido: string; lugar: string; tambien: Fuente[]; analisis: boolean };
 
 const NIVEL_CARGO: Record<string, number> = { CO: 3, JA: 5, AL: 3, AS: 2, GO: 2 };
 
@@ -30,7 +31,7 @@ async function entender(pregunta: string, historial: Turno[]): Promise<Intencion
   const salida = await generarTexto({
     system:
       "Clasificas lo que pregunta una persona al asistente del panel de una organización política colombiana. Responde SOLO un objeto JSON: " +
-      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "CO" | "JA" | "AL" | "AS" | "GO" | null, "partido": nombre del partido o movimiento si lo mencionan (si no, ""), "lugar": ciudad, municipio o departamento si lo mencionan (si no, "")}. ' +
+      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "CO" | "JA" | "AL" | "AS" | "GO" | null, "partido": nombre del partido o movimiento si lo mencionan (si no, ""), "lugar": ciudad, municipio o departamento si lo mencionan (si no, ""), "tambien": lista con OTRAS fuentes que ayudarían a relacionar y contrastar la respuesta (de «documentos», «candidatos», «monitoreo», «datos»), "analisis": true si piden analizar, relacionar, comparar, interpretar, opinar, estrategia, riesgos, qué significa, por qué o qué conviene hacer (análisis político), false si solo piden un dato}. ' +
       "«documentos»: preguntas sobre el contenido de los documentos subidos: boletines, discursos, intervenciones, declaraciones y columnas de la Dra. María Fernanda Cabal, actas, programas, estudios; también «qué dijo o qué habló la Dra. sobre un tema» (en «busqueda» pon solo el tema). «candidatos»: votos de candidatos o concejales, ediles, alcaldes, diputados, gobernadores en las elecciones 2023 (en «busqueda» pon SOLO el nombre de la persona si lo dicen, nunca el partido ni el lugar; en «cargo»: CO concejo, JA ediles, AL alcaldía, AS asamblea, GO gobernación). " +
       "«monitoreo»: qué dicen la prensa y las redes de María Fernanda Cabal (menciones, medios, tono), NO lo que ella dijo. «datos»: cuántos datos o registros hay guardados en el panel. «charla»: saludos o cualquier cosa que no necesite datos.",
     user: `${previo ? `Conversación reciente:\n${previo}\n\n` : ""}Pregunta: ${pregunta}`,
@@ -38,7 +39,7 @@ async function entender(pregunta: string, historial: Turno[]): Promise<Intencion
   });
   const j = leerJson<Partial<Intencion>>(salida);
   const fuente = j?.fuente && ["documentos", "candidatos", "monitoreo", "datos", "charla"].includes(j.fuente) ? j.fuente : "documentos";
-  return { fuente, busqueda: String(j?.busqueda ?? pregunta).slice(0, 120), cargo: j?.cargo && j.cargo in NIVEL_CARGO ? j.cargo : null, partido: String(j?.partido ?? "").slice(0, 80), lugar: String(j?.lugar ?? "").slice(0, 80) };
+  return { fuente, busqueda: String(j?.busqueda ?? pregunta).slice(0, 120), cargo: j?.cargo && j.cargo in NIVEL_CARGO ? j.cargo : null, partido: String(j?.partido ?? "").slice(0, 80), lugar: String(j?.lugar ?? "").slice(0, 80), tambien: Array.isArray(j?.tambien) ? (j.tambien as string[]).filter((x): x is Fuente => ["documentos", "candidatos", "monitoreo", "datos"].includes(x)) : [], analisis: j?.analisis === true };
 }
 
 const CARGO_NOMBRE: Record<string, string> = { CO: "concejo", JA: "juntas administradoras locales", AL: "alcaldía", AS: "asamblea", GO: "gobernación" };
@@ -99,19 +100,26 @@ async function contextoDe(i: Intencion, pregunta: string): Promise<{ texto: stri
 }
 
 const SISTEMA =
-  "Eres el asistente de voz del panel del equipo de María Fernanda Cabal. Hablas en español de Colombia, natural y cercano, como una persona que conversa. " +
-  "Tus respuestas se LEEN EN VOZ ALTA: máximo cuatro frases cortas, sin markdown, sin listas, sin asteriscos, sin paréntesis, sin enlaces ni símbolos; di las cifras como se hablan. " +
-  "Usa SOLO lo que diga el CONTEXTO para los datos. Si el contexto no alcanza, dilo con franqueza y sugiere dónde mirar en el panel; nunca inventes. " +
+  "Eres MaFe, la analista política del equipo de María Fernanda Cabal: no solo entregas datos, los relacionas, los interpretas y propones qué hacer. Hablas en español de Colombia, natural, cercano y con criterio, como una asesora de confianza. " +
+  "Tus respuestas se LEEN EN VOZ ALTA: sin markdown, sin listas, sin asteriscos, sin paréntesis, sin enlaces ni símbolos; di las cifras como se hablan. " +
+  "Si piden un dato puntual, contesta en una o dos frases. Si piden analizar, relacionar o decidir, usa hasta siete frases cortas con este hilo: primero la lectura de los datos, luego cómo se relacionan entre sí (votos, documentos, prensa y redes, territorio), después el riesgo o la oportunidad, y cierra con una recomendación concreta. " +
+  "Cruza las fuentes del CONTEXTO: compara cifras, busca coincidencias y contradicciones, y señala tendencias. " +
+  "Separa con claridad lo que dicen los datos de lo que es tu interpretación: usa expresiones como «los datos muestran» y «mi lectura es». " +
+  "Usa SOLO lo que diga el CONTEXTO para cifras, nombres y hechos; nunca inventes un dato. Si falta información para concluir, dilo y di exactamente qué dato haría falta y dónde cargarlo en el panel. " +
   "Si dicen un saludo o piden algo que no necesita datos, responde breve y pregunta en qué ayudas.";
 
 export async function responder(pregunta: string, historial: Turno[]): Promise<{ respuesta: string; fuente: string }> {
-  const intencion = await entender(pregunta, historial).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null, partido: "", lugar: "" }));
-  const ctx = await contextoDe(intencion, pregunta);
+  const intencion = await entender(pregunta, historial).catch((): Intencion => ({ fuente: "documentos", busqueda: pregunta, cargo: null, partido: "", lugar: "", tambien: [], analisis: false }));
+  // Para un análisis se cruzan varias fuentes a la vez; para un dato puntual, la principal y las que el clasificador sugiera.
+  const extra = intencion.analisis ? (["documentos", "candidatos", "monitoreo"] as Fuente[]) : intencion.tambien;
+  const fuentes = [...new Set<Intencion["fuente"]>([intencion.fuente, ...extra])].filter((f) => f !== "charla").slice(0, 4);
+  const contextos = fuentes.length ? await Promise.all(fuentes.map((f) => contextoDe({ ...intencion, fuente: f }, pregunta).catch(() => ({ texto: "", fuente: "" })))) : [await contextoDe(intencion, pregunta)];
+  const ctx = { texto: contextos.filter((c) => c.texto).map((c) => `--- ${c.fuente} ---\n${c.texto}`).join("\n\n"), fuente: contextos.map((c) => c.fuente).filter(Boolean).join(" + ") };
   const previo = historial.slice(-6).map((t) => `${t.rol === "usuario" ? "Usuario" : "Asistente"}: ${t.texto}`).join("\n");
   const respuesta = await generarTexto({
     system: SISTEMA,
     user: `${previo ? `Conversación hasta ahora:\n${previo}\n\n` : ""}${ctx.texto ? `CONTEXTO (${ctx.fuente}):\n${ctx.texto}\n\n` : ""}Pregunta: ${pregunta}\n\nResponde hablando.`,
-    maxTokens: 400,
+    maxTokens: intencion.analisis ? 900 : 450,
   });
   return { respuesta: respuesta.replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim(), fuente: ctx.fuente };
 }
