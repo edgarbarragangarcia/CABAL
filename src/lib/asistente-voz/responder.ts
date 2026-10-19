@@ -12,8 +12,8 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export type Turno = { rol: "usuario" | "asistente"; texto: string };
 
-type Fuente = "documentos" | "candidatos" | "monitoreo" | "datos";
-type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | "SE" | "CA" | null; anios: number[]; partido: string; lugar: string; tambien: Fuente[]; analisis: boolean; personaje: string; dias: number; entrega: "ninguna" | "existente" | "nuevo" };
+type Fuente = "documentos" | "candidatos" | "monitoreo" | "datos" | "territorio";
+type Intencion = { fuente: "documentos" | "candidatos" | "monitoreo" | "datos" | "territorio" | "charla"; busqueda: string; cargo: "CO" | "JA" | "AL" | "AS" | "GO" | "SE" | "CA" | null; anios: number[]; partido: string; lugar: string; tambien: Fuente[]; analisis: boolean; personaje: string; dias: number; entrega: "ninguna" | "existente" | "nuevo" };
 
 /** Lo que el asistente entrega en pantalla: un documento ya guardado en el Gestor, o uno nuevo que él redactó. */
 export type Entrega = { tipo: "gestor"; id: string; nombre: string } | { tipo: "texto"; nombre: string; contenido: string };
@@ -37,14 +37,14 @@ async function entender(pregunta: string, historial: Turno[]): Promise<Intencion
   const salida = await generarTexto({
     system:
       "Clasificas lo que pregunta una persona al asistente del panel de una organización política colombiana. Responde SOLO un objeto JSON: " +
-      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "charla", "busqueda": texto corto para buscar, "cargo": "SE" | "CA" | "CO" | "JA" | "AL" | "AS" | "GO" | null, "anios": lista de años de elecciones que mencionan (por ejemplo [2018, 2022]; vacía si no dicen), "partido": nombre del partido o movimiento si lo mencionan (si no, ""), "lugar": ciudad, municipio o departamento si lo mencionan (si no, ""), "tambien": lista con OTRAS fuentes que ayudarían a relacionar y contrastar la respuesta (de «documentos», «candidatos», «monitoreo», «datos»), "personaje": de quién piden la prensa: «mafe» (por defecto), «espriella» (Abelardo de la Espriella, el presidente), «uribe», «petro», «cepeda», «paloma» (Paloma Valencia) o «fajardo», "dias": ventana de tiempo en días para prensa y redes (1 si dicen hoy, 7 esta semana, 30 por defecto, hasta 365), "entrega": «existente» si piden que les des, muestres, pases, envíes o abras un documento ya guardado (boletín, discurso, informe, columna); «nuevo» si piden que redactes, prepares, generes o escribas un documento, informe, resumen, discurso, comunicado o minuta para entregarlo como archivo; «ninguna» en TODOS los demás casos: preguntas, análisis, opiniones, datos y conversación normal (solo usa «existente» o «nuevo» si piden de forma explícita un archivo o documento para llevárselo; una pregunta sobre un tema NUNCA es una entrega) (en «busqueda» pon el título o tema del documento), "analisis": true si piden analizar, relacionar, comparar, interpretar, opinar, estrategia, riesgos, qué significa, por qué o qué conviene hacer (análisis político), false si solo piden un dato}. ' +
+      '{"fuente": "documentos" | "candidatos" | "monitoreo" | "datos" | "territorio" | "charla", "busqueda": texto corto para buscar, "cargo": "SE" | "CA" | "CO" | "JA" | "AL" | "AS" | "GO" | null, "anios": lista de años de elecciones que mencionan (por ejemplo [2018, 2022]; vacía si no dicen), "partido": nombre del partido o movimiento si lo mencionan (si no, ""), "lugar": ciudad, municipio o departamento si lo mencionan (si no, ""), "tambien": lista con OTRAS fuentes que ayudarían a relacionar y contrastar la respuesta (de «documentos», «candidatos», «monitoreo», «datos»), "personaje": de quién piden la prensa: «mafe» (por defecto), «espriella» (Abelardo de la Espriella, el presidente), «uribe», «petro», «cepeda», «paloma» (Paloma Valencia) o «fajardo», "dias": ventana de tiempo en días para prensa y redes (1 si dicen hoy, 7 esta semana, 30 por defecto, hasta 365), "entrega": «existente» si piden que les des, muestres, pases, envíes o abras un documento ya guardado (boletín, discurso, informe, columna); «nuevo» si piden que redactes, prepares, generes o escribas un documento, informe, resumen, discurso, comunicado o minuta para entregarlo como archivo; «ninguna» en TODOS los demás casos: preguntas, análisis, opiniones, datos y conversación normal (solo usa «existente» o «nuevo» si piden de forma explícita un archivo o documento para llevárselo; una pregunta sobre un tema NUNCA es una entrega) (en «busqueda» pon el título o tema del documento), "analisis": true si piden analizar, relacionar, comparar, interpretar, opinar, estrategia, riesgos, qué significa, por qué o qué conviene hacer (análisis político), false si solo piden un dato}. ' +
       "«documentos»: preguntas sobre el contenido de los documentos subidos: boletines, discursos, intervenciones, declaraciones y columnas de la Dra. María Fernanda Cabal, actas, programas, estudios; también «qué dijo o qué habló la Dra. sobre un tema» (en «busqueda» pon solo el tema). «candidatos»: votos de candidatos o concejales, ediles, alcaldes, diputados, gobernadores en las elecciones 2023 (en «busqueda» pon el NOMBRE COMPLETO de la persona si lo dicen, nunca el partido ni el lugar; en «cargo»: SE senado, CA cámara, CO concejo, JA ediles, AL alcaldía, AS asamblea, GO gobernación; el Congreso (SE, CA) tiene elecciones en 2018, 2022 y 2026, los cargos locales en 2023. Si preguntan cómo le fue a una persona en unas elecciones o años, es «candidatos»; sin cargo claro para una persona del Congreso usa SE). " +
-      "«monitoreo»: qué dicen la prensa y las redes de María Fernanda Cabal (menciones, medios, tono), NO lo que ella dijo. «datos»: cuántos datos o registros hay guardados en el panel. «charla»: saludos o cualquier cosa que no necesite datos.",
+      "«monitoreo»: qué dicen la prensa y las redes de María Fernanda Cabal (menciones, medios, tono), NO lo que ella dijo. «territorio»: seguridad, homicidios, extorsión, coca, víctimas, empresas o cámaras de comercio de un municipio o departamento. «datos»: cuántos datos o registros hay guardados en el panel. «charla»: saludos o cualquier cosa que no necesite datos.",
     user: `${previo ? `Conversación reciente:\n${previo}\n\n` : ""}Pregunta: ${pregunta}`,
     maxTokens: 200,
   });
   const j = leerJson<Partial<Intencion>>(salida);
-  const fuente = j?.fuente && ["documentos", "candidatos", "monitoreo", "datos", "charla"].includes(j.fuente) ? j.fuente : "documentos";
+  const fuente = j?.fuente && ["documentos", "candidatos", "monitoreo", "datos", "territorio", "charla"].includes(j.fuente) ? j.fuente : "documentos";
   return { fuente, busqueda: String(j?.busqueda ?? pregunta).slice(0, 120), cargo: j?.cargo && j.cargo in NIVEL_CARGO ? j.cargo : null, anios: Array.isArray(j?.anios) ? (j.anios as unknown[]).map(Number).filter((a) => a in ELECCIONES_CONGRESO || a === 2023) : [], partido: String(j?.partido ?? "").slice(0, 80), lugar: String(j?.lugar ?? "").slice(0, 80), tambien: Array.isArray(j?.tambien) ? (j.tambien as string[]).filter((x): x is Fuente => ["documentos", "candidatos", "monitoreo", "datos"].includes(x)) : [], analisis: j?.analisis === true, personaje: ["mafe", "espriella", "uribe", "petro", "cepeda", "paloma", "fajardo"].includes(String(j?.personaje)) ? String(j?.personaje) : "mafe", dias: Math.min(365, Math.max(1, Math.round(Number(j?.dias) || 30))), entrega: j?.entrega === "existente" || j?.entrega === "nuevo" ? j.entrega : "ninguna" };
 }
 
@@ -83,6 +83,24 @@ async function contextoDe(i: Intencion, pregunta: string): Promise<{ texto: stri
     const anios = esCongreso ? (i.anios.filter((a) => a in ELECCIONES_CONGRESO).length ? i.anios.filter((a) => a in ELECCIONES_CONGRESO) : [2018, 2022, 2026]) : [2023];
     const filtros = [i.busqueda && `nombre «${i.busqueda}»`, i.partido && `partido «${i.partido}»`, i.lugar && `lugar «${i.lugar}»`].filter(Boolean).join(", ") || "sin filtros";
     const bloques: string[] = [];
+    // Con el nombre de una persona se consulta la tabla de candidatos (incluye si salió elegido en el Congreso 2022); sin nombre, el ranking.
+    const nombre = i.busqueda.replace(/[%_\\,().]/g, " ").split(/\s+/).filter((w) => w.length >= 3);
+    if (nombre.length && (i.fuente === "candidatos" || i.cargo || i.anios.length)) {
+      const elecciones = i.anios.length ? i.anios.map((a) => (a === 2023 ? "territoriales-2023" : ELECCIONES_CONGRESO[a])).filter(Boolean) : [];
+      let q = c.from("candidatos_electorales").select("eleccion, eleccion_nombre, corporacion_nombre, ambito_nombre, partido, candidato, votos, porcentaje, electo, nivel").eq("solo_lista", false).lte("nivel", 3);
+      for (const w of nombre) q = q.ilike("candidato", `%${w}%`);
+      if (i.cargo) q = q.eq("corporacion", i.cargo);
+      if (elecciones.length) q = q.in("eleccion", elecciones);
+      if (i.partido) q = q.ilike("partido", `%${i.partido.replace(/[%_\\]/g, "")}%`);
+      if (i.lugar) q = q.ilike("ambito_nombre", `%${i.lugar.replace(/[%_\\]/g, "")}%`);
+      const { data: filas } = await q.order("fecha", { ascending: false }).order("votos", { ascending: false }).limit(60);
+      const vistos = new Set<string>();
+      const lineas = ((filas ?? []) as { eleccion: string; eleccion_nombre: string; corporacion_nombre: string; ambito_nombre: string; partido: string; candidato: string; votos: number; porcentaje: string | null; electo: boolean }[])
+        .filter((f) => { const k = `${f.eleccion}|${f.corporacion_nombre}|${f.ambito_nombre}|${f.candidato}`; if (vistos.has(k)) return false; vistos.add(k); return true; })
+        .slice(0, 20)
+        .map((f) => `- ${f.eleccion_nombre}, ${f.corporacion_nombre}, ${f.ambito_nombre}: ${f.candidato}, ${f.partido}, ${fmt(f.votos)} votos${f.porcentaje ? ` (${f.porcentaje})` : ""}${f.electo ? ", salió ELEGIDO" : f.eleccion === "congreso-2022" ? ", no resultó elegido" : ""}`);
+      if (lineas.length) return { texto: `Resultados guardados de «${i.busqueda}» (Registraduría; solo en el Congreso 2022 consta si fue elegido, en los demás años solo hay votos):\n${lineas.join("\n")}`, fuente: "resultados por candidato" };
+    }
     for (const anio of anios) {
       const eleccion = esCongreso ? ELECCIONES_CONGRESO[anio] : "territoriales-2023";
       const { data, error } = await c.rpc("candidatos_mas_votados", { p_eleccion: eleccion, p_corporacion: cargo, p_nivel: NIVEL_CARGO[cargo], p_prefijo: "", p_busqueda: i.busqueda.replace(/[%_\\]/g, ""), p_limite: i.busqueda ? 6 : 10, p_partido: i.partido.replace(/[%_\\]/g, ""), p_lugar: i.lugar.replace(/[%_\\]/g, "") });
@@ -91,6 +109,21 @@ async function contextoDe(i: Intencion, pregunta: string): Promise<{ texto: stri
       bloques.push(filas.length ? `${anio}:\n${filas.map((f) => `- ${f.candidato}, ${f.partido}, ${f.ambito_nombre}: ${fmt(f.votos)} votos${f.pct ? ` (${f.pct} del total)` : ""}`).join("\n")}` : `${anio}: no aparece ningún candidato con esos filtros.`);
     }
     return { texto: `Resultados oficiales guardados (preconteo de la Registraduría) de ${CARGO_NOMBRE[cargo]}; filtros: ${filtros}; ordenados de más a menos votos; no indican quién salió elegido (solo votos):\n${bloques.join("\n")}`, fuente: `resultados ${CARGO_NOMBRE[cargo]} ${anios.join(", ")}` };
+  }
+
+  if (i.fuente === "territorio") {
+    const lugar = i.lugar.replace(/[%_\\,().]/g, "").trim();
+    if (!lugar) return { texto: "", fuente: "" };
+    const { data: g } = await c.from("ganadores_electorales").select("dane, ambito_nombre").ilike("ambito_nombre", `%${lugar}%`).not("dane", "is", null).limit(5);
+    const hallado = ((g ?? []) as { dane: string; ambito_nombre: string }[])[0];
+    if (!hallado) return { texto: `No identifiqué el municipio «${lugar}» en las bases de datos.`, fuente: "territorio" };
+    const [ind, cam] = await Promise.all([
+      c.from("indicadores_territoriales").select("indicador, periodo, valor, detalle").eq("dane", hallado.dane).limit(60),
+      c.from("camaras_comercio").select("nombre, total, activas, personas_naturales, sociedades").eq("dane", hallado.dane).limit(3),
+    ]);
+    const filasInd = ((ind.data ?? []) as { indicador: string; periodo: string; valor: string; detalle: string | null }[]).map((f) => `- ${f.indicador} (${f.periodo}): ${f.valor}`);
+    const filasCam = ((cam.data ?? []) as { nombre: string; total: number; activas: number; personas_naturales: number; sociedades: number }[]).map((f) => `- ${f.nombre}: ${fmt(f.total)} matrículas, ${fmt(f.activas)} activas, ${fmt(f.personas_naturales)} personas naturales, ${fmt(f.sociedades)} sociedades`);
+    return { texto: `Datos territoriales de ${hallado.ambito_nombre} (DANE ${hallado.dane}):\n${filasInd.length ? filasInd.join("\n") : "Sin indicadores de seguridad ni víctimas guardados."}\nCámara de comercio:\n${filasCam.length ? filasCam.join("\n") : "Sin datos."}`, fuente: "territorio y cámaras de comercio" };
   }
 
   if (i.fuente === "monitoreo") {
@@ -133,7 +166,7 @@ const SISTEMA =
   "Responde SOLO a lo que se preguntó: no agregues información de otras fuentes ni de otros temas que no se pidieron, y si no hay datos para lo preguntado dilo sin rellenar con otra cosa. Si piden un dato puntual, contesta en una o dos frases. Si piden analizar, relacionar o decidir, usa hasta siete frases cortas con este hilo: primero la lectura de los datos, luego cómo se relacionan entre sí (votos, documentos, prensa y redes, territorio), después el riesgo o la oportunidad, y cierra con una recomendación concreta. " +
   "Cruza las fuentes del CONTEXTO: compara cifras, busca coincidencias y contradicciones, y señala tendencias. " +
   "Separa con claridad lo que dicen los datos de lo que es tu interpretación: usa expresiones como «los datos muestran» y «mi lectura es». " +
-  "Usa SOLO lo que diga el CONTEXTO para cifras, nombres y hechos; nunca inventes un dato. Los HECHOS VIGENTES del CONTEXTO mandan sobre cualquier documento o nota antigua que los contradiga: trata lo viejo como historia, con su fecha. Siempre habla de la situación actual y no de la de años anteriores. Si falta información para concluir, dilo y di exactamente qué dato haría falta y dónde cargarlo en el panel. " +
+  "Usa SOLO lo que diga el CONTEXTO para cifras, nombres y hechos; nunca inventes un dato. El CONTEXTO reúne lo que salió de TODAS las bases del panel (documentos, resultados electorales, prensa y redes, territorio): usa lo que responde la pregunta, sin importar de cuál base venga, y calla lo que no viene al caso. Los HECHOS VIGENTES del CONTEXTO mandan sobre cualquier documento o nota antigua que los contradiga: trata lo viejo como historia, con su fecha. Siempre habla de la situación actual y no de la de años anteriores. Si falta información para concluir, dilo y di exactamente qué dato haría falta y dónde cargarlo en el panel. " +
   "Si dicen un saludo o piden algo que no necesita datos, responde breve y pregunta en qué ayudas.";
 
 /** Busca en el Gestor los documentos que la persona pide: por título y, si no alcanza, por significado. Devuelve hasta tres con archivo descargable. */
@@ -185,10 +218,20 @@ export async function responder(pregunta: string, historial: Turno[]): Promise<{
     const dicho = docs.length === 1 ? `Listo. Te dejé en pantalla el documento ${docs[0].titulo}, para que lo descargues.` : `Listo. Te dejé en pantalla ${docs.length} documentos que coinciden: ${docs.map((d) => d.titulo).join(", ")}. Descarga el que necesites.`;
     return { respuesta: dicho.replace(/[*_#`>]/g, ""), fuente: "Gestor documental", entregas: docs.map((d) => ({ tipo: "gestor" as const, id: d.id, nombre: d.titulo })) };
   }
-  // Para un análisis se cruzan varias fuentes a la vez; para un dato puntual, la principal y las que el clasificador sugiera.
-  const extra = intencion.analisis || intencion.entrega === "nuevo" ? (["documentos", "candidatos", "monitoreo"] as Fuente[]) : [];
-  const fuentes = [...new Set<Intencion["fuente"]>([intencion.fuente, ...extra])].filter((f) => f !== "charla").slice(0, 4);
+  // Se consultan TODAS las bases que pueden servir para la pregunta, a la vez; el modelo usa solo lo que corresponde.
+  const q = pregunta.toLowerCase();
+  const analiza = intencion.analisis || intencion.entrega === "nuevo";
+  const lista: Fuente[] = [];
+  if (intencion.fuente !== "charla" || analiza) lista.push("documentos");
+  if (analiza || intencion.fuente === "candidatos" || intencion.cargo || intencion.partido || intencion.anios.length || /(vot|eleg|elecci|candidat|senad|c[aá]mara de rep|alcald|gobernad|concej|edil|curul)/.test(q)) lista.push("candidatos");
+  if (intencion.lugar || intencion.fuente === "territorio" || /(homicid|extors|coca|v[ií]ctim|secuestr|masacre|c[aá]mara de comercio|empresa)/.test(q)) lista.push("territorio");
+  if (analiza || intencion.fuente === "monitoreo" || /(prensa|redes|noticia|medios|dice[n]? |dijo|tono|menci|trino|titular)/.test(q)) lista.push("monitoreo");
+  if (intencion.fuente === "datos") lista.push("datos");
+  const fuentes = [...new Set(lista)];
   const contextos = fuentes.length ? await Promise.all(fuentes.map((f) => contextoDe({ ...intencion, fuente: f }, pregunta).catch(() => ({ texto: "", fuente: "" })))) : [await contextoDe(intencion, pregunta)];
+  // Si otra base sí tiene datos, el «no hay documentos» sobra y solo distrae.
+  const hayDatos = contextos.some((c) => c.texto && !c.texto.startsWith("No hay documentos con información"));
+  if (hayDatos) for (let k = contextos.length - 1; k >= 0; k--) if (contextos[k].texto.startsWith("No hay documentos con información")) contextos.splice(k, 1);
   const ctx = { texto: contextos.filter((c) => c.texto).map((c) => `--- ${c.fuente} ---\n${c.texto}`).join("\n\n"), fuente: contextos.map((c) => c.fuente).filter(Boolean).join(" + ") };
   const previo = historial.slice(-6).map((t) => `${t.rol === "usuario" ? "Usuario" : "Asistente"}: ${t.texto}`).join("\n");
   const hoy = new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" });
