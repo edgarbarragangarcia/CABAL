@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Mic, Send, Square, Volume2, VolumeX, X } from "lucide-react";
+import { Loader2, Mic, Square, Volume2, VolumeX, X } from "lucide-react";
 
 import { MafeAvatar } from "@/components/mafe/mafe-avatar";
 
@@ -62,11 +62,10 @@ function arrastrar(e: React.PointerEvent<HTMLElement>, el: HTMLElement, alMover:
 export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void; pos?: Pos | null; alMover?: (p: Pos, fin: boolean) => void }) {
   const [turnos, setTurnos] = React.useState<Turno[]>([{ rol: "asistente", texto: SALUDO }]);
   const [fase, setFase] = React.useState<Fase>("reposo");
-  const [parcial, setParcial] = React.useState("");
+  const [, setParcial] = React.useState("");
   const [continuo, setContinuo] = React.useState(true);
   const [silencio, setSilencio] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [escrito, setEscrito] = React.useState("");
   const [aviso, setAviso] = React.useState("");
   const [soporte] = React.useState(() => typeof window !== "undefined" && !!((window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition));
 
@@ -239,15 +238,6 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
     }
   }
 
-  async function reproducir(texto: string) {
-    desbloquearAudio();
-    pararTodo();
-    const miGen = ++gen.current;
-    setFase("hablando");
-    await hablar(texto, miGen);
-    if (gen.current === miGen) setFase("reposo");
-  }
-
   async function enviar(pregunta: string) {
     const texto = pregunta.trim();
     if (!texto) return;
@@ -362,38 +352,27 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
   const etiqueta = { reposo: "Toca el micrófono y habla", escuchando: "Te escucho…", pensando: "Pensando…", hablando: "Hablando… toca para interrumpir" }[fase];
 
   return (
-    <div style={pos && typeof window !== "undefined" && window.innerWidth >= 640 ? { left: pos.x, top: pos.y, bottom: "auto" } : undefined} className="fixed inset-x-3 bottom-3 z-[70] flex max-h-[80dvh] flex-col overflow-hidden rounded-3xl bg-[#06281c] text-[#f4efe2] shadow-2xl ring-1 ring-white/10 sm:inset-x-auto sm:bottom-5 sm:left-[7rem] sm:w-[26rem]" role="dialog" aria-label="Asistente de voz">
+    <div style={pos && typeof window !== "undefined" && window.innerWidth >= 640 ? { left: pos.x, top: pos.y, bottom: "auto" } : undefined} className="fixed inset-x-3 bottom-3 z-[70] flex max-h-[80dvh] flex-col overflow-hidden rounded-3xl bg-[#06281c] text-[#f4efe2] shadow-2xl ring-1 ring-white/10 sm:inset-x-auto sm:bottom-5 sm:left-[7rem] sm:w-[19rem]" role="dialog" aria-label="Asistente de voz">
       <div
         className="flex cursor-grab items-center justify-between px-5 pt-4 active:cursor-grabbing sm:touch-none"
         onPointerDown={(e) => { if ((e.target as HTMLElement).closest("button") || !alMover || window.innerWidth < 640) return; const panel = e.currentTarget.parentElement as HTMLElement; arrastrar(e, panel, (p) => alMover(p, false), (m) => { if (m) alMover({ x: panel.getBoundingClientRect().left, y: panel.getBoundingClientRect().top }, true); }); }}
         title="Arrastra para mover"
       >
-        <div className="flex items-center gap-3">
-          <MafeAvatar talking={fase === "hablando"} title="MaFe" className={`size-14 rounded-full ring-2 transition ${fase === "escuchando" ? "ring-red-400" : fase === "hablando" ? "ring-[#e0bd7c]" : "ring-white/15"}`} />
-          <p className="text-lg leading-tight"><span className="font-bold">MaFe</span><br /><span className="text-xs font-normal text-[#f4efe2]/60">Asistente de voz</span></p>
-        </div>
+        <p className="text-xs font-semibold tracking-wide text-[#f4efe2]/60 uppercase">MaFe</p>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => { setSilencio((s) => !s); if (!silencio) { audio.current?.pause(); window.speechSynthesis?.cancel(); } }} aria-pressed={silencio} aria-label={silencio ? "Activar la voz" : "Silenciar la voz"} className="rounded-full p-2 hover:bg-white/10">{silencio ? <VolumeX className="size-4" aria-hidden="true" /> : <Volume2 className="size-4" aria-hidden="true" />}</button>
           <button type="button" onClick={() => { pararTodo(); alCerrar(); }} aria-label="Cerrar" className="rounded-full p-2 hover:bg-white/10"><X className="size-4" aria-hidden="true" /></button>
         </div>
       </div>
 
-      <div ref={lista} className="mt-2 min-h-24 flex-1 space-y-2 overflow-y-auto px-5 py-2 text-[14px] leading-relaxed">
-        {turnos.map((t, i) => (
-          <div key={i} className={t.rol === "usuario" ? "ml-8 rounded-2xl rounded-br-md bg-[#e0bd7c] px-3.5 py-2 text-[#2b1f06]" : "mr-4"}>
-            {t.texto}
-            {t.rol === "asistente" && t.texto !== SALUDO && (
-              <span className="mt-1 flex items-center gap-3 text-[11px] text-[#f4efe2]/50">
-                {t.fuente && <span>Fuente: {t.fuente}</span>}
-                <button type="button" onClick={() => void reproducir(t.texto)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[#e0bd7c] hover:bg-white/10"><Volume2 className="size-3" aria-hidden="true" />Escuchar</button>
-              </span>
-            )}
-          </div>
-        ))}
-        {parcial && <div className="ml-8 rounded-2xl rounded-br-md bg-[#e0bd7c]/60 px-3.5 py-2 text-[#2b1f06] italic">{parcial}</div>}
-        {fase === "pensando" && <div className="flex items-center gap-2 text-[#f4efe2]/60"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Consultando…</div>}
+      <div ref={lista} className="flex flex-col items-center px-5 pt-1">
+        <MafeAvatar
+          talking={fase === "hablando"}
+          title="MaFe"
+          className={`size-44 rounded-full ring-4 transition duration-300 ${fase === "escuchando" ? "scale-[1.02] ring-red-400/80" : fase === "hablando" ? "ring-[#e0bd7c]" : fase === "pensando" ? "opacity-80 ring-white/20" : "ring-white/15"}`}
+        />
         {error && (
-          <div role="alert" className="rounded-xl bg-red-500/20 px-3 py-2 text-[13px] text-red-100">
+          <div role="alert" className="mt-3 rounded-xl bg-red-500/20 px-3 py-2 text-[13px] text-red-100">
             <p>{error}</p>
             {/micr[oó]fono/i.test(error) && <button type="button" onClick={() => void pedirMicrofono()} className="mt-2 rounded-full bg-[#e0bd7c] px-3.5 py-1.5 text-xs font-semibold text-[#2b1f06]">Dar permiso del micrófono</button>}
           </div>
@@ -408,17 +387,13 @@ export function AsistenteVoz({ alCerrar, pos, alMover }: { alCerrar: () => void;
           ))}
         </div>
         {aviso && <p className="mt-1 rounded-lg bg-white/10 px-3 py-1.5 text-center text-[11px] text-[#f4efe2]/80">{aviso}</p>}
-        <p className="mt-1 text-center text-xs text-[#f4efe2]/70" aria-live="polite">{soporte ? etiqueta : "Tu navegador no reconoce voz: escribe abajo."}</p>
+        <p className="mt-1 text-center text-xs text-[#f4efe2]/70" aria-live="polite">{soporte ? etiqueta : "Este navegador no reconoce la voz: usa Chrome o Edge."}</p>
         <div className="mt-3 flex items-center justify-center gap-3">
           <button type="button" onClick={principal} disabled={!soporte && fase === "reposo"} aria-label={fase === "reposo" ? "Hablar" : "Detener"} className={`grid size-14 place-items-center rounded-full transition disabled:opacity-40 ${fase === "escuchando" ? "bg-red-500 text-white" : "bg-[#e0bd7c] text-[#2b1f06] hover:brightness-105"}`}>
             {fase === "reposo" ? <Mic className="size-6" aria-hidden="true" /> : fase === "pensando" ? <Loader2 className="size-6 animate-spin" aria-hidden="true" /> : <Square className="size-5" aria-hidden="true" />}
           </button>
         </div>
         <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 text-xs text-[#f4efe2]/70"><input type="checkbox" className="size-3.5 accent-[#e0bd7c]" checked={continuo} onChange={(e) => setContinuo(e.target.checked)} />Conversación continua (vuelve a escucharte solo)</label>
-        <form className="mt-3 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); const t = escrito; setEscrito(""); void enviar(t); }}>
-          <input value={escrito} onChange={(e) => setEscrito(e.target.value)} placeholder="O escribe tu pregunta" className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2 text-sm text-[#f4efe2] placeholder:text-[#f4efe2]/40 outline-none focus:ring-2 focus:ring-[#e0bd7c]/60" />
-          <button type="submit" disabled={!escrito.trim() || fase === "pensando"} aria-label="Enviar" className="grid size-9 place-items-center rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40"><Send className="size-4" aria-hidden="true" /></button>
-        </form>
       </div>
     </div>
   );

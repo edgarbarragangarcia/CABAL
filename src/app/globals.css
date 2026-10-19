@@ -486,7 +486,29 @@
 }
 
 .mafe-avatar--talking .mafe-avatar__mouth {
-  animation: mafe-talk 0.3s ease-in-out infinite alternate;
+  animation: mafe-talk 0.42s ease-in-out infinite;
+}
+
+/* Al hablar, MaFe mueve la cabeza y los hombros como quien gesticula. */
+.mafe-avatar--talking {
+  animation: mafe-gesto 2.6s ease-in-out infinite;
+  transform-origin: 50% 85%;
+}
+
+@keyframes mafe-gesto {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  20% {
+    transform: rotate(-2.2deg) translateY(-1px);
+  }
+  45% {
+    transform: rotate(1.8deg) translateY(1px);
+  }
+  70% {
+    transform: rotate(-1.2deg) translateY(-1px);
+  }
 }
 
 @keyframes mafe-blink {
@@ -501,16 +523,24 @@
 }
 
 @keyframes mafe-talk {
-  from {
-    transform: scaleY(0.55);
+  0%,
+  100% {
+    transform: scaleY(0.5) scaleX(0.96);
   }
-  to {
-    transform: scaleY(1.15);
+  25% {
+    transform: scaleY(1.25) scaleX(0.92);
+  }
+  50% {
+    transform: scaleY(0.8) scaleX(1.04);
+  }
+  75% {
+    transform: scaleY(1.1) scaleX(0.98);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mafe-avatar__eyes,
+  .mafe-avatar--talking,
   .mafe-avatar--talking .mafe-avatar__mouth {
     animation: none;
   }
