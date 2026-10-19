@@ -38,6 +38,7 @@ import type {
 } from "@/lib/gov-data/elecciones/resultados";
 import { heatColor } from "@/components/admin/colombia-heatmap";
 import { FotoCandidato, HojaDeVidaPanel, LogoPartido } from "./candidato-ui";
+import { CandidatosTop } from "./candidatos-top";
 import { FiltroEleccion } from "./filtro-eleccion";
 import { titulo } from "./nombres";
 import { CabalMap, type MapArea } from "./cabal-map";
@@ -1152,6 +1153,16 @@ export function ExploradorElectoral() {
               </div>
             )}
 
+            {pideTerritorio && vista!.corporacion.tipo === "lista" && vista!.corporacion.nivelEleccion >= 3 && (
+              <CandidatosTop
+                eleccion={vista!.eleccion.id}
+                corporacion={vista!.corporacion.sigla}
+                nombreCargo={vista!.corporacion.nombre}
+                nivel={vista!.corporacion.nivelEleccion}
+                prefijo={vista!.ambito.nivel <= 1 ? "" : vista!.ambito.codigo}
+                lugar={vista!.ambito.nivel <= 1 ? "todo el país" : titulo(vista!.ambito.nombre)}
+              />
+            )}
             {pideTerritorio && (
               <p className="mb-3 rounded-xl border border-sky-400/40 bg-sky-500/5 p-3 text-xs text-sky-800 dark:text-sky-300">
                 Aquí se ven los votos por partido. Para ver los candidatos ({vista!.corporacion.nombre}), elige{" "}

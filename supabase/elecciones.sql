@@ -183,3 +183,25 @@ grant execute on function carga_aviso_disponible() to service_role;
 revoke all on catalogo_electoral, resultados_electorales from anon, authenticated;
 revoke all on partidos_electorales, candidatos_electorales, ganadores_electorales from anon, authenticated;
 revoke all on function cobertura_electoral() from public, anon, authenticated;
+
+-- Candidatos más votados de un cargo (p. ej. concejales): recorre los resultados guardados en el nivel donde se elige el cargo y devuelve
+-- los de más votos, de todo el país o de un departamento (p_prefijo = código del ámbito), con búsqueda por nombre.
+create or replace function candidatos_mas_votados(p_eleccion text, p_corporacion text, p_nivel integer default 3, p_prefijo text default '', p_busqueda text default '', p_limite integer default 100)
+returns table (ambito text, ambito_nombre text, partido text, candidato text, cedula text, votos integer, pct text)
+language sql stable security invoker set search_path = public as $$
+  select r.ambito, r.ambito_nombre, p.valor ->> 'nombre', c.valor ->> 'nombre', c.valor ->> 'cedula', (c.valor ->> 'votos')::integer, c.valor ->> 'pct'
+  from resultados_electorales r
+  cross join lateral jsonb_array_elements(coalesce(r.datos -> 'circunscripciones' -> 0 -> 'partidos', '[]'::jsonb)) as p(valor)
+  cross join lateral jsonb_array_elements(coalesce(p.valor -> 'candidatos', '[]'::jsonb)) as c(valor)
+  where r.eleccion = p_eleccion
+    and r.corporacion = p_corporacion
+    and r.nivel = p_nivel
+    and not r.vacio
+    and r.ambito like coalesce(p_prefijo, '') || '%'
+    and coalesce((c.valor ->> 'soloLista')::boolean, false) = false
+    and (coalesce(p_busqueda, '') = '' or lower(c.valor ->> 'nombre') like '%' || lower(p_busqueda) || '%')
+  order by (c.valor ->> 'votos')::integer desc nulls last
+  limit greatest(1, least(coalesce(p_limite, 100), 500))
+$$;
+revoke all on function candidatos_mas_votados(text, text, integer, text, text, integer) from public, anon, authenticated;
+grant execute on function candidatos_mas_votados(text, text, integer, text, text, integer) to service_role;
