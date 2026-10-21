@@ -11,6 +11,7 @@ import { usePeticion } from "../analisis-publicaciones/peticion";
 import { MapaDatos } from "./mapa-datos";
 import { FuentesTerritorio } from "../analisis-publicaciones/territorio-fuentes";
 import { CamarasFuente } from "./camaras-fuente";
+import { ProyeccionFuente } from "./proyeccion-fuente";
 import { MonitoreoFuente } from "./monitoreo-fuente";
 
 const OPCIONES = [
@@ -47,6 +48,9 @@ export function FuenteDeLaVerdad() {
   const cam = usePeticion<{ disponible: boolean; camaras: { actualizado_en: string }[]; codigos: string[] }>("/api/admin/camaras");
   const [vCam, setVCam] = React.useState(0);
   const camaras = cam.estado === "listo" ? cam.data : null;
+  const [vProy, setVProy] = React.useState(0);
+  const proy = usePeticion<{ filas: number; esperadas: number }>(`/api/admin/proyeccion/cargar?v=${vProy}`);
+  const p = proy.estado === "listo" ? proy.data : null;
   const fuentes: FuenteDatos[] = [
     {
       id: "electoral",
@@ -87,6 +91,16 @@ export function FuenteDeLaVerdad() {
       tono: camaras?.disponible && camaras.camaras.length >= camaras.codigos.length ? "ok" : "pendiente",
       fecha: camaras?.camaras?.[0]?.actualizado_en ?? null,
       contenido: <CamarasFuente key={vCam} alCargar={() => setVCam((n) => n + 1)} />,
+    },
+    {
+      id: "proyeccion",
+      nombre: "Proyección 2030 · población DANE",
+      detalle: "Población por municipio, sexo y edad simple (DANE 2018-2042) que, con el censo de la Registraduría, proyecta los electores y los votantes nuevos de 2030",
+      resumen: p ? `${p.filas.toLocaleString("es-CO")} de ${p.esperadas.toLocaleString("es-CO")} filas` : "—",
+      estado: proy.estado === "error" ? "Falta SQL" : !p ? "Leyendo" : p.filas === 0 ? "Sin cargar" : p.filas < p.esperadas ? "Incompleta" : "Listo",
+      tono: p && p.filas >= p.esperadas ? "ok" : "pendiente",
+      fecha: null,
+      contenido: <ProyeccionFuente key={vProy} alCargar={() => setVProy((n) => n + 1)} />,
     },
   ];
 
