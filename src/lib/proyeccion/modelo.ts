@@ -1,6 +1,5 @@
 import "server-only";
 
-import datos from "@/data/proyeccion-dane.json";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 /**
@@ -11,9 +10,8 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
  * de cada municipio. Los «votantes nuevos» son quienes cumplen 18 años entre la elección de 2026 y la de 2030 (edades 18 a 21 en 2030).
  * El DANE proyecta personas residentes; el censo electoral incluye a quienes están inscritos aunque hayan migrado o fallecido, por eso se usa la razón.
  */
-type Fila = number[]; // ver scripts/proyeccion-dane.py
+type Fila = number[]; // lo que devuelve proyeccion_resumen (ver supabase/proyeccion.sql)
 type Municipio = { n: string; d: string; y: Record<string, Fila> };
-const DANE = datos as unknown as Record<string, Municipio>;
 
 export type FilaProyeccion = {
   dane: string; municipio: string; departamento: string;
@@ -40,7 +38,28 @@ async function censos(eleccion: string): Promise<Censo[]> {
   return ((data ?? []) as unknown as { dane: string; ambito_nombre: string; censo: number | string | null; votantes: number | string | null }[]).map((r) => ({ dane: r.dane, nombre: r.ambito_nombre, censo: Number(r.censo) || 0, votantes: Number(r.votantes) || 0 }));
 }
 
+/** La población del DANE guardada en Supabase (tabla proyeccion_poblacion), resumida por la función proyeccion_resumen. */
+async function poblacion(): Promise<Record<string, Municipio>> {
+  const c = getSupabaseServerClient();
+  if (!c) throw new Error("Supabase no está conectado.");
+  const out: Record<string, Municipio> = {};
+  for (const anio of [2022, 2026, 2030]) {
+    for (let desde = 0; ; desde += 1000) {
+      const { data, error } = await c.rpc("proyeccion_resumen", { p_anios: [anio] }).range(desde, desde + 999);
+      if (error) throw new Error(error.message.includes("proyeccion_") ? "Falta crear la tabla de población: corre supabase/proyeccion.sql en el SQL Editor de Supabase." : error.message);
+      const filas = (data ?? []) as { dane: string; anio: number; municipio: string; departamento: string; resumen: number[] }[];
+      for (const f of filas) (out[f.dane] ??= { n: f.municipio, d: f.departamento, y: {} }).y[String(f.anio)] = f.resumen;
+      if (filas.length < 1000) break;
+    }
+  }
+  return out;
+}
+
+export class SinDatosDane extends Error {}
+
 export async function proyectar() {
+  const DANE = await poblacion();
+  if (!Object.keys(DANE).length) throw new SinDatosDane("La población del DANE todavía no está cargada en Supabase.");
   const [c26, c26b, c22] = await Promise.all([censos("presidencia-2026-1v"), censos("presidencia-2026-2v"), censos("presidencia-2022-1v")]);
   if (!c26.length) throw new Error("Todavía no están cargados los resultados de 2026 en Supabase (hacen falta para el censo electoral).");
   const seg = new Map(c26b.map((x) => [x.dane, x.votantes]));

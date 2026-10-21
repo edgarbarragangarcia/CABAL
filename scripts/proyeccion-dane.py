@@ -5,8 +5,7 @@ en un JSON compacto para el módulo Proyección 2030.
 
 Uso:  python3 scripts/proyeccion-dane.py RUTA/PPED-AreaSexoEdadMun-2018-2042_VP.xlsx src/data/proyeccion-dane.json
 (El .xlsx pesa ~130 MB; se lee en flujo, sin cargarlo entero.)
-Por municipio y año (2022, 2026, 2030, 2034): [total, hombres, mujeres, 18+, hombres 18+, mujeres 18+, edades 14,15,16,17, edades 18,19,20,21,
-bandas 18-24, 25-34, 35-44, 45-54, 55-64, 65+]
+Por municipio y año (2022, 2026, 2030, 2034): 101 edades simples de hombres (0 a 100 o más) seguidas de 101 de mujeres.
 """
 import json, re, sys, zipfile
 import xml.etree.ElementTree as ET
@@ -51,9 +50,7 @@ with z.open("xl/worksheets/sheet3.xml") as f:
         tot = [num(T0 + a) for a in range(101)]
         hom = [num(H0 + a) for a in range(101)]
         muj = [num(M0 + a) for a in range(101)]
-        s = lambda xs, a, b: sum(xs[a:b + 1])
-        fila = [num(7), num(8), num(9), s(tot, 18, 100), s(hom, 18, 100), s(muj, 18, 100), *tot[14:18], *tot[18:22],
-                s(tot, 18, 24), s(tot, 25, 34), s(tot, 35, 44), s(tot, 45, 54), s(tot, 55, 64), s(tot, 65, 100)]
+        fila = hom + muj
         e = out.setdefault(dane, {"n": v[4], "d": v[2], "y": {}})
         e["y"][str(año)] = fila
 with open(salida, "w", encoding="utf-8") as f:
