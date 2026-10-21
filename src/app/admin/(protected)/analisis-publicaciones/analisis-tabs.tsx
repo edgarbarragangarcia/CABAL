@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Eye, LayoutDashboard, Network, ShieldCheck, Vote } from "lucide-react";
+import { Eye, LayoutDashboard, Network, ShieldCheck, TrendingUp, Vote } from "lucide-react";
 
 import { ChipPortada, Lienzo, Portada } from "@/components/admin/estilo-cabal";
 import { MonitoreoSecciones } from "@/components/admin/monitoreo-secciones";
@@ -10,13 +10,15 @@ import { MonitoreoSecciones } from "@/components/admin/monitoreo-secciones";
 import { AvalesTab } from "./avales-tab";
 import { ExploradorElectoral } from "./explorador-electoral";
 import { PrediccionesTab } from "./predicciones-tab";
+import { ProyeccionTab } from "./proyeccion-tab";
 
-type TabId = "centro" | "votaciones" | "predicciones" | "avales";
+type TabId = "centro" | "votaciones" | "predicciones" | "proyeccion" | "avales";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "centro", label: "Monitoreo", icon: LayoutDashboard },
   { id: "votaciones", label: "Votaciones", icon: Vote },
   { id: "predicciones", label: "Red Cabal", icon: Network },
+  { id: "proyeccion", label: "Proyección 2030", icon: TrendingUp },
   { id: "avales", label: "Avales", icon: ShieldCheck },
 ];
 
@@ -71,6 +73,12 @@ export function AnalisisTabs({ header }: { header: React.ReactNode }) {
           <Lienzo>
             <Portada icono={Network} etiqueta="Territorio y comunidad" titulo="Red Cabal" descripcion="Elige un lugar, de lo general a lo particular, y mira cómo le fue a María Fernanda Cabal, qué problemas tiene y quiénes la siguen allí." />
             <PrediccionesTab />
+          </Lienzo>
+        )}
+        {tab === "proyeccion" && (
+          <Lienzo>
+            <Portada icono={TrendingUp} etiqueta="Escenario electoral" titulo="Proyección 2030" descripcion="El censo electoral proyectado a 2030 por municipio y por edad, con el peso de los jóvenes que votan por primera vez. Sale de la Registraduría y de las proyecciones de población del DANE." />
+            <ProyeccionTab />
           </Lienzo>
         )}
         {tab === "avales" && (
