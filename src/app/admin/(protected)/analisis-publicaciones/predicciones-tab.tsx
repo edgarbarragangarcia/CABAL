@@ -44,6 +44,7 @@ import { demoSnapshot } from "@/lib/crm/demo";
 import { TerritorioPanel } from "./territorio-panel";
 import { OTHER_COMMUNITY_COLOR, RedCrmGraph, communityColor } from "./red-crm-graph";
 import { RedCrmMapa, resumenMapa } from "./red-crm-mapa";
+import { RedCrmTodos } from "./red-crm-todos";
 
 const DIMENSION_ICON: Record<Dimension, LucideIcon> = {
   lugar: MapPin,
@@ -285,7 +286,7 @@ function RedCrm({
 }) {
   const { resolvedTheme } = useTheme();
   const [showSteps, setShowSteps] = React.useState(false);
-  const [vista, setVista] = React.useState<"mapa" | "red">("mapa");
+  const [vista, setVista] = React.useState<"todos" | "mapa" | "red">("todos");
   const [mapping] = React.useState<Mapping>(() =>
     typeof window === "undefined" ? {} : readMapping()
   );
@@ -543,7 +544,7 @@ function RedCrm({
               </>
             )}
             <span className="inline-flex rounded-full border border-border p-0.5 text-[11px] font-semibold sm:ml-auto" role="group" aria-label="Cómo ver la red">
-              {([["mapa", "Mapa de Colombia"], ["red", "Red"]] as const).map(([v, t]) => <button key={v} type="button" onClick={() => setVista(v)} aria-pressed={vista === v} className={`rounded-full px-3 py-1 ${vista === v ? "bg-brand text-brand-foreground" : "text-muted-foreground"}`}>{t}</button>)}
+              {([["todos", "Todos los leads"], ["mapa", "Mapa de la red"], ["red", "Red"]] as const).map(([v, t]) => <button key={v} type="button" onClick={() => setVista(v)} aria-pressed={vista === v} className={`rounded-full px-3 py-1 ${vista === v ? "bg-brand text-brand-foreground" : "text-muted-foreground"}`}>{t}</button>)}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <svg viewBox="0 0 10 10" className="size-2.5" aria-hidden="true">
@@ -567,7 +568,9 @@ function RedCrm({
             )}
           </div>
 
-          {network.edges.length > 0 ? (
+          {vista === "todos" ? (
+            <RedCrmTodos />
+          ) : network.edges.length > 0 ? (
             vista === "mapa" ? <RedCrmMapa network={network} visible={visible} selected={selected} onSelect={choose} /> : <RedCrmGraph network={network} visible={visible} selected={selected} onSelect={choose} />
           ) : (
             <div className="grid h-[320px] place-items-center p-6 text-center text-sm text-muted-foreground">

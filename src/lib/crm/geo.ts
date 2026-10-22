@@ -11,7 +11,7 @@ const FILAS = lugares as unknown as Fila[];
 
 const plano = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9ñ ]+/g, " ").replace(/\s+/g, " ").trim();
 
-type Mun = { dane: string; nombre: string; dep: string; depNombre: string; pob: number; lat: number; lon: number };
+export type Mun = { dane: string; nombre: string; dep: string; depNombre: string; pob: number; lat: number; lon: number };
 // El centro de Bogotá: el punto del DANE cae al sur porque incluye el páramo de Sumapaz.
 const CENTRO: Record<string, [number, number]> = { "11001": [4.65, -74.1] };
 const MUNICIPIOS: Mun[] = FILAS.filter((f) => f[5] != null && f[6] != null).map(([dane, nombre, dep, depNombre, pob, lat, lon]) => ({ dane, nombre, dep, depNombre, pob, lat: CENTRO[dane]?.[0] ?? lat, lon: CENTRO[dane]?.[1] ?? lon }));
@@ -30,9 +30,12 @@ for (const m of MUNICIPIOS) {
   agregar(base, m);
   agregar(base.replace(/ d c$/, "").trim(), m); // «Bogotá, D.C.» → bogota
   agregar(base.replace(/ de indias$/, "").trim(), m); // «Cartagena de Indias» → cartagena
+  // «San José de Cúcuta» → cucuta, «Guadalajara de Buga» → buga, «El Carmen de Viboral» → carmen de viboral…
+  const sinPrefijo = base.replace(/^(san jose de|guadalajara de|villa de|santiago de|san juan de|santa fe de|puerto|el|la|los|las) /, "").trim();
+  if (sinPrefijo !== base) agregar(sinPrefijo, m);
 }
 
-type Dep = { codigo: string; nombre: string; lat: number; lon: number };
+export type Dep = { codigo: string; nombre: string; lat: number; lon: number };
 const DEPARTAMENTOS: Dep[] = [...new Set(MUNICIPIOS.map((m) => m.dep))].map((codigo) => {
   const ms = MUNICIPIOS.filter((m) => m.dep === codigo);
   const peso = ms.reduce((s, m) => s + m.pob, 0) || 1;
@@ -97,3 +100,40 @@ export function dispersar(ubicaciones: (Ubicacion & { id: number })[]): Map<numb
   }
   return out;
 }
+
+/** Municipios que pueden corresponder a un nombre (varios si se repite, como «Barbosa» en Antioquia y en Santander). */
+/** Nombres del CRM que no coinciden con el oficial («Mompox» es Santa Cruz de Mompox). «nombre|código de departamento» fija el departamento. */
+const ALIAS: Record<string, string> = {
+  "mompox": "santa cruz de mompox", "santiago de cali": "cali", "armero guayabal": "armero", "rioviejo": "rio viejo", "san juan de rio seco": "san juan de rioseco",
+  "puerto nare la magdalena": "puerto nare", "pueblo viejo": "puebloviejo", "san andres de sotavento": "san andres sotavento", "vista hermosa": "vistahermosa",
+  "rio blanco": "rioblanco", "san martin de los llanos": "san martin|50", "el retiro": "retiro|05", "san vicente ferrer": "san vicente|05",
+};
+
+export function candidatos(nombre: string): Mun[] {
+  const original = plano(nombre);
+  if (!original || NO_LUGAR.has(original)) return [];
+  const [t, depFijo] = (ALIAS[original] ?? original).split("|");
+  if (depFijo) return candidatosPlano(t).filter((m) => m.dep === depFijo);
+  return candidatosPlano(t);
+}
+
+function candidatosPlano(t: string): Mun[] {
+  const exacto = porNombre.get(t) ?? porNombre.get(`el ${t}`) ?? porNombre.get(`la ${t}`);
+  if (exacto?.length) return exacto;
+  // El nombre del CRM es el final o el principio del oficial («Cucuta» ↔ «san jose de cucuta»): solo si es único.
+  const parecidos = new Set<Mun>();
+  for (const [clave, ms] of porNombre) if (clave.length >= 5 && (clave.endsWith(` ${t}`) || clave.startsWith(`${t} `))) ms.forEach((m) => parecidos.add(m));
+  return parecidos.size === 1 ? [...parecidos] : [];
+}
+
+/** Departamento por su nombre en el CRM («Atlantico», «Valle», «Bogota D.C.»). */
+export function departamentoDe(nombre: string): Dep | undefined {
+  const t = plano(nombre).replace(/ d c$/, "");
+  if (!t) return undefined;
+  const exacto = depPorNombre.get(t);
+  if (exacto) return exacto;
+  return DEPARTAMENTOS.find((d) => { const n = plano(d.nombre).replace(/ d c$/, ""); return n.startsWith(t) || t.startsWith(n) || n.includes(t); });
+}
+
+export const todosLosDepartamentos = () => DEPARTAMENTOS;
+export const municipioPorDane = (dane: string) => MUNICIPIOS.find((m) => m.dane === dane);

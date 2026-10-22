@@ -68,7 +68,7 @@ export function normalizeWebhookUrl(raw: string): string {
   return `${url.origin}${path}`;
 }
 
-async function call<T>(base: string, method: string, params: object = {}, attempt = 0): Promise<BitrixReply<T>> {
+export async function call<T>(base: string, method: string, params: object = {}, attempt = 0): Promise<BitrixReply<T>> {
   let res: Response;
   try {
     res = await fetch(`${base}${method}.json`, {
@@ -91,7 +91,7 @@ async function call<T>(base: string, method: string, params: object = {}, attemp
 }
 
 /** Parámetros como query string al estilo PHP (`select[0]=ID&order[ID]=DESC`), que es lo que espera `batch`. */
-function toQuery(value: unknown, prefix: string): string[] {
+export function toQuery(value: unknown, prefix: string): string[] {
   if (value === null || value === undefined) return [];
   if (Array.isArray(value)) return value.flatMap((v, i) => toQuery(v, `${prefix}[${i}]`));
   if (typeof value === "object") {
