@@ -78,6 +78,7 @@ export function RedCrmMapa({ network, visible, selected, onSelect }: { network: 
     const c = CHROME[resolvedTheme];
     const { nodes, edges } = network;
     const lugarDe = new Map(ubicados.map((u) => [u.id, u]));
+    const elegida = selected !== null ? lugarDe.get(selected) : undefined;
     const maxFuerza = Math.max(1, ...ubicados.map((u) => nodes[u.id].strength));
     // Todas las conexiones registradas; de las posibles, las más fuertes (más de eso no se lee).
     const entre = edges.filter((e) => lugarDe.has(e.a) && lugarDe.has(e.b));
@@ -99,7 +100,8 @@ export function RedCrmMapa({ network, visible, selected, onSelect }: { network: 
 
     const option: EChartsOption = {
       tooltip: { confine: true, backgroundColor: c.surface, borderColor: withAlpha(c.ink, 0.12), textStyle: { color: c.ink, fontSize: 12 }, extraCssText: "border-radius:12px;max-width:300px;white-space:normal;", formatter: (p) => tooltip(p as never) },
-      geo: { map: "colombia", roam: true, silent: true, zoom: 1, scaleLimit: { min: 0.8, max: 40 }, itemStyle: { areaColor: c.tierra, borderColor: c.borde, borderWidth: 0.7 }, label: { show: false } },
+      animationDurationUpdate: 700,
+      geo: { map: "colombia", roam: false, silent: true, ...(elegida ? { center: elegida.pos, zoom: 8 } : { zoom: 1 }), itemStyle: { areaColor: c.tierra, borderColor: c.borde, borderWidth: 0.7 }, label: { show: false } },
       series: [{
         type: "graph",
         coordinateSystem: "geo",

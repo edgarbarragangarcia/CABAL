@@ -582,7 +582,7 @@ function RedCrm({
           )}
           {vista === "mapa" && network.edges.length > 0 && (() => {
             const r = resumenMapa(network, visible);
-            return <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">En el mapa: {fmt(r.ubicadas)} personas ubicadas en su municipio{r.sinLugar > 0 ? `; ${fmt(r.sinLugar)} no traen un lugar reconocible en el CRM y solo se ven en la vista «Red»` : ""}. Las líneas continuas con flecha son conexiones registradas en el CRM (quién trajo a quién); las punteadas son posibles conexiones deducidas de lo que comparten, no hechos comprobados. Acerca el mapa con la rueda del mouse.</p>;
+            return <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">En el mapa: {fmt(r.ubicadas)} personas ubicadas en su municipio{r.sinLugar > 0 ? `; ${fmt(r.sinLugar)} no traen un lugar reconocible en el CRM y solo se ven en la vista «Red»` : ""}. Las líneas continuas con flecha son conexiones registradas en el CRM (quién trajo a quién); las punteadas son posibles conexiones deducidas de lo que comparten, no hechos comprobados.</p>;
           })()}
           {hidden > 0 && (
             <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">

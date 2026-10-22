@@ -18,6 +18,91 @@ const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toLocaleString("es
 const plano = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
+type Persona = { id: number; nombre: string; estado: string | null; barrio: string | null; localidad: string | null; profesion: string | null; gremio: string | null; creado_en: string | null };
+
+/** Las personas (leads guardados en Supabase) de la ciudad elegida. */
+function PersonasDeCiudad({ dane, nombre }: { dane: string; nombre: string }) {
+  const [filas, setFilas] = React.useState<{ dane: string; personas: Persona[]; total: number; pagina: number; error?: string } | null>(null);
+  const [cargando, setCargando] = React.useState(false);
+  const pedir = React.useCallback(async (pagina: number) => {
+    setCargando(true);
+    try {
+      const r = await fetch(`/api/admin/red-crm/leads?dane=${dane}&pagina=${pagina}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "No se pudo leer.");
+      setFilas((f) => ({ dane, total: j.total, pagina, personas: pagina > 1 && f?.dane === dane ? [...f.personas, ...j.personas] : j.personas }));
+    } catch (e) {
+      setFilas({ dane, personas: [], total: 0, pagina: 1, error: e instanceof Error ? e.message : "No se pudo leer." });
+    } finally {
+      setCargando(false);
+    }
+  }, [dane]);
+  React.useEffect(() => {
+    let vivo = true;
+    fetch(`/api/admin/red-crm/leads?dane=${dane}&pagina=1`, { cache: "no-store" })
+      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error ?? "No se pudo leer."); if (vivo) setFilas({ dane, total: j.total, pagina: 1, personas: j.personas }); })
+      .catch((e: Error) => { if (vivo) setFilas({ dane, personas: [], total: 0, pagina: 1, error: e.message }); });
+    return () => { vivo = false; };
+  }, [dane]);
+  const f = filas?.dane === dane ? filas : null;
+  if (!f) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Trayendo las personas de {nombre}…</p>;
+  if (f.error) return <p role="alert" className="text-sm text-red-800">{f.error}</p>;
+  if (f.total === 0) return <p className="text-sm text-muted-foreground">Todavía no hay personas guardadas para {nombre}. Usa «Guardar todos los leads» arriba para traerlas del CRM a Supabase.</p>;
+  return (
+    <div>
+      <p className="mb-2 text-sm text-muted-foreground">{n(f.total)} personas guardadas en {nombre}:</p>
+      <div className="max-h-96 overflow-auto rounded-xl border border-border">
+        <table className="w-full min-w-[32rem] text-left text-xs">
+          <thead className="sticky top-0 bg-surface-muted text-[11px] tracking-wide text-muted-foreground uppercase"><tr><th className="px-3 py-2">Nombre</th><th className="px-3 py-2">Etapa</th><th className="px-3 py-2">Barrio / localidad</th><th className="px-3 py-2">Profesión</th><th className="px-3 py-2">Gremio</th></tr></thead>
+          <tbody>{f.personas.map((p) => <tr key={p.id} className="border-t border-border/60"><td className="px-3 py-1.5 font-semibold">{p.nombre}</td><td className="px-3 py-1.5">{p.estado ?? "—"}</td><td className="px-3 py-1.5">{[p.barrio, p.localidad].filter(Boolean).join(" · ") || "—"}</td><td className="px-3 py-1.5">{p.profesion ?? "—"}</td><td className="px-3 py-1.5">{p.gremio ?? "—"}</td></tr>)}</tbody>
+        </table>
+      </div>
+      {f.personas.length < f.total && <button type="button" disabled={cargando} onClick={() => void pedir(f.pagina + 1)} className="mt-2 rounded-full border border-border px-4 py-1.5 text-xs font-semibold hover:bg-surface-muted disabled:opacity-50">{cargando ? "Cargando…" : `Ver más (${n(f.total - f.personas.length)} restantes)`}</button>}
+    </div>
+  );
+}
+
+/** Copia los leads (nombre, lugar y campos de segmentación; sin teléfonos ni correos) de Bitrix24 a Supabase. */
+function GuardarLeads({ webhook }: { webhook: boolean }) {
+  const [guardados, setGuardados] = React.useState<number | null>(null);
+  const [avance, setAvance] = React.useState<{ siguiente: number; maxId: number } | null>(null);
+  const [error, setError] = React.useState("");
+  React.useEffect(() => {
+    fetch("/api/admin/red-crm/leads", { cache: "no-store" }).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error ?? "No se pudo leer."); setGuardados(j.guardados); }).catch((e: Error) => setError(e.message));
+  }, []);
+  async function guardar() {
+    setError("");
+    let desde = 0;
+    try {
+      setAvance({ siguiente: 0, maxId: 1 });
+      for (;;) {
+        const r = await fetch("/api/admin/red-crm/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ desde }) });
+        const j = (await r.json().catch(() => ({}))) as { siguiente?: number; maxId?: number; terminado?: boolean; error?: string };
+        if (!r.ok || j.siguiente === undefined) throw new Error(j.error ?? "No se pudo guardar.");
+        desde = j.siguiente;
+        setAvance({ siguiente: desde, maxId: j.maxId ?? 1 });
+        if (j.terminado) break;
+      }
+      const e = await fetch("/api/admin/red-crm/leads", { cache: "no-store" }).then((r) => r.json());
+      setGuardados(e.guardados ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setAvance(null);
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface p-3 text-sm">
+      <p className="min-w-0 flex-1">Leads guardados en Supabase: <b className="tabular-nums">{guardados === null ? "…" : n(guardados)}</b>. Al guardarlos puedes ver las personas de cada ciudad.</p>
+      <button type="button" onClick={() => void guardar()} disabled={!!avance || !webhook} title={!webhook ? "Falta BITRIX24_WEBHOOK_URL en el servidor" : undefined} className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs font-semibold hover:bg-surface-muted disabled:opacity-50">
+        {avance && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+        {avance ? `Guardando… ${Math.round((avance.siguiente / avance.maxId) * 100)} %` : "Guardar todos los leads"}
+      </button>
+      {error && <p role="alert" className="w-full rounded-xl bg-red-50 p-2 text-red-800">{error}</p>}
+    </div>
+  );
+}
+
 /** Cuántos leads hay en cada ciudad y departamento (todos los del CRM), con mapa de burbujas y buscador. */
 export function RedCrmTodos() {
   const [datos, setDatos] = React.useState<Datos | null>(null);
@@ -87,13 +172,15 @@ export function RedCrmTodos() {
     return () => { vivo = false; obs?.disconnect(); inst?.dispose(); setChart(null); setMapaListo(false); };
   }, [hayDatos]);
 
+  const sel = datos?.municipios.find((m) => m.dane === elegido) ?? null;
   React.useEffect(() => {
     if (!chart || !mapaListo || !datos) return;
     const oscuro = resolvedTheme === "dark";
     const max = Math.max(1, ...datos.municipios.map((m) => m.total));
     const opcion: EChartsOption = {
       tooltip: { confine: true, backgroundColor: oscuro ? "#0e1211" : "#fff", textStyle: { color: oscuro ? "#f2efe7" : "#16170f", fontSize: 12 }, formatter: (p) => { const d = (p as unknown as { data?: { nombre: string; departamento: string; total: number } }).data; return d ? `<b>${esc(d.nombre)}</b>, ${esc(d.departamento)}<br/>${n(d.total)} leads` : ""; } },
-      geo: { map: "colombia", roam: true, silent: true, scaleLimit: { min: 0.8, max: 40 }, itemStyle: { areaColor: oscuro ? "#1b2220" : "#eef0ea", borderColor: oscuro ? "#33403c" : "#c9ccc0", borderWidth: 0.7 }, label: { show: false } },
+      animationDurationUpdate: 700,
+      geo: { map: "colombia", roam: false, silent: true, ...(sel ? { center: [sel.lon, sel.lat], zoom: 9 } : { zoom: 1 }), itemStyle: { areaColor: oscuro ? "#1b2220" : "#eef0ea", borderColor: oscuro ? "#33403c" : "#c9ccc0", borderWidth: 0.7 }, label: { show: false } },
       series: [{
         type: "scatter", coordinateSystem: "geo",
         data: datos.municipios.map((m) => ({ dane: m.dane, nombre: m.nombre, departamento: m.departamento, total: m.total, value: [m.lon, m.lat, m.total], symbolSize: 5 + 46 * Math.sqrt(m.total / max), itemStyle: { color: m.dane === elegido ? "#eb6834" : "rgba(42,120,214,0.55)", borderColor: m.dane === elegido ? "#16170f" : "rgba(42,120,214,0.95)", borderWidth: m.dane === elegido ? 2 : 0.8 } })),
@@ -101,9 +188,7 @@ export function RedCrmTodos() {
       }],
     };
     chart.setOption(opcion, { notMerge: true });
-  }, [chart, mapaListo, datos, elegido, resolvedTheme]);
-
-  const sel = datos?.municipios.find((m) => m.dane === elegido) ?? null;
+  }, [chart, mapaListo, datos, elegido, sel, resolvedTheme]);
   const coincidencias = React.useMemo(() => {
     const t = plano(q.trim());
     if (!datos || t.length < 2) return [];
@@ -143,12 +228,17 @@ export function RedCrmTodos() {
             )}
           </div>
 
+          <GuardarLeads webhook={datos.webhook} />
+
           {sel && (
-            <div className={`${tarjeta} flex flex-wrap items-center gap-x-6 gap-y-1`}>
+            <div className={`${tarjeta} space-y-3`}>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
               <p className="text-lg font-bold">{sel.nombre} <span className="text-sm font-normal text-muted-foreground">{sel.departamento}</span></p>
               <p className="text-2xl font-bold tabular-nums text-brand">{n(sel.total)} <span className="text-sm font-normal text-muted-foreground">leads</span></p>
               <p className="text-sm text-muted-foreground">{pct(sel.total, datos.totales.conCiudad)} de los que tienen ciudad · puesto {n(datos.municipios.findIndex((m) => m.dane === sel.dane) + 1)} de {n(datos.municipios.length)}</p>
-              <button type="button" onClick={() => setElegido(null)} className="ml-auto text-xs underline">Quitar</button>
+              <button type="button" onClick={() => setElegido(null)} className="ml-auto text-xs underline">Ver todo el país</button>
+              </div>
+              <PersonasDeCiudad dane={sel.dane} nombre={sel.nombre} />
             </div>
           )}
 
