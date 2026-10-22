@@ -27,6 +27,7 @@ const TABLAS = [
   "portal_contactos", "portal_adeptos", "portal_interacciones", "portal_campanas", "portal_anuncios", "portal_metricas",
   "documento_carpetas", "documentos", "documento_fragmentos", "documento_eventos",
   "admin_usuarios", "voz_corpus", "redactor_notas", "redactor_guia", "piloto_registros", "camaras_comercio", "monitoreo_items", "indicadores_territoriales",
+  "crm_conteos", "crm_leads",
   ...(args.includes("--con-elecciones") ? ["catalogo_electoral", "carga_electoral", "resultados_electorales"] : []),
 ];
 // Columnas «generated always»: el destino las numera solo.
