@@ -48,11 +48,14 @@ function toBitrixError(status: number, reply: { error?: string; error_descriptio
 
 /** Acepta la URL tal como la muestra Bitrix24, aunque traiga un método de ejemplo al final. */
 export function normalizeWebhookUrl(raw: string): string {
+  // Errores comunes al pegar el valor en Vercel: comillas, el nombre de la variable delante o la URL sin «https://».
+  let limpio = raw.trim().replace(/^BITRIX24_WEBHOOK_URL\s*=\s*/i, "").replace(/^["'`]+|["'`]+$/g, "").trim();
+  if (/^[\w.-]+\.bitrix24\.[a-z.]+\//i.test(limpio)) limpio = `https://${limpio}`;
   let url: URL;
   try {
-    url = new URL(raw.trim());
+    url = new URL(limpio);
   } catch {
-    throw new BitrixError("INVALID_URL", "BITRIX24_WEBHOOK_URL no es una URL válida.");
+    throw new BitrixError("INVALID_URL", "BITRIX24_WEBHOOK_URL no es una URL válida: debe verse como https://tuportal.bitrix24.co/rest/8/código/ (solo la URL, sin comillas ni el nombre de la variable).");
   }
   const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
   if (url.protocol !== "https:" && !local) {
