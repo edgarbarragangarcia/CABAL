@@ -13,6 +13,7 @@ import { FuentesTerritorio } from "../analisis-publicaciones/territorio-fuentes"
 import { CamarasFuente } from "./camaras-fuente";
 import { ProyeccionFuente } from "./proyeccion-fuente";
 import { MonitoreoFuente } from "./monitoreo-fuente";
+import { CrmFuente } from "./crm-fuente";
 
 const OPCIONES = [
   { id: "biblioteca", label: "Documentos y datos", icon: Library },
@@ -51,6 +52,9 @@ export function FuenteDeLaVerdad() {
   const [vProy, setVProy] = React.useState(0);
   const proy = usePeticion<{ filas: number; esperadas: number }>(`/api/admin/proyeccion/cargar?v=${vProy}`);
   const p = proy.estado === "listo" ? proy.data : null;
+  const [vCrm, setVCrm] = React.useState(0);
+  const crmEstado = usePeticion<{ guardados: number; webhook: boolean }>(`/api/admin/red-crm/leads?v=${vCrm}`);
+  const crm = crmEstado.estado === "listo" ? crmEstado.data : null;
   const fuentes: FuenteDatos[] = [
     {
       id: "electoral",
@@ -91,6 +95,16 @@ export function FuenteDeLaVerdad() {
       tono: camaras?.disponible && camaras.camaras.length >= camaras.codigos.length ? "ok" : "pendiente",
       fecha: camaras?.camaras?.[0]?.actualizado_en ?? null,
       contenido: <CamarasFuente key={vCam} alCargar={() => setVCam((n) => n + 1)} />,
+    },
+    {
+      id: "crm",
+      nombre: "CRM · leads de Bitrix24",
+      detalle: "Los leads del CRM (nombre, ciudad, departamento y campos para segmentar; sin teléfonos ni correos), con los que se arma la Red Cabal",
+      resumen: crm ? `${crm.guardados.toLocaleString("es-CO")} leads` : "—",
+      estado: crmEstado.estado === "error" ? "Falta SQL" : !crm ? "Leyendo" : crm.guardados === 0 ? "Sin cargar" : "Listo",
+      tono: crm && crm.guardados > 0 ? "ok" : "pendiente",
+      fecha: null,
+      contenido: <CrmFuente key={vCrm} alCargar={() => setVCrm((n) => n + 1)} />,
     },
     {
       id: "proyeccion",

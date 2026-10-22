@@ -62,7 +62,7 @@ function PersonasDeCiudad({ dane, nombre }: { dane: string; nombre: string }) {
 }
 
 /** Copia los leads (nombre, lugar y campos de segmentación; sin teléfonos ni correos) de Bitrix24 a Supabase. */
-function GuardarLeads({ webhook }: { webhook: boolean }) {
+export function GuardarLeads({ webhook }: { webhook: boolean }) {
   const [guardados, setGuardados] = React.useState<number | null>(null);
   const [avance, setAvance] = React.useState<{ siguiente: number; maxId: number } | null>(null);
   const [error, setError] = React.useState("");
