@@ -3,13 +3,14 @@ import { NextResponse } from "next/server";
 
 import { ADMIN_USES_PUBLIC_DEFAULTS, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 import { BitrixError, getCrmSnapshot } from "@/lib/crm/bitrix24";
+import { snapshotDesdeSupabase } from "@/lib/crm/desde-supabase";
 import type { RedCrmResponse } from "@/lib/crm/types";
 
 export const maxDuration = 60;
 
 /**
- * Contactos de Bitrix24 para la red de relaciones (pestaña Red Cabal).
- * `?refresh=1` ignora la copia en memoria de los últimos 10 minutos.
+ * Contactos para la red de relaciones (pestaña Red Cabal): los leads guardados en Supabase o, si no hay, los de Bitrix24.
+ * `?refresh=1` ignora la copia en memoria de Bitrix24 (la de los últimos 10 minutos).
  *
  * El proxy solo protege las páginas /admin, no /api/admin: por eso la
  * sesión se verifica aquí. Y como son datos personales reales, en
@@ -27,7 +28,12 @@ export async function GET(req: Request) {
     admin: process.env.NODE_ENV === "production" && ADMIN_USES_PUBLIC_DEFAULTS,
     bitrix: !webhook,
   };
-  if (falta.admin || !webhook) return reply({ status: "configurar", falta });
+  if (falta.admin) return reply({ status: "configurar", falta });
+
+  // Primero Supabase: los leads ya guardados (crm_leads) no dependen de que Bitrix24 responda. Solo si no hay, se pregunta a Bitrix24.
+  const guardado = await snapshotDesdeSupabase();
+  if (guardado) return reply({ status: "ok", snapshot: guardado });
+  if (!webhook) return reply({ status: "configurar", falta });
 
   try {
     const refresh = new URL(req.url).searchParams.get("refresh") === "1";
