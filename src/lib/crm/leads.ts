@@ -22,7 +22,8 @@ const COLUMNAS: [string, RegExp][] = [
 ];
 const BOOLEANAS = new Set(["tiene_hijos", "testigo_electoral", "electo", "voto", "microinfluenciador", "grupo_whatsapp"]);
 
-let cache: { at: number; base: string; mapa: Record<string, Mapa>; estados: Map<string, string> } | null = null;
+type CampoUF = { llave: string; etiqueta: string; items?: Map<string, string> };
+let cache: { at: number; base: string; mapa: Record<string, Mapa>; uf: CampoUF[]; estados: Map<string, string> } | null = null;
 
 async function esquema(base: string) {
   if (cache && cache.base === base && Date.now() - cache.at < 10 * 60_000) return cache;
@@ -33,7 +34,11 @@ async function esquema(base: string) {
     if (hallado) mapa[columna] = { llave: hallado[0], items: hallado[1].items ? new Map(hallado[1].items.map((i) => [String(i.ID), String(i.VALUE)])) : undefined };
   }
   const st = await call<{ STATUS_ID: string; NAME: string }[]>(base, "crm.status.list", { filter: { ENTITY_ID: "STATUS" } }).catch(() => null);
-  cache = { at: Date.now(), base, mapa, estados: new Map((st?.result ?? []).map((s) => [s.STATUS_ID, s.NAME])) };
+  // Todos los campos personalizados (UF_…), con su nombre y sus opciones: se guardan completos en `personalizados`.
+  const uf: CampoUF[] = Object.entries(result)
+    .filter(([k]) => k.startsWith("UF_"))
+    .map(([k, m]) => ({ llave: k, etiqueta: [m.formLabel, m.listLabel, m.title].map(texto).find((t) => t.trim())?.trim() || k, items: m.items ? new Map(m.items.map((i) => [String(i.ID), String(i.VALUE)])) : undefined }));
+  cache = { at: Date.now(), base, mapa, uf, estados: new Map((st?.result ?? []).map((s) => [s.STATUS_ID, s.NAME])) };
   return cache;
 }
 
@@ -51,6 +56,31 @@ function aFila(c: Crudo, e: Awaited<ReturnType<typeof esquema>>) {
     responsable_id: Number(c.ASSIGNED_BY_ID) || null,
     actualizado_en: new Date().toISOString(),
   };
+  const cad = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : null);
+  const fecha = (x: unknown) => { const t = cad(x); return t && !Number.isNaN(Date.parse(t)) ? t : null; };
+  const lista = (x: unknown): { VALUE?: string; VALUE_TYPE?: string }[] => (Array.isArray(x) ? (x as { VALUE?: string; VALUE_TYPE?: string }[]) : []);
+  const monto = Number(c.OPPORTUNITY);
+  const nac = cad(c.BIRTHDATE)?.slice(0, 10);
+  Object.assign(fila, {
+    nombre_pila: cad(c.NAME), apellido: cad(c.LAST_NAME), segundo_nombre: cad(c.SECOND_NAME),
+    fecha_nacimiento: nac && /^\d{4}-\d{2}-\d{2}$/.test(nac) && nac > "1900-01-01" ? nac : null,
+    cargo: cad(c.POST), empresa: cad(c.COMPANY_TITLE), empresa_id: Number(c.COMPANY_ID) || null, contacto_id: Number(c.CONTACT_ID) || null,
+    telefonos: lista(c.PHONE).map((t) => cad(t.VALUE)).filter((t): t is string => !!t),
+    mensajeria: lista(c.IM).map((t) => ({ tipo: t.VALUE_TYPE ?? null, valor: cad(t.VALUE) })).filter((t) => t.valor),
+    tiene_telefono: c.HAS_PHONE === undefined ? null : c.HAS_PHONE === "Y", tiene_correo: c.HAS_EMAIL === undefined ? null : c.HAS_EMAIL === "Y",
+    comentarios: cad(c.COMMENTS), estado_descripcion: cad(c.STATUS_DESCRIPTION), fuente_id: cad(c.SOURCE_ID), fuente_descripcion: cad(c.SOURCE_DESCRIPTION),
+    estado_semantico: cad(c.STATUS_SEMANTIC_ID), fecha_cierre: fecha(c.DATE_CLOSED), ultima_actividad: fecha(c.LAST_ACTIVITY_TIME), monto: Number.isFinite(monto) && monto !== 0 ? monto : null,
+    direccion: cad(c.ADDRESS), direccion_ciudad: cad(c.ADDRESS_CITY), direccion_region: cad(c.ADDRESS_REGION), direccion_provincia: cad(c.ADDRESS_PROVINCE), direccion_pais: cad(c.ADDRESS_COUNTRY), direccion_postal: cad(c.ADDRESS_POSTAL_CODE),
+    utm_source: cad(c.UTM_SOURCE), utm_medium: cad(c.UTM_MEDIUM), utm_campaign: cad(c.UTM_CAMPAIGN), utm_content: cad(c.UTM_CONTENT), utm_term: cad(c.UTM_TERM),
+  });
+  const personalizados: Record<string, unknown> = {};
+  for (const u of e.uf) {
+    const v = c[u.llave];
+    if (v === null || v === undefined || v === "" || v === "0" || (Array.isArray(v) && v.length === 0)) continue;
+    const valores = (Array.isArray(v) ? v : [v]).map((x) => (u.items ? u.items.get(String(x)) ?? String(x) : x)).filter((x) => x !== "" && x !== null && x !== undefined);
+    if (valores.length) personalizados[personalizados[u.etiqueta] === undefined ? u.etiqueta : `${u.etiqueta} (${u.llave})`] = valores.length === 1 ? valores[0] : valores;
+  }
+  fila.personalizados = Object.keys(personalizados).length ? personalizados : null;
   for (const [columna, m] of Object.entries(e.mapa)) {
     const v = c[m.llave];
     if (BOOLEANAS.has(columna)) fila[columna] = v === null || v === undefined || v === "" ? null : v === true || v === "1" || v === 1 || v === "Y";
@@ -82,7 +112,7 @@ export async function guardarLeads(webhook: string, desde: number, presupuestoMs
   if (!supabase) throw new Error("Supabase no está conectado.");
   const [e, maxId] = await Promise.all([esquema(base), ultimoId(webhook)]);
   if (!e.mapa.ciudad || !e.mapa.departamento) throw new Error("No encontré en Bitrix24 los campos «Ciudad / Municipio» y «Departamentos» de los leads.");
-  const select = ["ID", "NAME", "LAST_NAME", "TITLE", "STATUS_ID", "DATE_CREATE", "ASSIGNED_BY_ID", ...Object.values(e.mapa).map((m) => m.llave)];
+  const select = [...new Set(["ID", "NAME", "SECOND_NAME", "LAST_NAME", "TITLE", "STATUS_ID", "DATE_CREATE", "ASSIGNED_BY_ID", "BIRTHDATE", "POST", "COMPANY_TITLE", "COMPANY_ID", "CONTACT_ID", "PHONE", "IM", "HAS_PHONE", "HAS_EMAIL", "COMMENTS", "STATUS_DESCRIPTION", "SOURCE_ID", "SOURCE_DESCRIPTION", "STATUS_SEMANTIC_ID", "DATE_CLOSED", "LAST_ACTIVITY_TIME", "OPPORTUNITY", "ADDRESS", "ADDRESS_CITY", "ADDRESS_REGION", "ADDRESS_PROVINCE", "ADDRESS_COUNTRY", "ADDRESS_POSTAL_CODE", "UTM_SOURCE", "UTM_MEDIUM", "UTM_CAMPAIGN", "UTM_CONTENT", "UTM_TERM", ...Object.values(e.mapa).map((m) => m.llave), ...e.uf.map((u) => u.llave)])];
   const t0 = Date.now();
   let siguiente = desde;
   let guardados = 0;
@@ -97,7 +127,7 @@ export async function guardarLeads(webhook: string, desde: number, presupuestoMs
     const filas = crudos.map((c) => aFila(c, e));
     for (let i = 0; i < filas.length; i += 1000) {
       const { error } = await supabase.from("crm_leads").upsert(filas.slice(i, i + 1000), { onConflict: "id" });
-      if (error) throw new Error(error.message.includes("crm_leads") ? "Falta crear la tabla: corre supabase/crm.sql en el SQL Editor de Supabase." : error.message);
+      if (error) throw new Error(error.message.includes("crm_leads") || /column/i.test(error.message) ? "Faltan columnas en crm_leads: corre supabase/crm.sql completo en el SQL Editor de Supabase (agrega los campos nuevos)." : error.message);
     }
     guardados += filas.length;
     siguiente += POR_LLAMADA * ANCHO;
