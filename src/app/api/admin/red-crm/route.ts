@@ -32,16 +32,15 @@ export async function GET(req: Request) {
 
   // Primero Supabase: los leads ya guardados (crm_leads) no dependen de que Bitrix24 responda. Solo si no hay, se pregunta a Bitrix24.
   const guardado = await snapshotDesdeSupabase();
-  if (guardado) return reply({ status: "ok", snapshot: guardado });
-  if (!webhook) return reply({ status: "configurar", falta });
+  if ("snapshot" in guardado) return reply({ status: "ok", snapshot: guardado.snapshot });
+  if (!webhook) return reply({ status: "error", message: `${guardado.motivo} Y Bitrix24 no está configurado (BITRIX24_WEBHOOK_URL).` }, 502);
 
   try {
     const refresh = new URL(req.url).searchParams.get("refresh") === "1";
     return reply({ status: "ok", snapshot: await getCrmSnapshot(webhook, { refresh }) });
   } catch (err) {
-    const message =
-      err instanceof BitrixError ? err.message : "No fue posible leer los contactos de Bitrix24.";
-    return reply({ status: "error", message }, 502);
+    const bitrix = err instanceof BitrixError ? err.message : "No fue posible leer los contactos de Bitrix24.";
+    return reply({ status: "error", message: `${guardado.motivo} Y Bitrix24: ${bitrix}` }, 502);
   }
 }
 
