@@ -242,9 +242,9 @@ export function RedCrmTodos() {
             </div>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
             <div className="relative overflow-hidden rounded-2xl border border-border">
-              <div ref={ref} role="img" aria-label="Mapa de Colombia con un círculo por ciudad, más grande donde hay más leads." className="h-[460px] w-full sm:h-[620px]" />
+              <div ref={ref} role="img" aria-label="Mapa de Colombia con un círculo por ciudad, más grande donde hay más leads." className="h-[540px] w-full sm:h-[min(88vh,56rem)]" />
               {!mapaListo && <p className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Cargando el mapa…</p>}
             </div>
             <div className="space-y-4">

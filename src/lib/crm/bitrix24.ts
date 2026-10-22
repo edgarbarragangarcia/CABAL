@@ -72,16 +72,24 @@ export function normalizeWebhookUrl(raw: string): string {
 }
 
 export async function call<T>(base: string, method: string, params: object = {}, attempt = 0): Promise<BitrixReply<T>> {
-  let res: Response;
-  try {
-    res = await fetch(`${base}${method}.json`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
-      cache: "no-store",
-      signal: AbortSignal.timeout(25_000),
-    });
-  } catch (e) {
+  let res: Response | null = null;
+  let fallo: unknown = null;
+  // Bitrix24 a veces corta la conexión (ECONNRESET) o tarda: se reintenta tres veces, esperando un poco más cada vez, antes de rendirse.
+  for (let intento = 0; intento < 4 && !res; intento++) {
+    try {
+      res = await fetch(`${base}${method}.json`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+        cache: "no-store",
+        signal: AbortSignal.timeout(25_000),
+      });
+    } catch (e) {
+      fallo = e;
+      if (intento < 3) await new Promise((r) => setTimeout(r, 1500 * (intento + 1)));
+    }
+  }
+  if (!res) {
     // Se dice a qué dominio se intentó (nunca el código del webhook) y por qué falló: así se ve si Vercel tiene otra dirección que la del equipo.
     let dominio = "?";
     try {
@@ -89,7 +97,7 @@ export async function call<T>(base: string, method: string, params: object = {},
     } catch {
       /* se deja «?» */
     }
-    const causa = (e as { cause?: { code?: string } })?.cause?.code ?? (e as Error)?.name ?? "error";
+    const causa = (fallo as { cause?: { code?: string } })?.cause?.code ?? (fallo as Error)?.name ?? "error";
     throw new BitrixError("NETWORK", `No fue posible conectar con ${dominio} (${causa}). Revisa que BITRIX24_WEBHOOK_URL en Vercel sea la dirección de tu portal.`);
   }
   const reply = (await res.json().catch(() => null)) as BitrixReply<T> | null;
