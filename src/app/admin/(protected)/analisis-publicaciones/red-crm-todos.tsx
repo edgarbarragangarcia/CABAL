@@ -1,10 +1,9 @@
 "use client";
 
 import * as React from "react";
-import type { ECharts, EChartsOption } from "echarts";
-import { Loader2, RefreshCw, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, RefreshCw, Search } from "lucide-react";
 
-import { useTheme } from "@/components/animations/theme-provider";
+import { TerritorioMapa } from "./territorio-mapa";
 
 type Punto = { dane: string; nombre: string; departamento: string; lat: number; lon: number; total: number };
 type Datos = {
@@ -110,11 +109,9 @@ export function RedCrmTodos() {
   const [calculando, setCalculando] = React.useState<{ hecho: number; total: number } | null>(null);
   const [q, setQ] = React.useState("");
   const [elegido, setElegido] = React.useState<string | null>(null);
-  const ref = React.useRef<HTMLDivElement>(null);
-  const [chart, setChart] = React.useState<ECharts | null>(null);
-  const [mapaListo, setMapaListo] = React.useState(false);
-  const { resolvedTheme } = useTheme();
-  const elegir = React.useEffectEvent((d: string) => setElegido(d));
+  /** Departamento abierto en el mapa (código de 2 dígitos); null = todo el país. */
+  const [dep, setDep] = React.useState<string | null>(null);
+  const [filtroLugar, setFiltroLugar] = React.useState("");
 
   const leer = React.useCallback(async () => {
     const r = await fetch("/api/admin/red-crm/conteos", { cache: "no-store" });
@@ -149,51 +146,27 @@ export function RedCrmTodos() {
     }
   }
 
-  // Mapa de burbujas: se crea cuando ya hay datos que mostrar.
-  const hayDatos = !!datos?.hayDatos;
-  React.useEffect(() => {
-    if (!hayDatos) return;
-    let vivo = true;
-    let inst: ECharts | null = null;
-    let obs: ResizeObserver | null = null;
-    (async () => {
-      const echarts = await import("echarts");
-      if (!vivo || !ref.current) return;
-      const r = await fetch("/data/geo/departamentos.json");
-      if (!r.ok || !vivo || !ref.current) return;
-      echarts.registerMap("colombia", await r.json());
-      inst = echarts.init(ref.current);
-      inst.on("click", (p) => { const d = (p.data as { dane?: string } | undefined)?.dane; if (d) elegir(d); });
-      obs = new ResizeObserver(() => inst?.resize());
-      obs.observe(ref.current);
-      setChart(inst);
-      setMapaListo(true);
-    })();
-    return () => { vivo = false; obs?.disconnect(); inst?.dispose(); setChart(null); setMapaListo(false); };
-  }, [hayDatos]);
-
   const sel = datos?.municipios.find((m) => m.dane === elegido) ?? null;
-  React.useEffect(() => {
-    if (!chart || !mapaListo || !datos) return;
-    const oscuro = resolvedTheme === "dark";
-    const max = Math.max(1, ...datos.municipios.map((m) => m.total));
-    const opcion: EChartsOption = {
-      tooltip: { confine: true, backgroundColor: oscuro ? "#0e1211" : "#fff", textStyle: { color: oscuro ? "#f2efe7" : "#16170f", fontSize: 12 }, formatter: (p) => { const d = (p as unknown as { data?: { nombre: string; departamento: string; total: number } }).data; return d ? `<b>${esc(d.nombre)}</b>, ${esc(d.departamento)}<br/>${n(d.total)} leads` : ""; } },
-      animationDurationUpdate: 700,
-      geo: { map: "colombia", roam: false, silent: true, ...(sel ? { center: [sel.lon, sel.lat], zoom: 9 } : { zoom: 1 }), itemStyle: { areaColor: oscuro ? "#1b2220" : "#eef0ea", borderColor: oscuro ? "#33403c" : "#c9ccc0", borderWidth: 0.7 }, label: { show: false } },
-      series: [{
-        type: "scatter", coordinateSystem: "geo",
-        data: datos.municipios.map((m) => ({ dane: m.dane, nombre: m.nombre, departamento: m.departamento, total: m.total, value: [m.lon, m.lat, m.total], symbolSize: 5 + 46 * Math.sqrt(m.total / max), itemStyle: { color: m.dane === elegido ? "#eb6834" : "rgba(42,120,214,0.55)", borderColor: m.dane === elegido ? "#16170f" : "rgba(42,120,214,0.95)", borderWidth: m.dane === elegido ? 2 : 0.8 } })),
-        emphasis: { scale: 1.15 },
-      }],
-    };
-    chart.setOption(opcion, { notMerge: true });
-  }, [chart, mapaListo, datos, elegido, sel, resolvedTheme]);
   const coincidencias = React.useMemo(() => {
     const t = plano(q.trim());
     if (!datos || t.length < 2) return [];
     return datos.municipios.filter((m) => plano(m.nombre).includes(t) || plano(m.departamento).includes(t)).slice(0, 8);
   }, [datos, q]);
+  const lugares = React.useMemo(() => {
+    if (!datos) return [];
+    const t = plano(filtroLugar.trim());
+    const base = dep ? datos.municipios.filter((m) => m.dane.startsWith(dep)).map((m) => ({ id: m.dane, nombre: m.nombre, total: m.total })) : datos.departamentos.filter((d) => d.total > 0).map((d) => ({ id: d.codigo, nombre: d.nombre, total: d.total }));
+    return base.filter((x) => !t || plano(x.nombre).includes(t)).sort((a, b) => b.total - a.total);
+  }, [datos, dep, filtroLugar]);
+  const valoresMapa = React.useMemo(() => (datos ? (dep ? Object.fromEntries(datos.municipios.filter((m) => m.dane.startsWith(dep)).map((m) => [m.dane, m.total])) : Object.fromEntries(datos.departamentos.map((d) => [d.codigo, d.total]))) : {}), [datos, dep]);
+  const nombreDep = dep ? datos?.departamentos.find((d) => d.codigo === dep)?.nombre ?? datos?.municipios.find((m) => m.dane.startsWith(dep))?.departamento ?? "" : "";
+  /** Un clic en el mapa o en la lista: en el país abre el departamento; dentro de un departamento elige el municipio. */
+  const irA = (id: string) => {
+    if (!dep) {
+      if (id === "11") { setDep("11"); setElegido("11001"); } else { setDep(id); setElegido(null); }
+    } else setElegido(id);
+    setFiltroLugar("");
+  };
   const tarjeta = "rounded-2xl border border-border bg-surface p-4 shadow-sm";
 
   if (!datos && !error) return <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Leyendo…</p>;
@@ -236,31 +209,35 @@ export function RedCrmTodos() {
               <p className="text-lg font-bold">{sel.nombre} <span className="text-sm font-normal text-muted-foreground">{sel.departamento}</span></p>
               <p className="text-2xl font-bold tabular-nums text-brand">{n(sel.total)} <span className="text-sm font-normal text-muted-foreground">leads</span></p>
               <p className="text-sm text-muted-foreground">{pct(sel.total, datos.totales.conCiudad)} de los que tienen ciudad · puesto {n(datos.municipios.findIndex((m) => m.dane === sel.dane) + 1)} de {n(datos.municipios.length)}</p>
-              <button type="button" onClick={() => setElegido(null)} className="ml-auto text-xs underline">Ver todo el país</button>
+              <button type="button" onClick={() => { setElegido(null); setDep(null); }} className="ml-auto text-xs underline">Ver todo el país</button>
               </div>
               <PersonasDeCiudad dane={sel.dane} nombre={sel.nombre} />
             </div>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
-            <div className="relative overflow-hidden rounded-2xl border border-border">
-              <div ref={ref} role="img" aria-label="Mapa de Colombia con un círculo por ciudad, más grande donde hay más leads." className="h-[540px] w-full sm:h-[min(88vh,56rem)]" />
-              {!mapaListo && <p className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Cargando el mapa…</p>}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <button type="button" onClick={() => { setDep(null); setElegido(null); setFiltroLugar(""); }} disabled={!dep} className={`font-semibold ${dep ? "text-brand hover:underline" : ""}`}>Colombia</button>
+              {dep && <><ChevronRight className="size-3.5 text-muted-foreground" aria-hidden="true" /><span className="font-semibold">{nombreDep}</span></>}
+              {dep && <button type="button" onClick={() => { setDep(null); setElegido(null); setFiltroLugar(""); }} className="ml-auto inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-surface-muted"><ChevronLeft className="size-3" aria-hidden="true" />Todo el país</button>}
+              <span className={`${dep ? "" : "ml-auto "}text-xs text-muted-foreground`}>Cada {dep ? "municipio" : "departamento"} está más oscuro cuantos más leads tiene; haz clic para {dep ? "ver sus personas" : "entrar"}.</span>
             </div>
-            <div className="space-y-4">
-              <div className={tarjeta}>
-                <h3 className="text-sm font-semibold">Ciudades con más leads</h3>
-                <ol className="mt-2 space-y-1.5">
-                  {datos.municipios.slice(0, 15).map((m) => (
-                    <li key={m.dane}><button type="button" onClick={() => setElegido(m.dane)} className="block w-full text-left text-xs"><span className="flex justify-between gap-2"><span className="truncate">{m.nombre}</span><b className="tabular-nums">{n(m.total)}</b></span><span className="mt-0.5 block h-1.5 rounded-full bg-border"><span className="block h-1.5 rounded-full bg-brand" style={{ width: `${(m.total / datos.municipios[0].total) * 100}%` }} /></span></button></li>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+              <TerritorioMapa key={dep ?? "pais"} url={dep ? `/data/geo/municipios/${dep}.json` : "/data/geo/departamentos.json"} idDe={(c) => c.padStart(dep ? 5 : 2, "0")} alElegir={irA} valores={valoresMapa} unidad="leads" />
+              <div className="space-y-3 lg:max-h-[min(88vh,56rem)] lg:overflow-y-auto lg:pr-1">
+                <p className="text-sm font-semibold">{dep ? `Municipios de ${nombreDep}` : "Departamentos"} <span className="font-normal text-muted-foreground">({lugares.length})</span></p>
+                <label className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2"><Search className="size-4 text-muted-foreground" aria-hidden="true" /><input value={filtroLugar} onChange={(e) => setFiltroLugar(e.target.value)} placeholder="Filtrar…" aria-label="Filtrar la lista" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
+                <ul className="grid gap-2">
+                  {lugares.map((x) => (
+                    <li key={x.id}>
+                      <button type="button" onClick={() => irA(x.id)} className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition hover:border-brand ${elegido === x.id ? "border-brand bg-brand-soft" : "border-border bg-surface"}`}>
+                        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{x.nombre}</span><span className="block text-xs"><b>{n(x.total)}</b> <span className="text-muted-foreground">leads</span></span></span>
+                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      </button>
+                    </li>
                   ))}
-                </ol>
-              </div>
-              <div className={tarjeta}>
-                <h3 className="text-sm font-semibold">Por departamento</h3>
-                <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1 text-xs">
-                  {datos.departamentos.filter((d) => d.total > 0).map((d) => <li key={d.codigo} className="flex justify-between gap-2"><span className="truncate">{d.nombre}</span><b className="tabular-nums">{n(d.total)}</b></li>)}
                 </ul>
+                {lugares.length === 0 && <p className="text-sm text-muted-foreground">Nada coincide con «{filtroLugar}».</p>}
               </div>
             </div>
           </div>

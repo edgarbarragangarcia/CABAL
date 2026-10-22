@@ -34,7 +34,7 @@ const W = 720;
 const H = 820;
 
 /** Mapa para elegir un lugar con un clic: cada departamento, municipio o localidad es un botón. */
-export function TerritorioMapa({ url, idDe, alElegir, valores }: { url: string; idDe: (c: string) => string; alElegir: (id: string) => void; /** Votos por código del lugar: pinta más oscuro donde hay más. */ valores?: Record<string, number> | null }) {
+export function TerritorioMapa({ url, idDe, alElegir, valores, unidad = "votos" }: { url: string; idDe: (c: string) => string; alElegir: (id: string) => void; /** Lo que cuentan los valores (votos, leads…). */ unidad?: string; /** Votos por código del lugar: pinta más oscuro donde hay más. */ valores?: Record<string, number> | null }) {
   const [res, setRes] = React.useState<{ url: string; fc: FeatureCollection<Geometry, Props> | null } | null>(null);
   const [sobre, setSobre] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -81,13 +81,13 @@ export function TerritorioMapa({ url, idDe, alElegir, valores }: { url: string; 
         ))}
       </svg>
       <p className="mt-1 h-6 text-center text-sm font-semibold" aria-live="polite">
-        {actual ? <>{titulo(actual.name)}{valores && <span className="font-normal text-muted-foreground"> · {valorDe(actual.code) === undefined ? "sin resultado guardado" : `${fmt(valorDe(actual.code)!)} votos`}</span>}</> : <span className="font-normal text-muted-foreground">Pasa el cursor sobre el mapa y haz clic para elegir.</span>}
+        {actual ? <>{titulo(actual.name)}{valores && <span className="font-normal text-muted-foreground"> · {valorDe(actual.code) === undefined ? "sin datos" : `${fmt(valorDe(actual.code)!)} ${unidad}`}</span>}</> : <span className="font-normal text-muted-foreground">Pasa el cursor sobre el mapa y haz clic para elegir.</span>}
       </p>
       {valores && max > 0 && (
         <div className="mt-1 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
           <span>0</span>
           <span aria-hidden="true" className="h-2 w-40 rounded-full" style={{ background: "linear-gradient(to right, color-mix(in srgb, var(--brand) 10%, transparent), var(--brand))" }} />
-          <span>{fmt(max)} votos</span>
+          <span>{fmt(max)} {unidad}</span>
         </div>
       )}
     </div>
