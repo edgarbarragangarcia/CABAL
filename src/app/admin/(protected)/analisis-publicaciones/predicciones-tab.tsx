@@ -43,6 +43,7 @@ import {
 import { demoSnapshot } from "@/lib/crm/demo";
 import { TerritorioPanel } from "./territorio-panel";
 import { OTHER_COMMUNITY_COLOR, RedCrmGraph, communityColor } from "./red-crm-graph";
+import { RedCrmMapa, resumenMapa } from "./red-crm-mapa";
 
 const DIMENSION_ICON: Record<Dimension, LucideIcon> = {
   lugar: MapPin,
@@ -284,6 +285,7 @@ function RedCrm({
 }) {
   const { resolvedTheme } = useTheme();
   const [showSteps, setShowSteps] = React.useState(false);
+  const [vista, setVista] = React.useState<"mapa" | "red">("mapa");
   const [mapping] = React.useState<Mapping>(() =>
     typeof window === "undefined" ? {} : readMapping()
   );
@@ -540,7 +542,10 @@ function RedCrm({
                 )}
               </>
             )}
-            <span className="inline-flex items-center gap-1.5 sm:ml-auto">
+            <span className="inline-flex rounded-full border border-border p-0.5 text-[11px] font-semibold sm:ml-auto" role="group" aria-label="Cómo ver la red">
+              {([["mapa", "Mapa de Colombia"], ["red", "Red"]] as const).map(([v, t]) => <button key={v} type="button" onClick={() => setVista(v)} aria-pressed={vista === v} className={`rounded-full px-3 py-1 ${vista === v ? "bg-brand text-brand-foreground" : "text-muted-foreground"}`}>{t}</button>)}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
               <svg viewBox="0 0 10 10" className="size-2.5" aria-hidden="true">
                 <path d="M5 0 10 5 5 10 0 5z" fill="currentColor" />
               </svg>
@@ -550,12 +555,20 @@ function RedCrm({
               <svg viewBox="0 0 16 8" className="h-2 w-4" aria-hidden="true">
                 <path d="M0 4h12M9 1l4 3-4 3" fill="none" stroke="currentColor" strokeWidth="1.5" />
               </svg>
-              Quién trajo a quién
+              Conexión registrada (referido)
             </span>
+            {vista === "mapa" && (
+              <span className="inline-flex items-center gap-1.5">
+                <svg viewBox="0 0 16 8" className="h-2 w-4" aria-hidden="true">
+                  <path d="M0 4h16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" />
+                </svg>
+                Posible conexión (por lo que comparten)
+              </span>
+            )}
           </div>
 
           {network.edges.length > 0 ? (
-            <RedCrmGraph network={network} visible={visible} selected={selected} onSelect={choose} />
+            vista === "mapa" ? <RedCrmMapa network={network} visible={visible} selected={selected} onSelect={choose} /> : <RedCrmGraph network={network} visible={visible} selected={selected} onSelect={choose} />
           ) : (
             <div className="grid h-[320px] place-items-center p-6 text-center text-sm text-muted-foreground">
               <div>
@@ -564,6 +577,10 @@ function RedCrm({
               </div>
             </div>
           )}
+          {vista === "mapa" && network.edges.length > 0 && (() => {
+            const r = resumenMapa(network, visible);
+            return <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">En el mapa: {fmt(r.ubicadas)} personas ubicadas en su municipio{r.sinLugar > 0 ? `; ${fmt(r.sinLugar)} no traen un lugar reconocible en el CRM y solo se ven en la vista «Red»` : ""}. Las líneas continuas con flecha son conexiones registradas en el CRM (quién trajo a quién); las punteadas son posibles conexiones deducidas de lo que comparten, no hechos comprobados. Acerca el mapa con la rueda del mouse.</p>;
+          })()}
           {hidden > 0 && (
             <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
               Se ven los {fmt(visible.length)} contactos más conectados de cada comunidad, de{" "}
