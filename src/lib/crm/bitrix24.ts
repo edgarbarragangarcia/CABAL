@@ -81,8 +81,16 @@ export async function call<T>(base: string, method: string, params: object = {},
       cache: "no-store",
       signal: AbortSignal.timeout(25_000),
     });
-  } catch {
-    throw new BitrixError("NETWORK", "No fue posible conectar con Bitrix24. Revisa la URL del webhook.");
+  } catch (e) {
+    // Se dice a qué dominio se intentó (nunca el código del webhook) y por qué falló: así se ve si Vercel tiene otra dirección que la del equipo.
+    let dominio = "?";
+    try {
+      dominio = new URL(base).hostname;
+    } catch {
+      /* se deja «?» */
+    }
+    const causa = (e as { cause?: { code?: string } })?.cause?.code ?? (e as Error)?.name ?? "error";
+    throw new BitrixError("NETWORK", `No fue posible conectar con ${dominio} (${causa}). Revisa que BITRIX24_WEBHOOK_URL en Vercel sea la dirección de tu portal.`);
   }
   const reply = (await res.json().catch(() => null)) as BitrixReply<T> | null;
   if (reply?.error === "QUERY_LIMIT_EXCEEDED" && attempt < 3) {
