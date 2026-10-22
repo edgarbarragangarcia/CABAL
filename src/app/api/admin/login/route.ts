@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import {
-  checkCredentials,
+  ADMIN_EMAIL,
   createSessionToken,
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
 } from "@/lib/admin-auth";
-import { verificarUsuario } from "@/lib/admin-usuarios";
+import { autenticarConSupabase, verificarUsuario } from "@/lib/admin-usuarios";
 
+/**
+ * Inicio de sesión del panel: el correo y la clave se comprueban en Supabase Auth. Entra el administrador principal (ADMIN_EMAIL) o
+ * quien tenga acceso activo en admin_usuarios (con su rol).
+ */
 export async function POST(req: Request) {
   let body: { email?: unknown; password?: unknown };
   try {
@@ -18,10 +22,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const email = typeof body.email === "string" ? body.email : "";
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
 
-  const principal = !!email && !!password && checkCredentials(email, password);
+  const principal = !!email && !!password && !!ADMIN_EMAIL && email === ADMIN_EMAIL && (await autenticarConSupabase(email, password).catch(() => false));
   const usuario = !principal && email && password ? await verificarUsuario(email, password).catch(() => null) : null;
   if (!principal && !usuario) {
     return NextResponse.json(
@@ -30,7 +34,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const token = await createSessionToken(email.trim().toLowerCase(), usuario?.rol, usuario?.cambiar);
+  let token: string;
+  try {
+    token = await createSessionToken(email, usuario?.rol, usuario?.cambiar);
+  } catch {
+    return NextResponse.json({ ok: false, error: "El servidor no tiene configurado ADMIN_SESSION_SECRET." }, { status: 503 });
+  }
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,

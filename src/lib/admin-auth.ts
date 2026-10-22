@@ -1,36 +1,26 @@
 /**
- * Autenticación mínima del panel administrativo — SIN base de datos, por
- * ahora. Un único usuario fijo y una cookie de sesión firmada (HMAC-SHA256,
- * Web Crypto: funciona igual en el middleware [Edge] y en las rutas de API
- * [Node]) para no dejar la sesión en texto plano.
+ * Sesión del panel administrativo. Quién es cada persona y su clave se comprueban en Supabase Auth (ver admin-usuarios.ts); aquí solo
+ * queda la cookie de sesión firmada (HMAC-SHA256, Web Crypto: funciona igual en el middleware [Edge] y en las rutas de API [Node]).
  *
- * Esto es un placeholder deliberado. Antes de manejar datos reales de
- * estudiantes o del sitio, reemplazar por autenticación real (Supabase Auth
- * u otro proveedor) con contraseñas con hash y usuarios en base de datos.
+ * En el código NO hay ninguna clave ni secreto por defecto: ADMIN_EMAIL (el correo del administrador principal) y ADMIN_SESSION_SECRET
+ * (el secreto con que se firma la cookie) vienen solo del entorno (.env.local o las variables de Vercel).
  */
-
-// En producción, define ADMIN_EMAIL y ADMIN_PASSWORD como variables de
-// entorno: los valores por defecto están a la vista en el repositorio.
-export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "admin@escuela.com").trim().toLowerCase();
-export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "12345";
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
 
 export const SESSION_COOKIE = "el_admin_session";
 export const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 horas
 
-// En producción, define ADMIN_SESSION_SECRET como variable de entorno.
-// Este valor por defecto solo protege contra manipulación casual de la
-// cookie, no sustituye un secreto real.
-const SECRET =
-  process.env.ADMIN_SESSION_SECRET ??
-  "escuela-libertad-admin-dev-secret-cambiar-en-produccion";
+function secreto(): string {
+  const s = process.env.ADMIN_SESSION_SECRET;
+  if (!s) throw new Error("Falta la variable ADMIN_SESSION_SECRET en el servidor.");
+  return s;
+}
 
 /**
- * `true` mientras el panel use la contraseña o el secreto de sesión por
- * defecto: cualquiera que lea el repositorio podría entrar (o firmar su
- * propia cookie). Con eso, el panel no entrega datos personales del CRM.
+ * `true` mientras falte configurar ADMIN_EMAIL o ADMIN_SESSION_SECRET: sin ellos nadie puede iniciar sesión, y el panel no entrega datos
+ * personales del CRM.
  */
-export const ADMIN_USES_PUBLIC_DEFAULTS =
-  !process.env.ADMIN_PASSWORD || !process.env.ADMIN_SESSION_SECRET;
+export const ADMIN_USES_PUBLIC_DEFAULTS = !process.env.ADMIN_EMAIL || !process.env.ADMIN_SESSION_SECRET;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -54,7 +44,7 @@ function fromBase64Url(b64url: string): Uint8Array {
 async function hmacKey() {
   return crypto.subtle.importKey(
     "raw",
-    encoder.encode(SECRET),
+    encoder.encode(secreto()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign", "verify"]
@@ -65,13 +55,6 @@ async function sign(data: string): Promise<string> {
   const key = await hmacKey();
   const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
   return toBase64Url(sig);
-}
-
-/** Compara dos credenciales sin distinguir mayúsculas en el correo. */
-export function checkCredentials(email: string, password: string): boolean {
-  return (
-    email.trim().toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD
-  );
 }
 
 export type AdminSession = { email: string; exp: number; /** Rol del usuario dado de alta; sin rol (o «direccion») ve todo el panel. */ rol?: string; /** Debe cambiar su clave temporal antes de usar el panel. */ cambiar?: boolean };
@@ -138,7 +121,7 @@ export async function createPurposeToken(purpose: string, ttlSeconds: number): P
 export async function verifyPurposeToken(purpose: string, token: string | undefined | null): Promise<boolean> {
   if (!token) return false;
   const [payloadB64, sig] = token.split(".");
-  if (!payloadB64 || !sig || (await sign(payloadB64)) !== sig) return false;
+  if (!payloadB64 || !sig || (await sign(payloadB64).catch(() => null)) !== sig) return false;
   try {
     const payload = JSON.parse(decoder.decode(fromBase64Url(payloadB64))) as { p?: unknown; exp?: unknown };
     return payload.p === purpose && typeof payload.exp === "number" && Date.now() <= payload.exp;
@@ -155,7 +138,8 @@ export async function verifySessionToken(
   const [payloadB64, sig] = token.split(".");
   if (!payloadB64 || !sig) return null;
 
-  const expectedSig = await sign(payloadB64);
+  // Sin ADMIN_SESSION_SECRET configurado no hay sesión válida.
+  const expectedSig = await sign(payloadB64).catch(() => null);
   if (expectedSig !== sig) return null;
 
   try {

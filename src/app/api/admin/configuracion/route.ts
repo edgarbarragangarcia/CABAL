@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   const compartida = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
   if (compartida && process.env.NODE_ENV === "production" && ADMIN_USES_PUBLIC_DEFAULTS) {
     return NextResponse.json(
-      { error: "Primero cambia la contraseña del panel (ADMIN_PASSWORD y ADMIN_SESSION_SECRET en Vercel)." },
+      { error: "Primero configura el acceso al panel: ADMIN_EMAIL y ADMIN_SESSION_SECRET en Vercel." },
       { status: 403 }
     );
   }

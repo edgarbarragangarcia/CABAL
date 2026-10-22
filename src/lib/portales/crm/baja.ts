@@ -7,9 +7,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * de baja a sí mismo; no hay que iniciar sesión. Con un secreto propio (PORTAL_BAJA_SECRET) o, si no, el de sesión del panel.
  */
 
-const SECRETO = process.env.PORTAL_BAJA_SECRET ?? process.env.ADMIN_SESSION_SECRET ?? "escuela-libertad-baja-dev-cambiar-en-produccion";
+const secreto = () => {
+  const s = process.env.PORTAL_BAJA_SECRET ?? process.env.ADMIN_SESSION_SECRET;
+  if (!s) throw new Error("Falta la variable PORTAL_BAJA_SECRET (o ADMIN_SESSION_SECRET) en el servidor.");
+  return s;
+};
 
-const firma = (contactoId: string) => createHmac("sha256", SECRETO).update(`baja:${contactoId}`).digest("base64url").slice(0, 32);
+const firma = (contactoId: string) => createHmac("sha256", secreto()).update(`baja:${contactoId}`).digest("base64url").slice(0, 32);
 
 export function enlaceDeBaja(origen: string, slug: string, contactoId: string): string {
   return `${origen}/p/${slug}/baja?c=${contactoId}&t=${firma(contactoId)}`;

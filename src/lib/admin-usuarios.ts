@@ -1,13 +1,16 @@
 import "server-only";
 
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
+import { scryptSync, timingSafeEqual } from "node:crypto";
 
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { SQL_POR_ARCHIVO } from "@/lib/gestor/sql";
 
 /**
- * Usuarios del panel guardados en Supabase (tabla admin_usuarios). La clave se guarda con scrypt y sal propia. El usuario del
- * entorno (ADMIN_EMAIL) sigue existiendo y es el único que da de alta, desactiva o elimina a los demás.
+ * Quién puede entrar al panel. Las credenciales (correo y clave) viven en Supabase Auth: aquí se comprueban con
+ * `signInWithPassword`, y se crean o cambian con la API de administración de Auth. La tabla admin_usuarios guarda a quién se dio acceso,
+ * con qué rol y si sigue activo. El administrador principal (ADMIN_EMAIL) también es un usuario de Supabase Auth y es el único que da de
+ * alta, desactiva o elimina a los demás.
  */
 export type UsuarioPanel = { email: string; rol: string; nombre: string; activo: boolean; creado_en: string; ultimo_ingreso: string | null; creado_por: string | null };
 
@@ -15,10 +18,51 @@ const TABLA = "admin_usuarios";
 const COLUMNAS = "email, rol, nombre, activo, creado_en, ultimo_ingreso, creado_por";
 export const CLAVE_MINIMA = 8;
 
-export function hashDeClave(clave: string): string {
-  const sal = randomBytes(16);
-  return `scrypt$${sal.toString("hex")}$${scryptSync(clave, sal, 64).toString("hex")}`;
+/** Marca de las filas cuya clave ya vive en Supabase Auth. */
+const CLAVE_EN_AUTH = "supabase-auth";
+
+/** Cliente aparte, sin sesión guardada, solo para comprobar una clave (la llave se usa del lado del servidor, nunca llega al navegador). */
+function clienteAuth() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
+
+/** ¿Son correctos este correo y esta clave en Supabase Auth? */
+export async function autenticarConSupabase(email: string, clave: string): Promise<boolean> {
+  const c = clienteAuth();
+  if (!c || !email || !clave) return false;
+  const { data, error } = await c.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: clave });
+  return !error && !!data.user;
+}
+
+/** El id del usuario de Supabase Auth con ese correo (se busca en la lista: son pocos usuarios). */
+async function idEnAuth(email: string): Promise<string | null> {
+  const c = getSupabaseServerClient();
+  if (!c) return null;
+  const correo = email.trim().toLowerCase();
+  for (let pagina = 1; pagina <= 20; pagina++) {
+    const { data, error } = await c.auth.admin.listUsers({ page: pagina, perPage: 200 });
+    if (error) return null;
+    const u = data.users.find((x) => x.email?.toLowerCase() === correo);
+    if (u) return u.id;
+    if (data.users.length < 200) return null;
+  }
+  return null;
+}
+
+/** Crea el usuario en Supabase Auth, o le pone esta clave si ya existía. */
+async function ponerClaveEnAuth(email: string, clave: string): Promise<string | null> {
+  const c = getSupabaseServerClient();
+  if (!c) return "Supabase no está configurado.";
+  const correo = email.trim().toLowerCase();
+  const id = await idEnAuth(correo);
+  const r = id ? await c.auth.admin.updateUserById(id, { password: clave }) : await c.auth.admin.createUser({ email: correo, password: clave, email_confirm: true });
+  return r.error ? "Supabase no aceptó la clave (revisa que cumpla los requisitos de Authentication → Policies)." : null;
+}
+
+/** Cambia la clave de cualquier usuario (el principal también) en Supabase Auth. */
+export const cambiarClaveEnAuth = ponerClaveEnAuth;
 
 function claveCoincide(clave: string, guardada: string): boolean {
   const [tipo, sal, hash] = guardada.split("$");
@@ -46,7 +90,11 @@ export async function listarUsuarios(): Promise<UsuarioPanel[]> {
   return (data ?? []) as UsuarioPanel[];
 }
 
-/** Verifica correo y clave contra la tabla; si coincide y está activo, anota el ingreso. */
+/**
+ * Verifica correo y clave de un usuario dado de alta: la clave se comprueba en Supabase Auth y el acceso (activo, rol) en admin_usuarios.
+ * Quien se dio de alta antes de que existiera Supabase Auth tenía la clave guardada con hash aquí: en su primer ingreso correcto se pasa
+ * a Supabase Auth y el hash deja de usarse.
+ */
 export async function verificarUsuario(email: string, clave: string): Promise<{ rol: string; cambiar: boolean } | null> {
   const c = getSupabaseServerClient();
   if (!c) return null;
@@ -56,7 +104,16 @@ export async function verificarUsuario(email: string, clave: string): Promise<{ 
   if (r.error) r = (await c.from(TABLA).select("email, clave_hash, activo, rol").eq("email", correo).maybeSingle()) as typeof r;
   if (r.error) r = (await c.from(TABLA).select("email, clave_hash, activo").eq("email", correo).maybeSingle()) as typeof r;
   const data = r.data as { email: string; clave_hash: string; activo: boolean; rol?: string; cambiar_clave?: boolean } | null;
-  if (!data || !data.activo || !claveCoincide(clave, String(data.clave_hash))) return null;
+  if (!data || !data.activo) return null;
+  let ok = await autenticarConSupabase(correo, clave);
+  if (!ok && data.clave_hash !== CLAVE_EN_AUTH && claveCoincide(clave, String(data.clave_hash))) {
+    // Clave antigua correcta: se pasa a Supabase Auth.
+    if ((await ponerClaveEnAuth(correo, clave)) === null) {
+      await c.from(TABLA).update({ clave_hash: CLAVE_EN_AUTH }).eq("email", data.email);
+      ok = true;
+    }
+  }
+  if (!ok) return null;
   await c.from(TABLA).update({ ultimo_ingreso: new Date().toISOString() }).eq("email", data.email);
   return { rol: data.rol ?? "direccion", cambiar: data.cambiar_clave === true };
 }
@@ -75,7 +132,11 @@ export async function crearUsuario(p: { email: string; nombre: string; clave: st
   const email = p.email.trim().toLowerCase();
   if (!correoValido(email)) return { ok: false, error: "Escribe un correo válido." };
   if (p.clave.length < CLAVE_MINIMA) return { ok: false, error: `La clave debe tener al menos ${CLAVE_MINIMA} caracteres.` };
-  const { error } = await c.from(TABLA).insert({ email, nombre: p.nombre.trim().slice(0, 120), clave_hash: hashDeClave(p.clave), rol: p.rol, creado_por: p.creadoPor, cambiar_clave: true });
+  const { data: existe } = await c.from(TABLA).select("email").eq("email", email).maybeSingle();
+  if (existe) return { ok: false, error: "Ese correo ya tiene usuario." };
+  const falla = await ponerClaveEnAuth(email, p.clave);
+  if (falla) return { ok: false, error: falla };
+  const { error } = await c.from(TABLA).insert({ email, nombre: p.nombre.trim().slice(0, 120), clave_hash: CLAVE_EN_AUTH, rol: p.rol, creado_por: p.creadoPor, cambiar_clave: true });
   if (error) return { ok: false, error: error.code === "23505" ? "Ese correo ya tiene usuario." : "No se pudo crear el usuario." };
   return { ok: true };
 }
@@ -89,7 +150,9 @@ export async function actualizarUsuario(email: string, cambios: { activo?: boole
   if (typeof cambios.nombre === "string") fila.nombre = cambios.nombre.trim().slice(0, 120);
   if (typeof cambios.clave === "string") {
     if (cambios.clave.length < CLAVE_MINIMA) return { ok: false, error: `La clave debe tener al menos ${CLAVE_MINIMA} caracteres.` };
-    fila.clave_hash = hashDeClave(cambios.clave);
+    const falla = await ponerClaveEnAuth(email, cambios.clave);
+    if (falla) return { ok: false, error: falla };
+    fila.clave_hash = CLAVE_EN_AUTH;
     fila.cambiar_clave = cambios.claveTemporal ?? false;
   }
   if (Object.keys(fila).length === 0) return { ok: false, error: "Nada que cambiar." };
@@ -101,5 +164,9 @@ export async function eliminarUsuario(email: string): Promise<boolean> {
   const c = getSupabaseServerClient();
   if (!c) return false;
   const { error } = await c.from(TABLA).delete().eq("email", email.trim().toLowerCase());
-  return !error;
+  if (error) return false;
+  // También se quita su cuenta de Supabase Auth (si no, su clave seguiría existiendo).
+  const id = await idEnAuth(email);
+  if (id) await c.auth.admin.deleteUser(id);
+  return true;
 }

@@ -189,11 +189,10 @@ function Configurar({
       title: "Protege el panel",
       body: (
         <>
-          El correo y la contraseña del panel están escritos en el código, que es público en GitHub. Antes
-          de traer datos personales del CRM, crea en Vercel (<b>Settings → Environment Variables</b>){" "}
-          <code>ADMIN_EMAIL</code>, <code>ADMIN_PASSWORD</code> (una contraseña nueva) y{" "}
-          <code>ADMIN_SESSION_SECRET</code> (una frase larga al azar). Al volver a desplegar, entra con la
-          contraseña nueva.
+          Antes de traer datos personales del CRM, crea en Vercel (<b>Settings → Environment Variables</b>){" "}
+          <code>ADMIN_EMAIL</code> (tu correo de administrador) y <code>ADMIN_SESSION_SECRET</code> (una frase
+          larga al azar). La contraseña no va en Vercel: se guarda en Supabase (<b>Authentication → Users</b>) y
+          así es como inicias sesión.
         </>
       ),
     },

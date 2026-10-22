@@ -35,7 +35,8 @@ function redis() {
 const COOKIE = "el_admin_ia";
 
 async function llave() {
-  const secreto = process.env.ADMIN_SESSION_SECRET ?? "escuela-libertad-admin-dev-secret-cambiar-en-produccion";
+  const secreto = process.env.ADMIN_SESSION_SECRET;
+  if (!secreto) throw new Error("Falta la variable ADMIN_SESSION_SECRET en el servidor.");
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`ia-config:${secreto}`));
   return crypto.subtle.importKey("raw", hash, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
