@@ -30,11 +30,24 @@ type Fila = Record<string, string | number | null>;
 /** Los leads de Supabase, o el motivo por el que no se pudo (sin Supabase, sin tabla, tabla vacía…): entonces se usa Bitrix24 como antes. */
 export type DesdeSupabase = { snapshot: CrmSnapshot } | { motivo: string };
 
-export async function snapshotDesdeSupabase(): Promise<DesdeSupabase> {
+/** Copia en memoria: la red se arma con miles de leads y no cambia entre un clic y otro. `refresh` la ignora. */
+let guardada: { en: number; datos: DesdeSupabase } | null = null;
+const VIGENCIA_MS = 10 * 60_000;
+
+export async function snapshotDesdeSupabase({ refresh = false } = {}): Promise<DesdeSupabase> {
+  if (!refresh && guardada && Date.now() - guardada.en < VIGENCIA_MS && "snapshot" in guardada.datos) return guardada.datos;
+  const datos = await armar();
+  if ("snapshot" in datos) guardada = { en: Date.now(), datos };
+  return datos;
+}
+
+async function armar(): Promise<DesdeSupabase> {
   const c = getSupabaseServerClient();
   if (!c) return { motivo: "El servidor no tiene conexión con Supabase (faltan SUPABASE_URL y la llave de servicio)." };
   try {
-    const { count, error: eCount } = await c.from("crm_leads").select("id", { count: "exact", head: true });
+    // El conteo estimado es instantáneo, pero tras una carga masiva puede venir en cero hasta que Postgres actualiza sus estadísticas: si pasa, se cuenta bien.
+    let { count, error: eCount } = await c.from("crm_leads").select("id", { count: "estimated", head: true });
+    if (!eCount && !count) ({ count, error: eCount } = await c.from("crm_leads").select("id", { count: "exact", head: true }));
     if (eCount) {
       const falta = /does not exist|could not find the table|PGRST205|42P01/i.test(`${eCount.code ?? ""} ${eCount.message}`);
       return { motivo: falta ? "En Supabase falta la tabla crm_leads: ejecuta supabase/crm.sql en el SQL Editor del proyecto." : `Supabase no dejó leer crm_leads (${eCount.message}).` };
@@ -42,13 +55,13 @@ export async function snapshotDesdeSupabase(): Promise<DesdeSupabase> {
     if (!count) return { motivo: "La tabla crm_leads de Supabase está vacía: se llena en Red Cabal → Todos los leads → «Guardar todos los leads»." };
 
     const columnas = ["id", "nombre", ...CAMPOS.map((x) => x.columna)].join(", ");
-    const filas: Fila[] = [];
-    for (let desde = 0; desde < TOPE; desde += PAGINA) {
-      const { data, error } = await c.from("crm_leads").select(columnas).not("ciudad", "is", null).order("id", { ascending: false }).range(desde, desde + PAGINA - 1);
-      if (error) return { motivo: `Supabase no dejó leer los leads (${error.message}).` };
-      filas.push(...((data ?? []) as unknown as Fila[]));
-      if ((data?.length ?? 0) < PAGINA) break;
-    }
+    // Las páginas se piden todas a la vez (antes, una tras otra): 5 consultas de ~0,5 s pasan de 2,5 s a 0,5 s.
+    const paginas = await Promise.all(
+      Array.from({ length: TOPE / PAGINA }, (_, i) => c.from("crm_leads").select(columnas).not("ciudad", "is", null).order("id", { ascending: false }).range(i * PAGINA, (i + 1) * PAGINA - 1))
+    );
+    const falla = paginas.find((r) => r.error);
+    if (falla?.error) return { motivo: `Supabase no dejó leer los leads (${falla.error.message}).` };
+    const filas: Fila[] = paginas.flatMap((r) => (r.data ?? []) as unknown as Fila[]);
     if (filas.length === 0) return { motivo: "Ningún lead guardado en Supabase tiene ciudad." };
 
     const indices = CAMPOS.map(() => new Map<string, number>());

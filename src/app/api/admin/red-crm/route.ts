@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   if (falta.admin) return reply({ status: "configurar", falta });
 
   // Primero Supabase: los leads ya guardados (crm_leads) no dependen de que Bitrix24 responda. Solo si no hay, se pregunta a Bitrix24.
-  const guardado = await snapshotDesdeSupabase();
+  const guardado = await snapshotDesdeSupabase({ refresh: new URL(req.url).searchParams.get("refresh") === "1" });
   if ("snapshot" in guardado) return reply({ status: "ok", snapshot: guardado.snapshot });
   if (!webhook) return reply({ status: "error", message: `${guardado.motivo} Y Bitrix24 no está configurado (BITRIX24_WEBHOOK_URL).` }, 502);
 
