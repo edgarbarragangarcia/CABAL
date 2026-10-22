@@ -66,6 +66,25 @@ export async function intentarEnSupabase(email: string, clave: string): Promise<
   return { ok: false, mensaje: error?.message ?? "sin respuesta", estado: error?.status };
 }
 
+/**
+ * Diagnóstico TEMPORAL del login: a qué proyecto de Supabase apunta el servidor y si el correo existe como usuario allí. Se muestra en el
+ * mensaje de error para saber si la clave está mal o si el usuario está en otro proyecto. Quitar cuando el acceso funcione.
+ */
+export async function diagnosticarUsuario(email: string): Promise<string> {
+  const proyecto = (process.env.SUPABASE_URL ?? "").replace(/^https?:\/\//, "").split(".")[0] || "sin URL";
+  const c = getSupabaseServerClient();
+  if (!c) return `proyecto ${proyecto}; sin llave de servicio`;
+  const correo = email.trim().toLowerCase();
+  for (let pagina = 1; pagina <= 5; pagina++) {
+    const { data, error } = await c.auth.admin.listUsers({ page: pagina, perPage: 200 });
+    if (error) return `proyecto ${proyecto}; no se pudo listar usuarios (${error.message})`;
+    const u = data.users.find((x) => x.email?.toLowerCase() === correo);
+    if (u) return `proyecto ${proyecto}; el usuario existe${u.email_confirmed_at ? "" : " pero NO está confirmado"}`;
+    if (data.users.length < 200) break;
+  }
+  return `proyecto ${proyecto}; el usuario NO existe en ese proyecto`;
+}
+
 /** ¿Son correctos este correo y esta clave en Supabase Auth? */
 export async function autenticarConSupabase(email: string, clave: string): Promise<boolean> {
   const c = clienteAuth();

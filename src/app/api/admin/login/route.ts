@@ -4,7 +4,7 @@ import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
 } from "@/lib/admin-auth";
-import { esPrincipal, intentarEnSupabase, supabaseAuthConfigurado, verificarUsuario } from "@/lib/admin-usuarios";
+import { diagnosticarUsuario, esPrincipal, intentarEnSupabase, supabaseAuthConfigurado, verificarUsuario } from "@/lib/admin-usuarios";
 
 /**
  * Inicio de sesión del panel: el correo y la clave se comprueban en Supabase Auth. Entra el administrador principal (el que marca Supabase) o
@@ -34,8 +34,9 @@ export async function POST(req: Request) {
   const usuario = !principal && email && password ? await verificarUsuario(email, password).catch(() => null) : null;
   if (!principal && !usuario) {
     // Se distingue «la clave no es» de «la clave es, pero este correo no tiene acceso»: así se sabe qué arreglar.
+    const diag = claveValida ? "" : ` [${await diagnosticarUsuario(email).catch(() => "sin diagnóstico")}]`;
     return NextResponse.json(
-      { ok: false, error: claveValida ? "Supabase aceptó la clave, pero este correo no es el administrador principal ni está dado de alta en el panel." : `Correo o clave incorrectos. (Supabase respondió: ${intento.mensaje ?? "sin detalle"}${intento.estado ? `, ${intento.estado}` : ""})` },
+      { ok: false, error: claveValida ? "Supabase aceptó la clave, pero este correo no es el administrador principal ni está dado de alta en el panel." : `Correo o clave incorrectos. (Supabase respondió: ${intento.mensaje ?? "sin detalle"}${intento.estado ? `, ${intento.estado}` : ""})${diag}` },
       { status: claveValida ? 403 : 401 }
     );
   }
