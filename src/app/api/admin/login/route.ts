@@ -4,7 +4,7 @@ import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
 } from "@/lib/admin-auth";
-import { autenticarConSupabase, esPrincipal, verificarUsuario } from "@/lib/admin-usuarios";
+import { autenticarConSupabase, esPrincipal, supabaseAuthConfigurado, verificarUsuario } from "@/lib/admin-usuarios";
 
 /**
  * Inicio de sesión del panel: el correo y la clave se comprueban en Supabase Auth. Entra el administrador principal (el que marca Supabase) o
@@ -24,13 +24,18 @@ export async function POST(req: Request) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
 
+  if (!supabaseAuthConfigurado()) {
+    return NextResponse.json({ ok: false, error: "El servidor no tiene configurado Supabase (faltan SUPABASE_URL y su llave en las variables de Vercel)." }, { status: 503 });
+  }
   // Supabase Auth dice si el correo y la clave son correctos; el administrador principal entra con eso, los demás además deben estar dados de alta.
-  const principal = !!email && !!password && (await autenticarConSupabase(email, password).catch(() => false)) && (await esPrincipal(email).catch(() => false));
+  const claveValida = !!email && !!password && (await autenticarConSupabase(email, password).catch(() => false));
+  const principal = claveValida && (await esPrincipal(email).catch(() => false));
   const usuario = !principal && email && password ? await verificarUsuario(email, password).catch(() => null) : null;
   if (!principal && !usuario) {
+    // Se distingue «la clave no es» de «la clave es, pero este correo no tiene acceso»: así se sabe qué arreglar.
     return NextResponse.json(
-      { ok: false, error: "Correo o clave incorrectos." },
-      { status: 401 }
+      { ok: false, error: claveValida ? "Supabase aceptó la clave, pero este correo no es el administrador principal ni está dado de alta en el panel." : "Correo o clave incorrectos." },
+      { status: claveValida ? 403 : 401 }
     );
   }
 

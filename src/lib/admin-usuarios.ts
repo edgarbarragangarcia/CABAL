@@ -29,6 +29,9 @@ function clienteAuth() {
   return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 
+/** ¿El servidor tiene lo necesario para hablar con Supabase Auth (URL y una llave)? */
+export const supabaseAuthConfigurado = () => !!clienteAuth();
+
 let principalGuardado: { en: number; email: string } | null = null;
 
 /**
