@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import {
-  ADMIN_EMAIL,
   createSessionToken,
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
 } from "@/lib/admin-auth";
-import { autenticarConSupabase, verificarUsuario } from "@/lib/admin-usuarios";
+import { autenticarConSupabase, esPrincipal, verificarUsuario } from "@/lib/admin-usuarios";
 
 /**
- * Inicio de sesión del panel: el correo y la clave se comprueban en Supabase Auth. Entra el administrador principal (ADMIN_EMAIL) o
+ * Inicio de sesión del panel: el correo y la clave se comprueban en Supabase Auth. Entra el administrador principal (el que marca Supabase) o
  * quien tenga acceso activo en admin_usuarios (con su rol).
  */
 export async function POST(req: Request) {
@@ -25,7 +24,8 @@ export async function POST(req: Request) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
 
-  const principal = !!email && !!password && !!ADMIN_EMAIL && email === ADMIN_EMAIL && (await autenticarConSupabase(email, password).catch(() => false));
+  // Supabase Auth dice si el correo y la clave son correctos; el administrador principal entra con eso, los demás además deben estar dados de alta.
+  const principal = !!email && !!password && (await autenticarConSupabase(email, password).catch(() => false)) && (await esPrincipal(email).catch(() => false));
   const usuario = !principal && email && password ? await verificarUsuario(email, password).catch(() => null) : null;
   if (!principal && !usuario) {
     return NextResponse.json(

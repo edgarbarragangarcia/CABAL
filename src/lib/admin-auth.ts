@@ -2,8 +2,9 @@
  * Sesión del panel administrativo. Quién es cada persona y su clave se comprueban en Supabase Auth (ver admin-usuarios.ts); aquí solo
  * queda la cookie de sesión firmada (HMAC-SHA256, Web Crypto: funciona igual en el middleware [Edge] y en las rutas de API [Node]).
  *
- * En el código NO hay ninguna clave ni secreto por defecto: ADMIN_EMAIL (el correo del administrador principal) y ADMIN_SESSION_SECRET
- * (el secreto con que se firma la cookie) vienen solo del entorno (.env.local o las variables de Vercel).
+ * En el código NO hay ninguna clave ni secreto por defecto: ADMIN_SESSION_SECRET (el secreto con que se firma la cookie) viene solo del
+ * entorno (.env.local o las variables de Vercel). Quién es el administrador lo dice Supabase Auth (ver `emailPrincipal` en admin-usuarios.ts);
+ * ADMIN_EMAIL es opcional y, si existe, manda sobre eso.
  */
 export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
 
@@ -17,10 +18,9 @@ function secreto(): string {
 }
 
 /**
- * `true` mientras falte configurar ADMIN_EMAIL o ADMIN_SESSION_SECRET: sin ellos nadie puede iniciar sesión, y el panel no entrega datos
- * personales del CRM.
+ * `true` mientras falte configurar ADMIN_SESSION_SECRET: sin él nadie puede iniciar sesión, y el panel no entrega datos personales del CRM.
  */
-export const ADMIN_USES_PUBLIC_DEFAULTS = !process.env.ADMIN_EMAIL || !process.env.ADMIN_SESSION_SECRET;
+export const ADMIN_USES_PUBLIC_DEFAULTS = !process.env.ADMIN_SESSION_SECRET;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

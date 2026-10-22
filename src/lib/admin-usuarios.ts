@@ -5,6 +5,7 @@ import { scryptSync, timingSafeEqual } from "node:crypto";
 
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { SQL_POR_ARCHIVO } from "@/lib/gestor/sql";
+import { ADMIN_EMAIL } from "@/lib/admin-auth";
 
 /**
  * Quién puede entrar al panel. Las credenciales (correo y clave) viven en Supabase Auth: aquí se comprueban con
@@ -26,6 +27,31 @@ function clienteAuth() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
   return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+}
+
+let principalGuardado: { en: number; email: string } | null = null;
+
+/**
+ * El correo del administrador principal, según Supabase Auth: el usuario marcado con `app_metadata.principal` (lo hace
+ * scripts/crear-admin.mjs) o, si ninguno lo está, el primero que se creó en el proyecto. Si existe la variable ADMIN_EMAIL, manda ella.
+ */
+export async function emailPrincipal(): Promise<string> {
+  if (ADMIN_EMAIL) return ADMIN_EMAIL;
+  if (principalGuardado && Date.now() - principalGuardado.en < 10 * 60_000) return principalGuardado.email;
+  const c = getSupabaseServerClient();
+  if (!c) return "";
+  const { data, error } = await c.auth.admin.listUsers({ page: 1, perPage: 200 });
+  if (error) return "";
+  const usuarios = data.users.filter((u) => !!u.email);
+  const elegido = usuarios.find((u) => u.app_metadata?.principal === true) ?? [...usuarios].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))[0];
+  const email = elegido?.email?.toLowerCase() ?? "";
+  principalGuardado = { en: Date.now(), email };
+  return email;
+}
+
+export async function esPrincipal(email: string): Promise<boolean> {
+  const p = await emailPrincipal();
+  return !!p && p === email.trim().toLowerCase();
 }
 
 /** ¿Son correctos este correo y esta clave en Supabase Auth? */

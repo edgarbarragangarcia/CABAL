@@ -190,9 +190,8 @@ function Configurar({
       body: (
         <>
           Antes de traer datos personales del CRM, crea en Vercel (<b>Settings → Environment Variables</b>){" "}
-          <code>ADMIN_EMAIL</code> (tu correo de administrador) y <code>ADMIN_SESSION_SECRET</code> (una frase
-          larga al azar). La contraseña no va en Vercel: se guarda en Supabase (<b>Authentication → Users</b>) y
-          así es como inicias sesión.
+          <code>ADMIN_SESSION_SECRET</code> (una frase larga al azar). El correo y la contraseña no van en Vercel:
+          viven en Supabase (<b>Authentication → Users</b>) y así es como inicias sesión.
         </>
       ),
     },

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-import { ADMIN_EMAIL, createSessionToken, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySessionToken } from "@/lib/admin-auth";
-import { actualizarUsuario, autenticarConSupabase, cambiarClaveEnAuth, CLAVE_MINIMA, verificarUsuario } from "@/lib/admin-usuarios";
+import { createSessionToken, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySessionToken } from "@/lib/admin-auth";
+import { actualizarUsuario, autenticarConSupabase, cambiarClaveEnAuth, CLAVE_MINIMA, esPrincipal, verificarUsuario } from "@/lib/admin-usuarios";
 
 /** El usuario cambia su propia clave (obligatorio cuando entró con una temporal): la nueva queda guardada con hash. */
 export async function POST(req: Request) {
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (b.nueva.length < CLAVE_MINIMA) return NextResponse.json({ error: `La clave nueva debe tener al menos ${CLAVE_MINIMA} caracteres.` }, { status: 400 });
   if (b.nueva === b.actual) return NextResponse.json({ error: "La clave nueva debe ser distinta de la actual." }, { status: 400 });
   // El administrador principal solo vive en Supabase Auth; los demás, además, en admin_usuarios (con su rol).
-  const principal = !!ADMIN_EMAIL && s.email === ADMIN_EMAIL;
+  const principal = await esPrincipal(s.email);
   const u = principal ? ((await autenticarConSupabase(s.email, b.actual)) ? { rol: undefined as string | undefined } : null) : await verificarUsuario(s.email, b.actual);
   if (!u) return NextResponse.json({ error: "La clave actual no es correcta." }, { status: 401 });
   if (principal) {

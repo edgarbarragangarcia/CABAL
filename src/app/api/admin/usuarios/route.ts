@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-import { ADMIN_EMAIL, esRol, ROLES, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
-import { actualizarUsuario, crearUsuario, eliminarUsuario, estadoUsuarios, listarUsuarios } from "@/lib/admin-usuarios";
+import { esRol, ROLES, SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { actualizarUsuario, crearUsuario, eliminarUsuario, emailPrincipal, esPrincipal, estadoUsuarios, listarUsuarios } from "@/lib/admin-usuarios";
 
-/** Solo el administrador principal (ADMIN_EMAIL) gestiona usuarios. */
+/** Solo el administrador principal (el que marca Supabase Auth) gestiona usuarios. */
 async function principal() {
   const s = await verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value);
-  return s && s.email === ADMIN_EMAIL ? s.email : null;
+  return s && (await esPrincipal(s.email)) ? s.email : null;
 }
 const sinPermiso = () => NextResponse.json({ error: "Solo el administrador principal puede gestionar usuarios." }, { status: 403 });
 const noCache = { headers: { "Cache-Control": "no-store" } };
@@ -15,7 +15,7 @@ const noCache = { headers: { "Cache-Control": "no-store" } };
 export async function GET() {
   if (!(await principal())) return sinPermiso();
   const estado = await estadoUsuarios();
-  return NextResponse.json({ ...estado, principal: ADMIN_EMAIL, roles: Object.entries(ROLES).map(([id, r]) => ({ id, nombre: r.nombre, detalle: r.detalle })), usuarios: estado.disponible ? await listarUsuarios() : [] }, noCache);
+  return NextResponse.json({ ...estado, principal: await emailPrincipal(), roles: Object.entries(ROLES).map(([id, r]) => ({ id, nombre: r.nombre, detalle: r.detalle })), usuarios: estado.disponible ? await listarUsuarios() : [] }, noCache);
 }
 
 export async function POST(req: Request) {
