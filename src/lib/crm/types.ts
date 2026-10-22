@@ -44,6 +44,8 @@ export type CrmSnapshot = {
   /** Dominio del portal de Bitrix24. */
   portal: string;
   fetchedAt: string;
+  /** Qué se leyó del CRM: contactos o leads. */
+  entidad?: "contact" | "lead";
   /** Contactos que hay en el CRM (pueden ser más que los analizados). */
   total: number;
   fields: CrmField[];

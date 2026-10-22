@@ -168,6 +168,7 @@ const STANDARD_FIELDS: [string, string, Dimension | null, Kind, string?][] = [
   ["UTM_CAMPAIGN", "Campaña (UTM)", "actividades", "string"],
   ["UTM_SOURCE", "Fuente (UTM)", null, "string"],
   ["POST", "Cargo", null, "string"],
+  ["STATUS_ID", "Etapa del lead", null, "status", "STATUS"],
   ["ASSIGNED_BY_ID", "Responsable en Bitrix24", null, "employee"],
 ];
 
@@ -202,7 +203,7 @@ function labelText(x: unknown): string {
   return "";
 }
 
-function detectFields(meta: Record<string, FieldMeta>): FieldSpec[] {
+function detectFields(meta: Record<string, FieldMeta>, entidad: Entidad = "contact"): FieldSpec[] {
   const specs: FieldSpec[] = STANDARD_FIELDS.filter(([key]) => key in meta).map(
     ([key, label, auto, kind, statusType]) => ({
       key,
@@ -222,7 +223,7 @@ function detectFields(meta: Record<string, FieldMeta>): FieldSpec[] {
     if (m.type === "string") kind = "string";
     else if (m.type === "enumeration") kind = "enum";
     else if (m.type === "employee") kind = "employee";
-    else if (m.type === "crm" && m.settings?.CONTACT === "Y") kind = "contact";
+    else if (m.type === "crm" && (m.settings?.CONTACT === "Y" || (entidad === "lead" && m.settings?.LEAD === "Y"))) kind = "contact";
     else if (m.type === "crm_status" && typeof m.settings?.ENTITY_TYPE === "string") kind = "status";
     // Casillas tipo "¿Asistió al foro?": solo sirven si el nombre dice qué son.
     else if (m.type === "boolean" && auto) kind = "boolean";
@@ -244,11 +245,13 @@ function detectFields(meta: Record<string, FieldMeta>): FieldSpec[] {
 
 type RawContact = Record<string, unknown> & { ID: string | number };
 
-const contactName = (c: RawContact) =>
+type Entidad = "contact" | "lead";
+
+const contactName = (c: RawContact, entidad: Entidad = "contact") =>
   [c.NAME, c.SECOND_NAME, c.LAST_NAME]
     .map((s) => (typeof s === "string" ? s.trim() : ""))
     .filter(Boolean)
-    .join(" ") || `Contacto #${c.ID}`;
+    .join(" ") || (entidad === "lead" && typeof c.TITLE === "string" && c.TITLE.trim() ? c.TITLE.trim() : `${entidad === "lead" ? "Lead" : "Contacto"} #${c.ID}`);
 
 const asList = (x: unknown): unknown[] => (Array.isArray(x) ? x : x === null || x === undefined || x === "" ? [] : [x]);
 
@@ -287,18 +290,27 @@ async function fetchUserNames(base: string, ids: string[]) {
   return names;
 }
 
+/** Las personas de la campaña pueden vivir como contactos o como leads: si no hay contactos, se leen los leads (o lo que diga BITRIX24_ENTIDAD). */
+async function elegirEntidad(base: string): Promise<Entidad> {
+  const forzada = process.env.BITRIX24_ENTIDAD?.trim().toLowerCase();
+  if (forzada === "contact" || forzada === "lead") return forzada;
+  const c = await call<unknown[]>(base, "crm.contact.list", { select: ["ID"], start: 0 });
+  return (c.total ?? c.result.length) > 0 ? "contact" : "lead";
+}
+
 async function fetchSnapshot(base: string): Promise<CrmSnapshot> {
-  const { result: meta } = await call<Record<string, FieldMeta>>(base, "crm.contact.fields");
-  const specs = detectFields(meta);
-  const select = ["ID", "NAME", "SECOND_NAME", "LAST_NAME", ...specs.map((s) => s.key)];
+  const entidad = await elegirEntidad(base);
+  const { result: meta } = await call<Record<string, FieldMeta>>(base, `crm.${entidad}.fields`);
+  const specs = detectFields(meta, entidad);
+  const select = ["ID", "NAME", "SECOND_NAME", "LAST_NAME", ...(entidad === "lead" ? ["TITLE"] : []), ...specs.map((s) => s.key)];
 
   const [statuses, { items: raw, total }] = await Promise.all([
     fetchStatuses(base, [...new Set(specs.flatMap((s) => (s.statusType ? [s.statusType] : [])))]),
-    listAll<RawContact>(base, "crm.contact.list", { order: { ID: "DESC" }, select }, MAX_CONTACTS),
+    listAll<RawContact>(base, `crm.${entidad}.list`, { order: { ID: "DESC" }, select }, MAX_CONTACTS),
   ]);
 
   // Referentes enlazados que quedaron fuera del tope de contactos: se traen también.
-  const contactId = (x: unknown) => /^(?:C_)?(\d+)$/.exec(String(x))?.[1] ?? null;
+  const contactId = (x: unknown) => /^(?:C_|L_)?(\d+)$/.exec(String(x))?.[1] ?? null;
   const known = new Set(raw.map((c) => String(c.ID)));
   const missing = [
     ...new Set(
@@ -312,7 +324,7 @@ async function fetchSnapshot(base: string): Promise<CrmSnapshot> {
     for (let i = 0; i < Math.min(missing.length, MAX_MISSING_REFERRERS); i += 50) chunks.push(missing.slice(i, i + 50));
     const pages = await batch<RawContact[]>(
       base,
-      Object.fromEntries(chunks.map((ids, i) => [`m${i}`, ["crm.contact.list", { filter: { "@ID": ids }, select }]]))
+      Object.fromEntries(chunks.map((ids, i) => [`m${i}`, [`crm.${entidad}.list`, { filter: { "@ID": ids }, select }]]))
     );
     chunks.forEach((_, i) => raw.push(...(pages[`m${i}`] ?? [])));
   }
@@ -325,7 +337,7 @@ async function fetchSnapshot(base: string): Promise<CrmSnapshot> {
     ),
   ].filter((id) => id !== "0");
   const users = await fetchUserNames(base, employeeIds);
-  const names = new Map(raw.map((c) => [String(c.ID), contactName(c)]));
+  const names = new Map(raw.map((c) => [String(c.ID), contactName(c, entidad)]));
 
   // Diccionario de valores por campo; cada contacto guarda índices.
   const dicts = specs.map(() => ({
@@ -352,7 +364,7 @@ async function fetchSnapshot(base: string): Promise<CrmSnapshot> {
         else if (spec.kind === "boolean") [key, label] = x === true || s === "1" || s === "Y" ? ["1", spec.label] : [null, ""];
         else if (spec.kind === "contact") {
           ref = contactId(s);
-          [key, label] = ref ? [ref, names.get(ref) ?? `Contacto #${ref}`] : [null, ""];
+          [key, label] = ref ? [ref, names.get(ref) ?? `${entidad === "lead" ? "Lead" : "Contacto"} #${ref}`] : [null, ""];
         }
         if (key === null || !label) continue;
         let vi = dict.index.get(key);
@@ -408,7 +420,7 @@ async function fetchSnapshot(base: string): Promise<CrmSnapshot> {
     v: perContact[i].filter(([fi]) => newIndex.has(fi)).map(([fi, idxs]) => [newIndex.get(fi)!, idxs]),
   }));
 
-  return { portal: new URL(base).host, fetchedAt: new Date().toISOString(), total, fields, contacts };
+  return { portal: new URL(base).host, fetchedAt: new Date().toISOString(), total, entidad, fields, contacts };
 }
 
 const cache = new Map<string, { at: number; snapshot: CrmSnapshot }>();
