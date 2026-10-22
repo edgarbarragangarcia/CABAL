@@ -57,6 +57,15 @@ export async function esPrincipal(email: string): Promise<boolean> {
   return !!p && p === email.trim().toLowerCase();
 }
 
+/** Lo que Supabase Auth contesta a un intento de entrada (su mensaje sirve para saber qué falla: clave, llave del proyecto, correo sin confirmar…). */
+export async function intentarEnSupabase(email: string, clave: string): Promise<{ ok: boolean; mensaje?: string; estado?: number }> {
+  const c = clienteAuth();
+  if (!c || !email || !clave) return { ok: false, mensaje: "Supabase no está configurado" };
+  const { data, error } = await c.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: clave });
+  if (!error && data.user) return { ok: true };
+  return { ok: false, mensaje: error?.message ?? "sin respuesta", estado: error?.status };
+}
+
 /** ¿Son correctos este correo y esta clave en Supabase Auth? */
 export async function autenticarConSupabase(email: string, clave: string): Promise<boolean> {
   const c = clienteAuth();
