@@ -104,7 +104,7 @@ export function dispersar(ubicaciones: (Ubicacion & { id: number })[]): Map<numb
 /** Municipios que pueden corresponder a un nombre (varios si se repite, como «Barbosa» en Antioquia y en Santander). */
 /** Nombres del CRM que no coinciden con el oficial («Mompox» es Santa Cruz de Mompox). «nombre|código de departamento» fija el departamento. */
 const ALIAS: Record<string, string> = {
-  "mompox": "santa cruz de mompox", "santiago de cali": "cali", "armero guayabal": "armero", "rioviejo": "rio viejo", "san juan de rio seco": "san juan de rioseco",
+  "mompox": "mompos", "santa cruz de mompox": "mompos", "san juan de pasto": "pasto", "san luis de cubarral": "cubarral", "santiago de cali": "cali", "armero guayabal": "armero", "rioviejo": "rio viejo", "san juan de rio seco": "san juan de rioseco",
   "puerto nare la magdalena": "puerto nare", "pueblo viejo": "puebloviejo", "san andres de sotavento": "san andres sotavento", "vista hermosa": "vistahermosa",
   "rio blanco": "rioblanco", "san martin de los llanos": "san martin|50", "el retiro": "retiro|05", "san vicente ferrer": "san vicente|05",
 };
