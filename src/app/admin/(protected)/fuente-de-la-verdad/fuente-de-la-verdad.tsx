@@ -14,6 +14,7 @@ import { CamarasFuente } from "./camaras-fuente";
 import { ProyeccionFuente } from "./proyeccion-fuente";
 import { MonitoreoFuente } from "./monitoreo-fuente";
 import { CrmFuente } from "./crm-fuente";
+import { VotosMesaFuente } from "./votos-mesa-fuente";
 
 const OPCIONES = [
   { id: "biblioteca", label: "Documentos y datos", icon: Library },
@@ -55,6 +56,8 @@ export function FuenteDeLaVerdad() {
   const [vCrm, setVCrm] = React.useState(0);
   const crmEstado = usePeticion<{ guardados: number; webhook: boolean }>(`/api/admin/red-crm/leads?v=${vCrm}`);
   const crm = crmEstado.estado === "listo" ? crmEstado.data : null;
+  const votosMesa = usePeticion<{ mesas: number; votos: number }>("/api/admin/votos-mesa");
+  const vm = votosMesa.estado === "listo" ? votosMesa.data : null;
   const fuentes: FuenteDatos[] = [
     {
       id: "electoral",
@@ -105,6 +108,16 @@ export function FuenteDeLaVerdad() {
       tono: crm && crm.guardados > 0 ? "ok" : "pendiente",
       fecha: null,
       contenido: <CrmFuente key={vCrm} alCargar={() => setVCrm((n) => n + 1)} />,
+    },
+    {
+      id: "votos-mesa",
+      nombre: "Votos por mesa · María Fernanda Cabal 2022",
+      detalle: "Senado 2022 después de escrutinio, mesa por mesa: votos de María Fernanda en cada puesto y municipio (Excel de la campaña)",
+      resumen: vm ? `${vm.mesas.toLocaleString("es-CO")} mesas · ${vm.votos.toLocaleString("es-CO")} votos` : "—",
+      estado: votosMesa.estado === "error" ? "Falta SQL" : !vm ? "Leyendo" : vm.mesas === 0 ? "Sin cargar" : "Listo",
+      tono: vm && vm.mesas > 0 ? "ok" : "pendiente",
+      fecha: null,
+      contenido: <VotosMesaFuente />,
     },
     {
       id: "proyeccion",
