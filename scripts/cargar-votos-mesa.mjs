@@ -41,7 +41,7 @@ const num = (v) => Number(v);
 const mapa = new Map(); // la llave primaria no admite repetidos dentro de un mismo envío: los consulados vienen sin municipio ni nombre de puesto, así que sus votos se suman
 for (const f of datos) {
   const departamento = DEPARTAMENTOS[f[0]] ?? f[0];
-  const r = { anio: Number(anio), etapa, corporacion: f[6], circunscripcion: f[7], candidato: f[10], agrupacion: f[8] || null, posicion: f[9] ? num(f[9]) : null, departamento, municipio: f[1], zona: num(f[2]), puesto: num(f[3]), nombre_puesto: f[4] || null, mesa: num(f[5]), votos: num(f[11]) };
+  const r = { anio: Number(anio), etapa, corporacion: f[6], circunscripcion: f[7], candidato: f[10], agrupacion: f[8] || null, posicion: f[9] ? num(f[9]) : null, departamento, municipio: f[1], zona: num(f[2]), puesto: f[3], nombre_puesto: f[4] || null, mesa: num(f[5]), votos: num(f[11]) };
   const k = [r.corporacion, r.candidato, r.departamento, r.municipio, r.zona, r.puesto, r.mesa].join("|");
   const previa = mapa.get(k);
   if (previa) previa.votos += r.votos;

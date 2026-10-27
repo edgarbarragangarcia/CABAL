@@ -1,5 +1,6 @@
 -- Votos por mesa de un candidato, tal como los publica el escrutinio (hoy: María Fernanda Cabal, Senado 2022, después de escrutinio).
 -- Fuente: el Excel «VOTACIÓN MARIA_FERNANDA_CABAL». Se carga con scripts/cargar-votos-mesa.mjs. Se puede ejecutar más de una vez.
+-- Si ya la habías creado con «puesto integer»: ejecuta antes  alter table votos_mesa alter column puesto type text using puesto::text;
 -- Se accede solo desde el servidor con la service role key: RLS ACTIVADO y sin políticas.
 
 create table if not exists votos_mesa (
@@ -13,7 +14,7 @@ create table if not exists votos_mesa (
   departamento text not null,
   municipio text not null,
   zona integer not null,
-  puesto integer not null,
+  puesto text not null,                -- código del puesto: casi siempre un número, pero hay A1, B2, etc.
   nombre_puesto text,
   mesa integer not null,
   votos integer not null,
